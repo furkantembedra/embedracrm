@@ -1,13 +1,7 @@
-import PageHeader from "@/components/layout/page-header";
-import OzetKartlari from "@/components/satis-hatti/ozet-kartlari";
-import Kanban from "@/components/satis-hatti/kanban";
+import SatisHattiGorunumu from "@/components/satis-hatti/satis-hatti-gorunumu";
+import { getFirsatlar } from "@/components/satis-hatti/queries";
 
-export default function SatisHattiPage() {
-  return (
-    <>
-      <PageHeader title="Satış Hattı" />
-      <OzetKartlari />
-      <Kanban />
-    </>
-  );
+export default async function SatisHattiPage() {
+  const firsatlar = await getFirsatlar();
+  return <SatisHattiGorunumu firsatlar={firsatlar} />;
 }

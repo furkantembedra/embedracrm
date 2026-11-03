@@ -1,15 +1,7 @@
-import PageHeader from "@/components/layout/page-header";
-import SegmentKartlari from "@/components/musteriler/segment-kartlari";
-import MusteriTablosu from "@/components/musteriler/musteri-tablosu";
-import MusteriDetay from "@/components/musteriler/musteri-detay";
+import MusteriGorunumu from "@/components/musteriler/musteri-gorunumu";
+import { getMusteriler } from "@/components/musteriler/queries";
 
-export default function MusterilerPage() {
-  return (
-    <>
-      <PageHeader title="Müşteriler" />
-      <SegmentKartlari />
-      <MusteriTablosu />
-      <MusteriDetay />
-    </>
-  );
+export default async function MusterilerPage() {
+  const musteriler = await getMusteriler();
+  return <MusteriGorunumu musteriler={musteriler} />;
 }

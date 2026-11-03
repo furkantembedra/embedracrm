@@ -1,19 +1,19 @@
+import { notFound } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
-import MusteriZamanCizelgesi from "@/components/musteriler/musteri-zaman-cizelgesi";
+import { getMusteri } from "@/components/musteriler/queries";
 
-export default async function MusteriPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function MusteriPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  void id; // detay verisini id ile çekin
+  const musteri = await getMusteri(id);
+  if (!musteri) notFound();
+
   return (
     <>
-      <PageHeader title="Müşteri" />
-      <MusteriDetay />
-      <MusteriZamanCizelgesi />
+      <PageHeader title={musteri.ad} description={`${musteri.sehir}, ${musteri.ulke}`} />
+      <div className="max-w-3xl">
+        <MusteriDetay musteri={musteri} />
+      </div>
     </>
   );
 }
