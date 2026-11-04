@@ -11,16 +11,24 @@ import type { Talep, TalepDurumu, TalepNotu } from "./queries";
 import TalepListesi from "./talep-listesi";
 import TalepDetay from "./talep-detay";
 import MusteriBilgiPaneli from "./musteri-bilgi-paneli";
-import TalepFormu, { type TalepMusterisi } from "./talep-formu";
+import TalepFormu from "./talep-formu";
+import MusteriDetay from "@/components/musteriler/musteri-detay";
+import type { Musteri } from "@/components/musteriler/queries";
+import CihazDetay from "@/components/cihaz-lisans/cihaz-detay";
+import type { Cihaz } from "@/components/cihaz-lisans/queries";
+import type { YeniLisans } from "@/components/cihaz-lisans/actions";
+import { lisansUygula } from "@/components/cihaz-lisans/ortak";
 
 export default function DestekGorunumu({
   talepler: ilk,
   musteriler,
+  cihazlar: ilkCihazlar,
   sonrakiNo,
   seciliIlk,
 }: {
   talepler: Talep[];
-  musteriler: TalepMusterisi[];
+  musteriler: Musteri[];
+  cihazlar: Cihaz[];
   sonrakiNo: string;
   seciliIlk?: string; // /destek/[id] adresinden gelindiyse
 }) {
@@ -30,6 +38,18 @@ export default function DestekGorunumu({
   const [arama, setArama] = useState("");
   const [seciliId, setSeciliId] = useState<string | null>(baslangic?.id ?? null);
   const [yeniAcik, setYeniAcik] = useState(false);
+  const [acikMusteri, setAcikMusteri] = useState<string | null>(null);
+  const [acikCihaz, setAcikCihaz] = useState<string | null>(null);
+  const [cihazlar, setCihazlar] = useState(ilkCihazlar);
+  const formMusterileri = useMemo(
+    () => musteriler.map((m) => ({ id: m.id, ad: m.ad, cihazlar: m.cihazlar.map((c) => ({ seriNo: c.seriNo, firmware: c.firmware })) })),
+    [musteriler],
+  );
+  const musteriKaydi = musteriler.find((m) => m.id === acikMusteri) ?? null;
+  const cihazKaydi = cihazlar.find((c) => c.seriNo === acikCihaz) ?? null;
+  const musteriKapat = useCallback(() => setAcikMusteri(null), []);
+  const cihazKapat = useCallback(() => setAcikCihaz(null), []);
+  const cihazLisans = useCallback((l: YeniLisans) => setCihazlar((liste) => liste.map((c) => lisansUygula(c, l))), []);
   const [, baslat] = useTransition();
 
   const sayilar = useMemo(() => {
@@ -114,13 +134,35 @@ export default function DestekGorunumu({
         </div>
         {secili && (
           <div className="flex min-w-0 flex-[1_1_280px] items-start">
-            <MusteriBilgiPaneli talep={secili} onAracKapsami={aracKapsami} />
+            <MusteriBilgiPaneli
+              talep={secili}
+              onAracKapsami={aracKapsami}
+              onMusteriAc={musteriler.length ? setAcikMusteri : undefined}
+              onCihazAc={setAcikCihaz}
+            />
           </div>
         )}
       </div>
 
       <Modal acik={yeniAcik} onKapat={kapat} baslik="Yeni destek talebi" aciklama="Müşteriden gelen talebi kaydedin">
-        <TalepFormu musteriler={musteriler} sonrakiNo={no} onKaydedildi={eklendi} onVazgec={kapat} />
+        <TalepFormu musteriler={formMusterileri} sonrakiNo={no} onKaydedildi={eklendi} onVazgec={kapat} />
+      </Modal>
+
+      <Modal acik={musteriKaydi !== null} onKapat={musteriKapat} baslik="Müşteri" aciklama={musteriKaydi ? `${musteriKaydi.sehir}, ${musteriKaydi.ulke}` : undefined}>
+        {musteriKaydi && <MusteriDetay musteri={musteriKaydi} yalin />}
+      </Modal>
+
+      <Modal
+        acik={acikCihaz !== null}
+        onKapat={cihazKapat}
+        baslik="Cihaz kaydı"
+        aciklama={cihazKaydi ? `${cihazKaydi.musteri} · ${cihazKaydi.ulke}` : acikCihaz ? `${acikCihaz} cihaz listesinde bulunamadı` : undefined}
+      >
+        {cihazKaydi ? (
+          <CihazDetay key={cihazKaydi.seriNo} cihaz={cihazKaydi} yalin onLisans={cihazLisans} />
+        ) : (
+          <p className="pb-5 text-sm text-muted">Bu seri numarası cihaz kayıtlarında yok. Cihaz & Lisans sayfasından ekleyebilirsiniz.</p>
+        )}
       </Modal>
     </>
   );

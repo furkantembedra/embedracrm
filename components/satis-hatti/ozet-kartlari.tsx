@@ -2,22 +2,23 @@
 
 // Açık fırsat değeri, kazanılan, kazanma oranı, geciken takip
 import { kisaTl } from "@/lib/format";
-import type { Firsat } from "./queries";
+import { KAPALI_ASAMALAR, type Firsat } from "./queries";
 import { gunFarki, useBugun } from "@/lib/use-bugun";
 
 export default function OzetKartlari({ firsatlar }: { firsatlar: Firsat[] }) {
   const bugun = useBugun();
-  const acik = firsatlar.filter((f) => f.asama !== "kazanildi");
+  const acik = firsatlar.filter((f) => !KAPALI_ASAMALAR.includes(f.asama));
   const kazanilan = firsatlar.filter((f) => f.asama === "kazanildi");
-  const teklifSonrasi = firsatlar.filter((f) => ["teklif", "muzakere", "kazanildi"].includes(f.asama));
-  const oran = teklifSonrasi.length ? Math.round((kazanilan.length / teklifSonrasi.length) * 100) : 0;
+  const kaybedilen = firsatlar.filter((f) => f.asama === "kaybedildi");
+  const sonuclanan = kazanilan.length + kaybedilen.length;
+  const oran = sonuclanan ? Math.round((kazanilan.length / sonuclanan) * 100) : 0;
   const geciken = bugun === null ? null : acik.filter((f) => (gunFarki(f.sonrakiTarih, bugun) ?? 0) < 0).length;
   const toplam = (l: Firsat[]) => l.reduce((t, f) => t + f.tutar, 0);
 
   const kartlar = [
     { etiket: "Açık fırsat değeri", deger: kisaTl(toplam(acik)), alt: `${acik.length} fırsat`, vurgu: false },
     { etiket: "Kazanılan", deger: kisaTl(toplam(kazanilan)), alt: `${kazanilan.length} fırsat`, vurgu: true },
-    { etiket: "Kazanma oranı", deger: `%${oran}`, alt: "Teklif aşamasına gelenlerden", vurgu: false },
+    { etiket: "Kazanma oranı", deger: `%${oran}`, alt: `${kazanilan.length} kazanıldı · ${kaybedilen.length} kaybedildi`, vurgu: false },
     { etiket: "Geciken takip", deger: geciken === null ? "—" : String(geciken), alt: geciken ? "Sonraki adım tarihi geçti" : "Hepsi zamanında", vurgu: false, uyari: !!geciken },
   ];
 

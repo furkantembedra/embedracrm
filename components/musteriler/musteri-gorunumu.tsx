@@ -9,8 +9,9 @@ import Modal from "@/components/ui/modal";
 import SegmentKartlari, { type SegmentSecimi } from "./segment-kartlari";
 import MusteriTablosu from "./musteri-tablosu";
 import MusteriDetay from "./musteri-detay";
+import type { IletisimDegisikligi } from "./musteri-iletisim";
 import MusteriFormu from "./musteri-formu";
-import type { Musteri } from "./queries";
+import type { Musteri, Olay } from "./queries";
 
 export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Musteri[] }) {
   const [musteriler, setMusteriler] = useState(ilk);
@@ -18,6 +19,8 @@ export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Muste
   const [arama, setArama] = useState("");
   const [seciliId, setSeciliId] = useState<string | null>(ilk[0]?.id ?? null);
   const [ekleAcik, setEkleAcik] = useState(false);
+  const [pencereId, setPencereId] = useState<string | null>(null);
+  const pencereKapat = useCallback(() => setPencereId(null), []);
 
   const sayilar = useMemo(() => {
     const s: Record<SegmentSecimi, number> = { tumu: musteriler.length, servis: 0, muhendislik: 0, egitim: 0, bayi: 0 };
@@ -30,7 +33,7 @@ export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Muste
     return musteriler.filter((m) => {
       if (segment !== "tumu" && m.segment !== segment) return false;
       if (!q) return true;
-      const alanlar = [m.ad, m.yetkili, m.sehir, m.ulke, ...m.cihazlar.map((c) => c.seriNo)];
+      const alanlar = [m.ad, ...m.yetkililer.flatMap((y) => [y.ad, y.telefon, y.eposta]), m.sehir, m.ulke, ...m.cihazlar.flatMap((c) => [c.seriNo, c.model])];
       return alanlar.some((a) => a.toLocaleLowerCase("tr-TR").includes(q));
     });
   }, [musteriler, segment, arama]);
@@ -39,6 +42,13 @@ export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Muste
   const secili = musteriler.find((m) => m.id === seciliId) ?? null;
 
   const kapat = useCallback(() => setEkleAcik(false), []);
+  // Panelde yetkili / vergi no değişince tablodaki kayıt da güncellensin (arama yeni yetkiliyi bulsun)
+  const iletisimDegisti = useCallback((id: string, d: IletisimDegisikligi) => {
+    setMusteriler((l) => l.map((m) => (m.id === id ? { ...m, ...d } : m)));
+  }, []);
+  const notEklendi = useCallback((id: string, olay: Olay) => {
+    setMusteriler((l) => l.map((m) => (m.id === id ? { ...m, sonTemas: "Bugün", olaylar: [olay, ...m.olaylar] } : m)));
+  }, []);
   const eklendi = useCallback((m: Musteri) => {
     setMusteriler((l) => [m, ...l]);
     setSegment("tumu");
@@ -66,9 +76,21 @@ export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Muste
           <MusteriTablosu musteriler={gorunen} seciliId={seciliId} arama={arama} onArama={setArama} onSec={setSeciliId} />
         </div>
         <div className="flex min-w-0 flex-[1_1_340px]">
-          <MusteriDetay musteri={secili} />
+          <MusteriDetay musteri={secili} onNotEklendi={notEklendi} onAdaTikla={setPencereId} onIletisimDegisti={iletisimDegisti} />
         </div>
       </div>
+
+      <Modal
+        acik={pencereId !== null}
+        onKapat={pencereKapat}
+        baslik="Müşteri"
+        aciklama={(() => {
+          const p = musteriler.find((m) => m.id === pencereId);
+          return p ? `${p.sehir}, ${p.ulke}` : undefined;
+        })()}
+      >
+        <MusteriDetay musteri={musteriler.find((m) => m.id === pencereId) ?? null} yalin onNotEklendi={notEklendi} onIletisimDegisti={iletisimDegisti} />
+      </Modal>
 
       <Modal acik={ekleAcik} onKapat={kapat} baslik="Yeni müşteri" aciklama="Firma ve iletişim bilgilerini girin">
         <MusteriFormu onKaydedildi={eklendi} onVazgec={kapat} />

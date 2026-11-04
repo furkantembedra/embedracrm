@@ -13,10 +13,10 @@ export const KAYNAK_TONU: Record<Kaynak, ChipTon> = {
 };
 
 /** "Bugün", "Yarın", "3 gün gecikti" veya "5 Kas". bugun bilinmiyorsa düz tarih. */
-export function tarihEtiketi(tarih: string, bugun: number | null, kazanildi = false) {
+export function tarihEtiketi(tarih: string, bugun: number | null, kapali = false) {
   const fark = gunFarki(tarih, bugun);
   if (fark !== null) {
-    if (!kazanildi && fark < 0) return { metin: `${-fark} gün gecikti`, gecikti: true };
+    if (!kapali && fark < 0) return { metin: `${-fark} gün gecikti`, gecikti: true };
     if (fark === 0) return { metin: "Bugün", gecikti: false };
     if (fark === 1) return { metin: "Yarın", gecikti: false };
   }

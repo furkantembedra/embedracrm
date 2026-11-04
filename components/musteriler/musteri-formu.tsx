@@ -113,7 +113,7 @@ export default function MusteriFormu({
         <textarea name="not" rows={3} className={`${GIRDI} resize-y py-2.5`} />
       </label>
 
-      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 -mb-5 border-t border-line bg-card px-5 py-4" : ""}`}>
+      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 bg-card px-5 py-4" : ""}`}>
         {onVazgec ? (
           <button type="button" onClick={onVazgec} className={IKINCIL_BTN}>Vazgeç</button>
         ) : (

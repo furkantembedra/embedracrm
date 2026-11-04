@@ -6,6 +6,7 @@ import Chip from "@/components/ui/chip";
 import { basHarfler, kisaTl } from "@/lib/format";
 import { SEGMENT_ADI, type Musteri } from "./queries";
 import { useBugun } from "@/lib/use-bugun";
+import { modelOzeti } from "@/lib/urunler";
 import { PLAN_TONU, avatarRengi, kalanGun, tarihYaz } from "./ortak";
 
 const TH = "px-2 py-2.5 text-left text-xs font-semibold text-muted";
@@ -35,7 +36,7 @@ export default function MusteriTablosu({
             type="search"
             value={arama}
             onChange={(e) => onArama(e.target.value)}
-            placeholder="Firma, kişi, şehir veya seri no"
+            placeholder="Firma, kişi, şehir, seri no veya model"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none"
           />
         </label>
@@ -48,7 +49,7 @@ export default function MusteriTablosu({
               <th scope="col" className={`${TH} pl-4`}>Müşteri</th>
               <th scope="col" className={TH}>Segment</th>
               <th scope="col" className={TH}>Plan</th>
-              <th scope="col" className={`${TH} text-right`}>Cihaz</th>
+              <th scope="col" className={TH}>Cihazlar</th>
               <th scope="col" className={TH}>Lisans bitişi</th>
               <th scope="col" className={`${TH} text-right`}>Toplam değer</th>
               <th scope="col" className={`${TH} pr-4`}>Son temas</th>
@@ -89,7 +90,9 @@ export default function MusteriTablosu({
                   </td>
                   <td className={`${TD} ${zemin}`}><Chip>{SEGMENT_ADI[m.segment]}</Chip></td>
                   <td className={`${TD} ${zemin}`}><Chip ton={PLAN_TONU[m.plan]}>{m.plan}</Chip></td>
-                  <td className={`${TD} ${zemin} text-right font-bold tabular-nums`}>{m.cihazlar.length}</td>
+                  <td className={`${TD} ${zemin} whitespace-nowrap text-xs font-bold tabular-nums`}>
+                    {m.cihazlar.length ? modelOzeti(m.cihazlar) : <span className="font-semibold text-muted">—</span>}
+                  </td>
                   <td className={`${TD} ${zemin} whitespace-nowrap font-semibold tabular-nums ${yakin ? "text-err" : ""}`}>
                     {tarihYaz(m.lisansBitis)}
                   </td>

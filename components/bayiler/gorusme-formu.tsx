@@ -47,7 +47,7 @@ export default function GorusmeFormu({
       </label>
       <p className="text-xs text-muted">Takvim daveti otomatik gönderilmez; {basvuru.yetkili} ile ayrıca paylaşın.</p>
 
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-line bg-card px-5 py-4">
+      <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 bg-card px-5 py-4">
         <button type="button" onClick={onVazgec} className="inline-flex min-h-11 cursor-pointer items-center rounded-control border border-line-strong px-4 text-sm font-bold hover:bg-[#F4F5F0]">
           Vazgeç
         </button>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import DestekGorunumu from "@/components/destek/destek-gorunumu";
 import { getTalepler, sonrakiTalepNo } from "@/components/destek/queries";
 import { getMusteriler } from "@/components/musteriler/queries";
+import { getCihazlar } from "@/components/cihaz-lisans/queries";
 
 // /destek/4821 → destek ekranı bu talep seçili açılır.
 // params istek anında belli olur; Suspense dışında okunursa tüm sayfa bekletilir (cacheComponents).
@@ -16,7 +17,7 @@ export default function TalepPage({ params }: { params: Promise<{ id: string }> 
 
 async function TalepIcerik({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [talepler, musteriler, sonrakiNo] = await Promise.all([getTalepler(), getMusteriler(), sonrakiTalepNo()]);
+  const [talepler, musteriler, sonrakiNo, cihazlar] = await Promise.all([getTalepler(), getMusteriler(), sonrakiTalepNo(), getCihazlar()]);
   if (!talepler.some((t) => t.id === id)) notFound();
 
   return (
@@ -24,7 +25,8 @@ async function TalepIcerik({ params }: { params: Promise<{ id: string }> }) {
       talepler={talepler}
       sonrakiNo={sonrakiNo}
       seciliIlk={id}
-      musteriler={musteriler.map((m) => ({ id: m.id, ad: m.ad, cihazlar: m.cihazlar.map((c) => ({ seriNo: c.seriNo, firmware: c.firmware })) }))}
+      musteriler={musteriler}
+      cihazlar={cihazlar}
     />
   );
 }

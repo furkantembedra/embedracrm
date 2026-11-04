@@ -6,6 +6,7 @@ import { Search, X } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { sayi } from "@/lib/format";
 import { useBugun } from "@/lib/use-bugun";
+import { useSimdi } from "@/lib/use-simdi";
 import { DURUM_ADI, type Cihaz, type CihazDurumu } from "./queries";
 import {
   DURUM_TONU,
@@ -15,6 +16,7 @@ import {
   ilerlemeRengi,
   kalanYaz,
   lisansIlerleme,
+  sonGorulmeYaz,
   tarihYaz,
 } from "./ortak";
 
@@ -39,6 +41,8 @@ export default function CihazTablosu({
   onSekme,
   onArama,
   onEskiFiltre,
+  onMusteriAc,
+  yeniBildirenler,
 }: {
   cihazlar: Cihaz[];
   sekme: DurumSekmesi;
@@ -48,8 +52,11 @@ export default function CihazTablosu({
   onSekme: (s: DurumSekmesi) => void;
   onArama: (v: string) => void;
   onEskiFiltre: (v: boolean) => void;
+  onMusteriAc?: (musteriId: string) => void; // verilirse müşteri adı sayfa yerine pencere açar
+  yeniBildirenler?: Set<string>; // az önce bildirim gönderen cihazların satırı kısa süre vurgulanır
 }) {
   const bugun = useBugun();
+  const simdi = useSimdi();
 
   return (
     <section aria-label="Cihaz listesi" className="flex w-full min-w-0 flex-col overflow-hidden rounded-card border border-line bg-card">
@@ -90,7 +97,7 @@ export default function CihazTablosu({
             type="search"
             value={arama}
             onChange={(e) => onArama(e.target.value)}
-            placeholder="Seri no veya müşteri"
+            placeholder="Seri no, model veya müşteri"
             className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
           />
         </label>
@@ -100,11 +107,11 @@ export default function CihazTablosu({
         <table className="w-full min-w-[820px] border-collapse text-[13px]">
           <thead className="bg-[#F8F9F5]">
             <tr>
-              <th scope="col" className={`${TH} pl-4`}>Seri no</th>
+              <th scope="col" className={`${TH} pl-4`}>Seri no · model</th>
               <th scope="col" className={TH}>Müşteri</th>
               <th scope="col" className={TH}>Plan</th>
               <th scope="col" className={TH}>Lisans süresi</th>
-              <th scope="col" className={TH}>Firmware</th>
+              <th scope="col" className={TH}>Firmware · son görülme</th>
               <th scope="col" className={TH}>Aktivasyon</th>
               <th scope="col" className={`${TH} pr-4`}>Durum</th>
             </tr>
@@ -114,16 +121,25 @@ export default function CihazTablosu({
               const durum = guncelDurum(c, bugun);
               const ilerleme = lisansIlerleme(c.lisansBaslangic, c.lisansBitis, bugun);
               const acil = ilerleme !== null && ilerleme.yuzde >= 95;
+              const gorulme = sonGorulmeYaz(c.sonGorulme, simdi);
+              const yeni = yeniBildirenler?.has(c.seriNo) ?? false;
               return (
-                <tr key={c.seriNo} className="transition-colors hover:bg-[#F6F7F2]">
+                <tr key={c.seriNo} className={`transition-colors duration-700 ${yeni ? "bg-lime-bg" : "hover:bg-[#F6F7F2]"}`}>
                   <td className={`${TD} pl-4`}>
-                    <Link href={`/cihaz-lisans/${c.seriNo}`} className="whitespace-nowrap font-mono text-xs font-semibold hover:underline">
-                      {c.seriNo}
-                    </Link>
+                    <div className="flex flex-col gap-0.5">
+                      <Link href={`/cihaz-lisans/${c.seriNo}`} className="whitespace-nowrap font-mono text-xs font-semibold hover:underline">
+                        {c.seriNo}
+                      </Link>
+                      <span className="text-xs font-semibold text-muted">{c.model}</span>
+                    </div>
                   </td>
                   <td className={TD}>
                     <div className="flex flex-col gap-0.5">
-                      {c.musteriId ? (
+                      {c.musteriId && onMusteriAc ? (
+                        <button type="button" onClick={() => onMusteriAc(c.musteriId!)} className="cursor-pointer text-left font-bold hover:underline">
+                          {c.musteri}
+                        </button>
+                      ) : c.musteriId ? (
                         <Link href={`/musteriler/${c.musteriId}`} className="font-bold hover:underline">{c.musteri}</Link>
                       ) : (
                         <b className="font-bold">{c.musteri}</b>
@@ -153,11 +169,20 @@ export default function CihazTablosu({
                     )}
                   </td>
                   <td className={TD}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs">{c.firmware}</span>
-                      {eskiFirmware(c.firmware) && (
-                        <Chip ton="warn" className="h-5 px-2 text-[11px]">Eski</Chip>
-                      )}
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{c.firmware}</span>
+                        {eskiFirmware(c.firmware) && (
+                          <Chip ton="warn" className="h-5 px-2 text-[11px]">Eski</Chip>
+                        )}
+                      </div>
+                      <span
+                        title={c.sonGorulme ? "ONESuite'in son bildirimi" : "Bu cihazdan henüz bildirim gelmedi"}
+                        className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold ${gorulme.uyari ? "text-warn" : "text-muted"}`}
+                      >
+                        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${!c.sonGorulme ? "bg-line-strong" : gorulme.uyari ? "bg-warn" : "bg-ok"}`} />
+                        {gorulme.metin}
+                      </span>
                     </div>
                   </td>
                   <td className={`${TD} whitespace-nowrap tabular-nums text-[#474A42]`}>{tarihYaz(c.lisansBaslangic)}</td>

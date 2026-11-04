@@ -12,9 +12,13 @@ const EYLEM_BTN =
 export default function MusteriBilgiPaneli({
   talep,
   onAracKapsami,
+  onMusteriAc,
+  onCihazAc,
 }: {
   talep: Talep | null;
   onAracKapsami?: (id: string) => void;
+  onMusteriAc?: (musteriId: string) => void; // verilirse sayfaya gitmek yerine pencerede açılır
+  onCihazAc?: (seriNo: string) => void;
 }) {
   if (!talep) return null;
   const t = talep;
@@ -27,7 +31,15 @@ export default function MusteriBilgiPaneli({
     <aside aria-label="Müşteri ve cihaz bilgisi" className="flex w-full min-w-0 flex-col gap-[18px] rounded-card border border-line bg-card p-5">
       <section className="flex flex-col gap-2.5">
         <h3 className="text-sm font-extrabold">Müşteri</h3>
-        {t.musteriId ? (
+        {t.musteriId && onMusteriAc ? (
+          <button
+            type="button"
+            onClick={() => onMusteriAc(t.musteriId!)}
+            className="cursor-pointer self-start text-left text-[15px] font-bold text-info hover:text-[#1A2A9E]"
+          >
+            {t.musteri} →
+          </button>
+        ) : t.musteriId ? (
           <Link href={`/musteriler/${t.musteriId}`} className="text-[15px] font-bold text-info hover:text-[#1A2A9E]">{t.musteri} →</Link>
         ) : (
           <b className="text-[15px]">{t.musteri}</b>
@@ -74,7 +86,12 @@ export default function MusteriBilgiPaneli({
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-extrabold">Bu talepten</h3>
-        {t.seriNo ? (
+        {t.seriNo && onCihazAc ? (
+          <button type="button" onClick={() => onCihazAc(t.seriNo!)} className={EYLEM_BTN}>
+            <Cpu size={18} aria-hidden="true" />
+            Cihaz kaydını aç
+          </button>
+        ) : t.seriNo ? (
           <Link href={`/cihaz-lisans/${t.seriNo}`} className={EYLEM_BTN}>
             <Cpu size={18} aria-hidden="true" />
             Cihaz kaydını aç

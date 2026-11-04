@@ -1,13 +1,18 @@
 // Müşteriler: veri okuma. Şimdilik demo veri döner;
 // Supabase bağlanınca fonksiyonların içini supabase.from("customers")... ile değiştirin.
+import type { CihazModeli } from "@/lib/urunler";
+import { getCihazlar } from "@/components/cihaz-lisans/queries";
 
 export type Segment = "servis" | "muhendislik" | "egitim" | "bayi";
 export type Plan = "Basic" | "Pro" | "Pro+" | "Lead";
-export type CihazDurumu = "Lisans aktif" | "Süresi doluyor" | "Serviste";
+export type CihazDurumu = "Lisans aktif" | "Süresi doluyor" | "Serviste" | "Lisanssız";
 export type OlayTuru = "siparis" | "destek" | "demo" | "teklif" | "arama" | "not";
 
-export type Cihaz = { seriNo: string; firmware: string; durum: CihazDurumu };
+export type Cihaz = { seriNo: string; model: CihazModeli; firmware: string; durum: CihazDurumu };
 export type Olay = { metin: string; zaman: string; tur: OlayTuru };
+
+/** Firmadaki iletişim kişisi. Boş alanlar "" olarak tutulur. İlk sıradaki birincil yetkilidir. */
+export type Yetkili = { id: string; ad: string; unvan: string; telefon: string; eposta: string };
 
 export type Musteri = {
   id: string;
@@ -20,10 +25,8 @@ export type Musteri = {
   toplamDeger: number | null; // TL
   sonTemas: string;
   durum: string;
-  yetkili: string;
-  telefon: string;
-  eposta: string;
-  vergiNo: string;
+  yetkililer: Yetkili[]; // ilk sıradaki birincil yetkili (Ara / WhatsApp / E-posta düğmeleri)
+  vergiNo: string; // boşsa ""
   acikTalep: number;
   cihazlar: Cihaz[];
   olaylar: Olay[];
@@ -40,10 +43,13 @@ const DEMO: Musteri[] = [
   {
     id: "volant", ad: "Volant Lenkung Service GmbH", sehir: "Stuttgart", ulke: "Almanya", segment: "servis",
     plan: "Pro+", lisansBitis: "2027-03-14", toplamDeger: 1_860_000, sonTemas: "Bugün", durum: "Aktif · VIP",
-    yetkili: "Jonas Weber", telefon: "+49 711 555 0142", eposta: "j.weber@volant-service.de", vergiNo: "DE 284 117 903", acikTalep: 1,
+    yetkililer: [
+      { id: "volant-1", ad: "Jonas Weber", unvan: "Servis müdürü", telefon: "+49 711 555 0142", eposta: "j.weber@volant-service.de" },
+      { id: "volant-2", ad: "Anna Schmidt", unvan: "Satın alma", telefon: "+49 711 555 0150", eposta: "a.schmidt@volant-service.de" },
+    ], vergiNo: "DE 284 117 903", acikTalep: 1,
     cihazlar: [
-      { seriNo: "EO1-2402-0611", firmware: "v2.4.1", durum: "Lisans aktif" },
-      { seriNo: "EO1-2402-0612", firmware: "v2.3.0", durum: "Lisans aktif" },
+      { seriNo: "EO1-2402-0611", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
+      { seriNo: "EO1-2402-0612", model: "ONE", firmware: "v2.3.0", durum: "Lisans aktif" },
     ],
     olaylar: [
       { metin: "2× ONE + Pro+ lisans siparişi", zaman: "Bugün 11:24 · Sipariş", tur: "siparis" },
@@ -55,8 +61,8 @@ const DEMO: Musteri[] = [
   {
     id: "akdeniz", ad: "Akdeniz Direksiyon Servisi", sehir: "Antalya", ulke: "Türkiye", segment: "servis",
     plan: "Pro", lisansBitis: "2026-11-06", toplamDeger: 248_000, sonTemas: "30 Eki", durum: "Yenileme riski",
-    yetkili: "Hakan Yıldız", telefon: "+90 532 410 22 18", eposta: "hakan@akdenizdireksiyon.com", vergiNo: "0612 448 2190", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2309-0142", firmware: "v2.2.4", durum: "Süresi doluyor" }],
+    yetkililer: [{ id: "akdeniz-1", ad: "Hakan Yıldız", unvan: "", telefon: "+90 532 410 22 18", eposta: "hakan@akdenizdireksiyon.com" }], vergiNo: "0612 448 2190", acikTalep: 0,
+    cihazlar: [{ seriNo: "EO1-2309-0142", model: "ONE", firmware: "v2.2.4", durum: "Süresi doluyor" }],
     olaylar: [
       { metin: "Lisans yenilemesi için arandı", zaman: "30 Eki · Telefon", tur: "arama" },
       { metin: "Fiyat sorusu: Pro → Pro+ geçiş", zaman: "22 Eki · WhatsApp", tur: "not" },
@@ -66,10 +72,10 @@ const DEMO: Musteri[] = [
   {
     id: "kaya", ad: "Kaya Oto Elektronik", sehir: "İzmir", ulke: "Türkiye", segment: "servis",
     plan: "Pro", lisansBitis: "2027-06-02", toplamDeger: 412_000, sonTemas: "Bugün", durum: "Aktif",
-    yetkili: "Serkan Kaya", telefon: "+90 533 290 41 77", eposta: "serkan@kayaotoelektronik.com", vergiNo: "5310 772 0184", acikTalep: 1,
+    yetkililer: [{ id: "kaya-1", ad: "Serkan Kaya", unvan: "", telefon: "+90 533 290 41 77", eposta: "serkan@kayaotoelektronik.com" }], vergiNo: "5310 772 0184", acikTalep: 1,
     cihazlar: [
-      { seriNo: "EO1-2406-0455", firmware: "v2.4.1", durum: "Lisans aktif" },
-      { seriNo: "EO1-2406-0456", firmware: "v2.4.1", durum: "Lisans aktif" },
+      { seriNo: "EO1-2406-0455", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
+      { seriNo: "EO1-2406-0456", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
     ],
     olaylar: [
       { metin: "Destek #4817 · K-Line bağlantı hatası", zaman: "Bugün 08:40 · Telefon", tur: "destek" },
@@ -79,10 +85,10 @@ const DEMO: Musteri[] = [
   {
     id: "polska", ad: "Polska EPS Serwis", sehir: "Poznań", ulke: "Polonya", segment: "bayi",
     plan: "Pro+", lisansBitis: "2027-01-30", toplamDeger: 2_310_000, sonTemas: "Bugün", durum: "Bayi adayı",
-    yetkili: "Marta Nowak", telefon: "+48 61 555 0198", eposta: "marta@polskaeps.pl", vergiNo: "PL 7792 4410 22", acikTalep: 2,
+    yetkililer: [{ id: "polska-1", ad: "Marta Nowak", unvan: "", telefon: "+48 61 555 0198", eposta: "marta@polskaeps.pl" }], vergiNo: "PL 7792 4410 22", acikTalep: 2,
     cihazlar: [
-      { seriNo: "EO1-2404-0390", firmware: "v2.4.0", durum: "Lisans aktif" },
-      { seriNo: "EO1-2404-0391", firmware: "v2.4.0", durum: "Lisans aktif" },
+      { seriNo: "EO1-2404-0390", model: "ONE", firmware: "v2.4.0", durum: "Lisans aktif" },
+      { seriNo: "EO1-2404-0391", model: "ONE", firmware: "v2.4.0", durum: "Lisans aktif" },
     ],
     olaylar: [
       { metin: "Distribütörlük başvurusu değerlendirmede", zaman: "Bugün · Bayi kaydı", tur: "teklif" },
@@ -92,36 +98,39 @@ const DEMO: Musteri[] = [
   {
     id: "ege", ad: "Ege Meslek Yüksekokulu", sehir: "Manisa", ulke: "Türkiye", segment: "egitim",
     plan: "Pro", lisansBitis: "2026-11-19", toplamDeger: 520_000, sonTemas: "27 Eki", durum: "Yenileme yakın",
-    yetkili: "Dr. Ayşe Demir", telefon: "+90 236 555 08 40", eposta: "ayse.demir@egemyo.edu.tr", vergiNo: "—", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2311-0322", firmware: "v2.3.2", durum: "Süresi doluyor" }],
+    yetkililer: [{ id: "ege-1", ad: "Dr. Ayşe Demir", unvan: "", telefon: "+90 236 555 08 40", eposta: "ayse.demir@egemyo.edu.tr" }], vergiNo: "", acikTalep: 0,
+    cihazlar: [{ seriNo: "EO1-2311-0322", model: "ONE", firmware: "v2.3.2", durum: "Süresi doluyor" }],
     olaylar: [{ metin: "Eğitim lisansı teklif talebi (4 cihaz)", zaman: "27 Eki · E-posta", tur: "teklif" }],
   },
   {
     id: "nordic", ad: "Nordic Steering AB", sehir: "Göteborg", ulke: "İsveç", segment: "muhendislik",
     plan: "Pro+", lisansBitis: "2026-11-28", toplamDeger: 690_000, sonTemas: "19 Eki", durum: "Aktif",
-    yetkili: "Erik Lindqvist", telefon: "+46 31 555 0170", eposta: "erik@nordicsteering.se", vergiNo: "SE 5590 1144 01", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2312-0390", firmware: "v2.4.1", durum: "Lisans aktif" }],
+    yetkililer: [{ id: "nordic-1", ad: "Erik Lindqvist", unvan: "", telefon: "+46 31 555 0170", eposta: "erik@nordicsteering.se" }], vergiNo: "SE 5590 1144 01", acikTalep: 0,
+    cihazlar: [
+      { seriNo: "EO1-2312-0390", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
+      { seriNo: "EO1-2312-0412", model: "ONE", firmware: "v2.4.1", durum: "Serviste" },
+    ],
     olaylar: [{ metin: "FlexRay test raporu paylaşıldı", zaman: "19 Eki", tur: "not" }],
   },
   {
     id: "baskent", ad: "Başkent Rot & Direksiyon", sehir: "Ankara", ulke: "Türkiye", segment: "servis",
     plan: "Basic", lisansBitis: "2027-04-11", toplamDeger: 164_000, sonTemas: "31 Eki", durum: "Yükseltme adayı",
-    yetkili: "Mustafa Aydın", telefon: "+90 312 555 61 20", eposta: "info@baskentrot.com.tr", vergiNo: "1450 228 9031", acikTalep: 1,
-    cihazlar: [{ seriNo: "EO1-2404-0418", firmware: "v2.4.1", durum: "Lisans aktif" }],
+    yetkililer: [{ id: "baskent-1", ad: "Mustafa Aydın", unvan: "", telefon: "+90 312 555 61 20", eposta: "info@baskentrot.com.tr" }], vergiNo: "1450 228 9031", acikTalep: 1,
+    cihazlar: [{ seriNo: "EO1-2404-0418", model: "ONE Lite", firmware: "v2.4.1", durum: "Lisans aktif" }],
     olaylar: [{ metin: "Yeni model talebi · Hyundai Tucson", zaman: "31 Eki · Telefon", tur: "destek" }],
   },
   {
     id: "iberia", ad: "Iberia Dirección SL", sehir: "Valencia", ulke: "İspanya", segment: "servis",
     plan: "Lead", lisansBitis: null, toplamDeger: null, sonTemas: "Bugün", durum: "Demo planlı",
-    yetkili: "Lucía Martín", telefon: "+34 96 555 0123", eposta: "lucia@iberiadireccion.es", vergiNo: "ES B9844 1202", acikTalep: 0,
+    yetkililer: [{ id: "iberia-1", ad: "Lucía Martín", unvan: "", telefon: "+34 96 555 0123", eposta: "lucia@iberiadireccion.es" }], vergiNo: "ES B9844 1202", acikTalep: 0,
     cihazlar: [],
     olaylar: [{ metin: "Demo tarihi girildi · 5 Kas 14:00", zaman: "Bugün · Satış hattı", tur: "demo" }],
   },
   {
     id: "bursa", ad: "Bursa ECU Lab", sehir: "Bursa", ulke: "Türkiye", segment: "muhendislik",
     plan: "Pro+", lisansBitis: "2026-11-11", toplamDeger: 356_000, sonTemas: "1 Kas", durum: "Yenileme yakın",
-    yetkili: "Burak Şen", telefon: "+90 224 555 30 14", eposta: "burak@bursaeculab.com", vergiNo: "1880 554 2071", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2310-0218", firmware: "v2.4.1", durum: "Süresi doluyor" }],
+    yetkililer: [{ id: "bursa-1", ad: "Burak Şen", unvan: "", telefon: "+90 224 555 30 14", eposta: "burak@bursaeculab.com" }], vergiNo: "1880 554 2071", acikTalep: 0,
+    cihazlar: [{ seriNo: "EO1-2310-0218", model: "ONE", firmware: "v2.4.1", durum: "Süresi doluyor" }],
     olaylar: [{ metin: "Yenileme teklifi gönderildi", zaman: "1 Kas", tur: "teklif" }],
   },
 ];
@@ -131,12 +140,42 @@ const DEMO: Musteri[] = [
 const g = globalThis as { __embedraMusteriler?: Musteri[] };
 const DEPO = (g.__embedraMusteriler ??= [...DEMO]);
 
+// Bellekte eski yapıyla (tek yetkili / telefon / eposta) kalmış kayıtları yeni yapıya çevirir.
+// Geliştirmede HMR globalThis'i silmediği için gerekli; Supabase'e geçince kaldırabilirsiniz.
+for (const m of DEPO as (Musteri & { yetkili?: string; telefon?: string; eposta?: string })[]) {
+  if (Array.isArray(m.yetkililer)) continue;
+  const dolu = (v?: string) => (v && v !== "—" ? v : "");
+  m.yetkililer = dolu(m.yetkili) || dolu(m.telefon) || dolu(m.eposta)
+    ? [{ id: `${m.id}-1`, ad: dolu(m.yetkili) || m.ad, unvan: "", telefon: dolu(m.telefon), eposta: dolu(m.eposta) }]
+    : [];
+  if (m.vergiNo === "—") m.vergiNo = "";
+  delete m.yetkili;
+  delete m.telefon;
+  delete m.eposta;
+}
+
+const CIHAZ_DURUMU = { aktif: "Lisans aktif", bitiyor: "Süresi doluyor", serviste: "Serviste", lisanssiz: "Lisanssız" } as const;
+
+/** Müşterinin cihazları: cihaz kayıtlarındakiler (güncel lisans/model) + yalnızca müşteri kaydında olanlar.
+ *  TODO: Supabase'de devices.customer_id ile tek sorguda gelecek. */
+async function cihazlarlaBirlestir(liste: Musteri[]): Promise<Musteri[]> {
+  const kayitlar = await getCihazlar();
+  return liste.map((m) => {
+    const kayittan: Cihaz[] = kayitlar
+      .filter((c) => c.musteriId === m.id)
+      .map((c) => ({ seriNo: c.seriNo, model: c.model, firmware: c.firmware, durum: CIHAZ_DURUMU[c.durum] }));
+    const sadeceMusteride = m.cihazlar.filter((c) => !kayittan.some((k) => k.seriNo === c.seriNo));
+    return { ...m, cihazlar: [...kayittan, ...sadeceMusteride] };
+  });
+}
+
 export async function getMusteriler(): Promise<Musteri[]> {
-  return DEPO;
+  return cihazlarlaBirlestir(DEPO);
 }
 
 export async function getMusteri(id: string): Promise<Musteri | null> {
-  return DEPO.find((m) => m.id === id) ?? null;
+  const m = DEPO.find((x) => x.id === id);
+  return m ? (await cihazlarlaBirlestir([m]))[0] : null;
 }
 
 /** "Volant Lenkung Service" ile "Volant Lenkung Service GmbH" aynı firma sayılır. */
@@ -145,6 +184,13 @@ export async function musteriBulAdla(ad: string): Promise<Musteri | null> {
   const aranan = n(ad);
   if (!aranan) return null;
   return DEPO.find((m) => n(m.ad) === aranan || n(m.ad).startsWith(aranan + " ") || aranan.startsWith(n(m.ad) + " ")) ?? null;
+}
+
+/** Kaydı yerinde günceller (getMusteri kopya döndürür). Yalnızca actions dosyalarından çağrılır. */
+export async function musteriyiGuncelle(id: string, degisiklik: (m: Musteri) => void): Promise<Musteri | null> {
+  const m = DEPO.find((x) => x.id === id);
+  if (m) degisiklik(m);
+  return m ?? null;
 }
 
 /** Yalnızca sunucu tarafındaki actions dosyalarından çağrılır. */

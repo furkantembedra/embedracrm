@@ -2,7 +2,6 @@
 
 // Satış hattının etkileşimli kısmı: kart aşamaları ve "Fırsat ekle" paneli burada yönetilir,
 // özet kartlar ve kanban aynı veriden beslenir. Kazanıldı'ya geçen firma müşterilere eklenir.
-import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { CheckCircle2, Plus, X } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
@@ -11,11 +10,13 @@ import OzetKartlari from "./ozet-kartlari";
 import Kanban from "./kanban";
 import FirsatFormu from "./firsat-formu";
 import { firsatAsamasiGuncelle, type AsamaSonucu } from "./actions";
-import { ASAMA_BILGI, type Asama, type Firsat } from "./queries";
+import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type Firsat, type KayipBilgisi, type KayipNedeni } from "./queries";
+import MusteriDetay from "@/components/musteriler/musteri-detay";
+import type { Musteri } from "@/components/musteriler/queries";
 
 type Bildirim = NonNullable<AsamaSonucu["musteri"]>;
 
-function MusteriBildirimi({ bildirim, onKapat }: { bildirim: Bildirim; onKapat: () => void }) {
+function MusteriBildirimi({ bildirim, onKapat, onAc }: { bildirim: Bildirim; onKapat: () => void; onAc: (id: string) => void }) {
   useEffect(() => {
     const t = setTimeout(onKapat, 7000);
     return () => clearTimeout(t);
@@ -32,9 +33,16 @@ function MusteriBildirimi({ bildirim, onKapat }: { bildirim: Bildirim; onKapat: 
         <span className="text-[13px] text-muted">
           {bildirim.ad} {bildirim.yeni ? "yeni müşteri olarak kaydedildi." : "zaten müşteriydi; kazanılan satış geçmişine eklendi."}
         </span>
-        <Link href={`/musteriler/${bildirim.id}`} className="text-[13px] font-bold text-info hover:text-[#1A2A9E]">
+        <button
+          type="button"
+          onClick={() => {
+            onAc(bildirim.id);
+            onKapat();
+          }}
+          className="cursor-pointer self-start text-[13px] font-bold text-info hover:text-[#1A2A9E]"
+        >
           Müşteriyi aç →
-        </Link>
+        </button>
       </div>
       <button
         type="button"
@@ -48,18 +56,92 @@ function MusteriBildirimi({ bildirim, onKapat }: { bildirim: Bildirim; onKapat: 
   );
 }
 
-export default function SatisHattiGorunumu({ firsatlar: ilk }: { firsatlar: Firsat[] }) {
+// Kart Kaybedildi'ye taşınınca nedeni sorulur (raporlarda "neden kaybediyoruz" için)
+function KayipNedeniFormu({ firsat, onOnayla, onVazgec }: { firsat: Firsat; onOnayla: (k: KayipBilgisi) => void; onVazgec: () => void }) {
+  const [neden, setNeden] = useState<KayipNedeni | null>(null);
+  const [aciklama, setAciklama] = useState("");
+  const diger = neden === "Diğer";
+  const hazir = neden !== null && (!diger || aciklama.trim().length > 0);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!neden || !hazir) return;
+        onOnayla(diger ? { neden, aciklama: aciklama.trim() } : { neden });
+      }}
+      className="flex w-full flex-col gap-5"
+    >
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-[13px] font-bold">{firsat.firma} neden kaybedildi?</legend>
+        <div className="grid w-full gap-2 sm:grid-cols-2">
+          {KAYIP_NEDENLERI.map((n) => (
+            <label
+              key={n}
+              className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border border-line-strong px-3 text-sm font-semibold has-checked:border-ink has-checked:bg-err-bg has-focus-visible:outline-2 has-focus-visible:outline-blue"
+            >
+              <input type="radio" name="neden" value={n} checked={neden === n} onChange={() => setNeden(n)} className="accent-ink" />
+              {n}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {diger && (
+        <label className="flex flex-col gap-1.5 text-[13px] font-bold">
+          Sebebi yazın *
+          <textarea
+            autoFocus
+            value={aciklama}
+            onChange={(e) => setAciklama(e.target.value)}
+            maxLength={300}
+            rows={3}
+            placeholder="Örn. Firma kapandı, karar vericiye ulaşılamadı…"
+            className="w-full resize-y rounded-control border border-line-strong bg-card px-3 py-2.5 text-sm font-medium outline-none focus:border-ink"
+          />
+          <span className="self-end text-xs font-medium tabular-nums text-muted">{aciklama.length}/300</span>
+        </label>
+      )}
+      <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 bg-card px-5 py-4">
+        <button type="button" onClick={onVazgec} className="min-h-11 cursor-pointer rounded-control border border-line-strong px-4 text-sm font-bold hover:bg-[#F4F5F0]">
+          Vazgeç
+        </button>
+        <button type="submit" disabled={!hazir} className="min-h-11 cursor-pointer rounded-control bg-ink px-5 text-sm font-bold text-white transition-colors hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50">
+          Kaybedildi olarak işaretle
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function SatisHattiGorunumu({
+  firsatlar: ilk,
+  musteriler,
+}: {
+  firsatlar: Firsat[];
+  musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
+}) {
   const [firsatlar, setFirsatlar] = useState(ilk);
   const [ekleAsama, setEkleAsama] = useState<Asama | null>(null);
   const [bildirim, setBildirim] = useState<Bildirim | null>(null);
+  const [acikMusteri, setAcikMusteri] = useState<string | null>(null);
+  const musteriKapat = useCallback(() => setAcikMusteri(null), []);
+  const musteriKaydi = musteriler.find((m) => m.id === acikMusteri) ?? null;
   const [, baslat] = useTransition();
+  const [kayipId, setKayipId] = useState<string | null>(null);
+  const kayipFirsat = firsatlar.find((f) => f.id === kayipId) ?? null;
+  const kayipKapat = useCallback(() => setKayipId(null), []);
 
-  function tasi(id: string, asama: Asama) {
+  function tasi(id: string, asama: Asama, kayip?: KayipBilgisi) {
     const firsat = firsatlar.find((f) => f.id === id);
     if (!firsat || firsat.asama === asama) return;
-    setFirsatlar((l) => l.map((f) => (f.id === id ? { ...f, asama } : f)));
+    if (asama === "kaybedildi" && !kayip) {
+      setKayipId(id); // önce nedeni sor, kart onaylanınca taşınır
+      return;
+    }
+    // Taşınan kart yeni sütununun en altına gider
+    const guncel: Firsat = { ...firsat, asama, kayipNedeni: kayip?.neden, kayipAciklama: kayip?.aciklama };
+    setFirsatlar((l) => [...l.filter((f) => f.id !== id), guncel]);
     baslat(async () => {
-      const sonuc = await firsatAsamasiGuncelle(firsat, asama);
+      const sonuc = await firsatAsamasiGuncelle(firsat, asama, kayip);
       if (sonuc.musteri) setBildirim(sonuc.musteri);
     });
   }
@@ -67,7 +149,7 @@ export default function SatisHattiGorunumu({ firsatlar: ilk }: { firsatlar: Firs
   const kapat = useCallback(() => setEkleAsama(null), []);
   const bildirimiKapat = useCallback(() => setBildirim(null), []);
   const eklendi = useCallback((f: Firsat, musteri?: AsamaSonucu["musteri"]) => {
-    setFirsatlar((l) => [f, ...l]);
+    setFirsatlar((l) => [...l, f]); // yeni fırsat sütunun en altına eklenir
     setEkleAsama(null);
     if (musteri) setBildirim(musteri);
   }, []);
@@ -99,7 +181,34 @@ export default function SatisHattiGorunumu({ firsatlar: ilk }: { firsatlar: Firs
         )}
       </Modal>
 
-      {bildirim && <MusteriBildirimi key={bildirim.id} bildirim={bildirim} onKapat={bildirimiKapat} />}
+      <Modal acik={kayipFirsat !== null} onKapat={kayipKapat} baslik="Fırsat kaybedildi" aciklama={kayipFirsat ? `${kayipFirsat.firma} · ${kayipFirsat.icerik}` : undefined}>
+        {kayipFirsat && (
+          <KayipNedeniFormu
+            key={kayipFirsat.id}
+            firsat={kayipFirsat}
+            onOnayla={(k) => {
+              tasi(kayipFirsat.id, "kaybedildi", k);
+              setKayipId(null);
+            }}
+            onVazgec={kayipKapat}
+          />
+        )}
+      </Modal>
+
+      {bildirim && <MusteriBildirimi key={bildirim.id} bildirim={bildirim} onKapat={bildirimiKapat} onAc={setAcikMusteri} />}
+
+      <Modal
+        acik={acikMusteri !== null}
+        onKapat={musteriKapat}
+        baslik="Müşteri"
+        aciklama={musteriKaydi ? `${musteriKaydi.sehir}, ${musteriKaydi.ulke}` : undefined}
+      >
+        {musteriKaydi ? (
+          <MusteriDetay musteri={musteriKaydi} yalin />
+        ) : (
+          <p className="pb-5 text-sm text-muted">Müşteri kaydı yükleniyor…</p>
+        )}
+      </Modal>
     </>
   );
 }

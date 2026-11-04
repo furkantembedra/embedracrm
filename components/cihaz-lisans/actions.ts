@@ -1,7 +1,19 @@
 "use server";
 // Cihaz & Lisans: kaydetme, güncelleme ve silme (Server Actions)
-import { ayEkle } from "./ortak";
-import type { Cihaz, LisansKaydi, LisansPlani } from "./queries";
+import { revalidatePath } from "next/cache";
+import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
+import { ayEkle, lisansUygula } from "./ortak";
+import { cihazEkleDepo, cihaziGuncelle, type Cihaz, type LisansKaydi, type LisansPlani } from "./queries";
+
+/** Cihaz verisini gösteren sayfalar */
+function yenile(seriNo?: string) {
+  revalidatePath("/cihaz-lisans");
+  revalidatePath("/genel-bakis");
+  revalidatePath("/destek"); // destekteki cihaz penceresi
+  revalidatePath("/musteriler"); // müşterilerin cihaz listesi cihaz kayıtlarından gelir
+  revalidatePath("/bayiler/raporlama");
+  if (seriNo) revalidatePath(`/cihaz-lisans/${seriNo}`);
+}
 
 const PLANLAR: LisansPlani[] = ["Basic", "Pro", "Pro+"];
 const SURELER = [12, 24, 36];
@@ -33,6 +45,9 @@ export async function lisansTanimla(_onceki: LisansFormDurumu, form: FormData): 
 
   // TODO: Supabase bağlanınca:
   // await supabase.from("licenses").insert({ device_serial: seriNo, plan, starts_at: baslangic, ends_at: lisans.bitis });
+  const cihaz = await cihaziGuncelle(seriNo, (c) => lisansUygula(c, lisans));
+  if (!cihaz) return { hatalar: { seriNo: "Cihaz bulunamadı." } };
+  yenile(seriNo);
 
   return { lisans, zaman: Date.now() };
 }
@@ -44,8 +59,10 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
   const musteri = metin("musteri"); // "id|Ad|Ülke"
   const firmware = metin("firmware");
   const plan = metin("plan") as LisansPlani;
+  const model = metin("model") as CihazModeli;
 
   const hatalar: Record<string, string> = {};
+  if (!CIHAZ_MODELLERI.includes(model)) hatalar.model = "Cihaz modelini seçin.";
   if (!SERI_NO.test(seriNo)) hatalar.seriNo = "Seri no EO1-YYAA-NNNN biçiminde olmalı.";
   else if (metin("mevcut").split(",").includes(seriNo)) hatalar.seriNo = "Bu seri no zaten kayıtlı.";
   if (!musteri) hatalar.musteri = "Müşteri seçin.";
@@ -56,6 +73,7 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
   const [musteriId, musteriAdi, ulke] = musteri.split("|");
   const cihaz: Cihaz = {
     seriNo,
+    model,
     musteriId: musteriId || null,
     musteri: musteriAdi || "—",
     ulke: ulke || "—",
@@ -68,6 +86,8 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
   };
 
   // TODO: Supabase bağlanınca: await supabase.from("devices").insert({ ... }).select().single();
+  if (!(await cihazEkleDepo(cihaz))) return { hatalar: { seriNo: "Bu seri no zaten kayıtlı." } };
+  yenile();
 
   return { cihaz };
 }

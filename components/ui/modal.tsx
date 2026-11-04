@@ -20,6 +20,7 @@ export default function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const baslikId = useId();
+  const basmaArkaPlanda = useRef(false);
 
   useEffect(() => {
     const d = ref.current;
@@ -33,8 +34,14 @@ export default function Modal({
       ref={ref}
       aria-labelledby={baslikId}
       onClose={onKapat}
+      onMouseDown={(e) => {
+        basmaArkaPlanda.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onKapat(); // arka plana tıklama
+        // Yalnızca arka plana basılıp orada bırakılınca kapanır; alanın içinde basıp
+        // fareyi dışarı kaydırınca (ör. metin seçerken) pencere kapanmaz.
+        if (e.target === e.currentTarget && basmaArkaPlanda.current) onKapat();
+        basmaArkaPlanda.current = false;
       }}
       className="m-auto w-[calc(100%-32px)] max-w-[720px] max-h-[calc(100dvh-64px)] overflow-hidden rounded-card border border-line bg-card p-0 text-ink shadow-[0_24px_64px_rgba(14,15,12,0.25)] backdrop:bg-ink/40 backdrop:backdrop-blur-[2px] open:scale-100 open:opacity-100 starting:open:scale-95 starting:open:opacity-0 transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none"
     >
@@ -53,7 +60,9 @@ export default function Modal({
             <X size={20} aria-hidden="true" />
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{acik && children}</div>
+        {/* overflow-x-hidden: kaydırma çubukları "her zaman göster" ayarındaki Mac'lerde formun
+            altında yatay kaydırma çubuğu izi (ince çizgi) çıkmasın */}
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pt-5">{acik && children}</div>
       </div>
     </dialog>
   );

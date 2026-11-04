@@ -30,6 +30,21 @@ function varsayilanBaslangic(c: Cihaz | undefined, bugun: number | null) {
   return bugunIso;
 }
 
+/** Cihazı müşterisine bağlayan anahtar (müşteri kaydı olmayan cihazlarda firma adı) */
+const musteriAnahtari = (c: Cihaz) => c.musteriId ?? `ad:${c.musteri}`;
+
+/** Cihaz listesinden müşteri listesi: ada göre sıralı, her birinin cihaz sayısıyla */
+function musterileriCikar(cihazlar: Cihaz[]) {
+  const harita = new Map<string, { anahtar: string; ad: string; adet: number }>();
+  for (const c of cihazlar) {
+    const k = musteriAnahtari(c);
+    const m = harita.get(k);
+    if (m) m.adet++;
+    else harita.set(k, { anahtar: k, ad: c.musteri, adet: 1 });
+  }
+  return [...harita.values()].sort((a, b) => a.ad.localeCompare(b.ad, "tr"));
+}
+
 export default function LisansFormu({
   cihazlar,
   seciliSeri,
@@ -43,7 +58,19 @@ export default function LisansFormu({
 }) {
   const bugun = useBugun();
   const [durum, gonder, bekliyor] = useActionState<LisansFormDurumu, FormData>(lisansTanimla, {});
-  const [seri, setSeri] = useState(seciliSeri ?? cihazlar[0]?.seriNo ?? "");
+  // Önce müşteri, sonra o müşterinin cihazı seçilir. seciliSeri verilirse ikisi de hazır gelir.
+  const baslangicCihazi = cihazlar.find((c) => c.seriNo === seciliSeri);
+  const [musteri, setMusteri] = useState(baslangicCihazi ? musteriAnahtari(baslangicCihazi) : "");
+  const [seri, setSeri] = useState(baslangicCihazi?.seriNo ?? (cihazlar.length === 1 ? cihazlar[0].seriNo : ""));
+  const musteriler = musterileriCikar(cihazlar);
+  const musterininCihazlari = cihazlar.filter((c) => musteriAnahtari(c) === musteri);
+
+  function musteriSec(anahtar: string) {
+    setMusteri(anahtar);
+    const liste = cihazlar.filter((c) => musteriAnahtari(c) === anahtar);
+    setSeri(liste.length === 1 ? liste[0].seriNo : ""); // tek cihazı varsa onu seç
+    setBaslangic(null);
+  }
   const [baslangic, setBaslangic] = useState<string | null>(null);
   const [sure, setSure] = useState(12);
   const bildirildi = useRef<number | null>(null);
@@ -71,25 +98,48 @@ export default function LisansFormu({
         {tekCihaz ? (
           <input type="hidden" name="seriNo" value={seri} />
         ) : (
-          <label className={`${ALAN} sm:col-span-2`}>
-            Cihaz *
-            <select
-              name="seriNo"
-              value={seri}
-              onChange={(e) => {
-                setSeri(e.target.value);
-                setBaslangic(null);
-              }}
-              className={GIRDI}
-              aria-invalid={!!h.seriNo}
-              aria-describedby="hata-seriNo"
-            >
-              {cihazlar.map((c) => (
-                <option key={c.seriNo} value={c.seriNo}>{c.seriNo} · {c.musteri}</option>
-              ))}
-            </select>
-            <Hata id="hata-seriNo" mesaj={h.seriNo} />
-          </label>
+          <>
+            <label className={ALAN}>
+              Müşteri *
+              <select
+                value={musteri}
+                onChange={(e) => musteriSec(e.target.value)}
+                autoFocus
+                className={GIRDI}
+                aria-invalid={!!h.seriNo && !musteri}
+              >
+                <option value="" disabled>Müşteri seçin…</option>
+                {musteriler.map((m) => (
+                  <option key={m.anahtar} value={m.anahtar}>
+                    {m.ad} ({m.adet} cihaz)
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={ALAN}>
+              Cihaz *
+              <select
+                name="seriNo"
+                value={seri}
+                disabled={!musteri}
+                onChange={(e) => {
+                  setSeri(e.target.value);
+                  setBaslangic(null);
+                }}
+                className={`${GIRDI} disabled:cursor-not-allowed disabled:bg-[#F4F5F0] disabled:text-muted`}
+                aria-invalid={!!h.seriNo}
+                aria-describedby="hata-seriNo"
+              >
+                <option value="" disabled>{musteri ? "Cihaz seçin…" : "Önce müşteri seçin"}</option>
+                {musterininCihazlari.map((c) => (
+                  <option key={c.seriNo} value={c.seriNo}>
+                    {c.seriNo} · {c.model}{c.plan ? ` · ${c.plan}` : ""}
+                  </option>
+                ))}
+              </select>
+              <Hata id="hata-seriNo" mesaj={h.seriNo} />
+            </label>
+          </>
         )}
 
         <label className={ALAN}>
@@ -140,7 +190,7 @@ export default function LisansFormu({
         </p>
       )}
 
-      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 -mb-5 border-t border-line bg-card px-5 py-4" : ""}`}>
+      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 bg-card px-5 py-4" : ""}`}>
         {onVazgec && (
           <button
             type="button"

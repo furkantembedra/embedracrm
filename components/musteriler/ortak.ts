@@ -1,6 +1,6 @@
 // Müşteriler bileşenlerinin paylaştığı küçük yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import type { CihazDurumu, Plan } from "./queries";
+import type { CihazDurumu, Plan, Yetkili } from "./queries";
 
 export const PLAN_TONU: Record<Plan, ChipTon> = { Basic: "gray", Pro: "ink", "Pro+": "info", Lead: "warn" };
 
@@ -8,6 +8,7 @@ export const CIHAZ_TONU: Record<CihazDurumu, ChipTon> = {
   "Lisans aktif": "ok",
   "Süresi doluyor": "err",
   Serviste: "info",
+  Lisanssız: "gray",
 };
 
 export function durumTonu(durum: string): ChipTon {
@@ -42,3 +43,11 @@ export function avatarRengi(id: string) {
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return AVATAR_RENKLERI[h % AVATAR_RENKLERI.length];
 }
+
+/** Ara / WhatsApp / E-posta düğmelerinin kullandığı kişi: listedeki ilk yetkili */
+export function birincilYetkili(m: { yetkililer: Yetkili[] }): Yetkili | null {
+  return m.yetkililer?.[0] ?? null;
+}
+
+/** "+90 532 410 22 18" → "+905324102218" (tel: ve wa.me bağlantıları için) */
+export const telefonSade = (t: string) => t.replace(/[^\d+]/g, "");

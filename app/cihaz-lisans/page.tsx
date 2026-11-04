@@ -14,7 +14,7 @@ export default async function CihazLisansPage() {
       cihazlar={cihazlar}
       ozet={ozet}
       rma={rma}
-      musteriler={musteriler.map((m) => ({ id: m.id, ad: m.ad, ulke: m.ulke }))}
+      musteriler={musteriler}
     />
   );
 }

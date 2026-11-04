@@ -11,7 +11,7 @@ import { ASAMA_TONU, gorusmeYaz, sonrakiAsama } from "./ortak";
 const IKINCIL_BTN =
   "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border border-line-strong bg-card px-3 text-sm font-bold transition-colors hover:bg-[#F4F5F0] disabled:cursor-default disabled:opacity-60";
 
-export type DetayBildirimi = { tur: "hata" | "basari"; metin: string; link?: { href: string; ad: string } };
+export type DetayBildirimi = { tur: "hata" | "basari"; metin: string; link?: { href: string; ad: string; onAc?: () => void } };
 
 export default function BasvuruDetay({
   basvuru,
@@ -130,9 +130,11 @@ export default function BasvuruDetay({
           className={`rounded-control px-3 py-2.5 text-[13px] font-semibold ${bildirim.tur === "hata" ? "bg-err-bg text-err" : "bg-ok-bg text-ok"}`}
         >
           {bildirim.metin}
-          {bildirim.link && (
+          {bildirim.link?.onAc ? (
+            <button type="button" onClick={bildirim.link.onAc} className="ml-1 cursor-pointer font-bold underline">{bildirim.link.ad}</button>
+          ) : bildirim.link ? (
             <Link href={bildirim.link.href} className="ml-1 font-bold underline">{bildirim.link.ad}</Link>
-          )}
+          ) : null}
         </p>
       )}
 

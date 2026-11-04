@@ -1,6 +1,6 @@
 "use client";
 
-// Aşama sütunları: Yeni lead → Demo → Teklif → Müzakere → Kazanıldı
+// Aşama sütunları: Yeni lead → Demo → Teklif → Müzakere → Kazanıldı / Kaybedildi
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { kisaTl } from "@/lib/format";
@@ -21,7 +21,7 @@ export default function Kanban({
 
   return (
     <div className="-mx-1 overflow-x-auto px-1 pb-2">
-      <div className="grid min-w-[1340px] grid-cols-5 gap-3.5">
+      <div className="grid min-w-[1600px] grid-cols-6 gap-3.5">
         {ASAMALAR.map((asama) => {
           const bilgi = ASAMA_BILGI[asama];
           const liste = firsatlar.filter((f) => f.asama === asama);
@@ -55,14 +55,14 @@ export default function Kanban({
                 <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: bilgi.renk }} />
                 <h2 className="text-sm font-extrabold">{bilgi.ad}</h2>
                 <span className="rounded-full bg-card px-2 py-0.5 text-xs font-bold tabular-nums text-[#474A42]">{liste.length}</span>
-                <button
+                {asama !== "kaybedildi" && <button
                   type="button"
                   onClick={() => onEkle(asama)}
                   aria-label={`${bilgi.ad} aşamasına fırsat ekle`}
                   className="ml-auto flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] text-[#474A42] transition-colors hover:bg-[#D6D9D0]"
                 >
                   <Plus size={18} aria-hidden="true" />
-                </button>
+                </button>}
               </header>
               <p className="px-1 text-xs font-semibold tabular-nums text-[#474A42]">{kisaTl(toplam)}</p>
 

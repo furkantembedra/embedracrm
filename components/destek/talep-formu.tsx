@@ -148,7 +148,7 @@ export default function TalepFormu({
         <input type="file" name="dosya" className="sr-only" onChange={(e) => setDosya(e.target.files?.[0]?.name ?? null)} />
       </label>
 
-      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 -mb-5 border-t border-line bg-card px-5 py-4" : ""}`}>
+      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 bg-card px-5 py-4" : ""}`}>
         {onVazgec ? (
           <button type="button" onClick={onVazgec} className={IKINCIL_BTN}>Vazgeç</button>
         ) : (

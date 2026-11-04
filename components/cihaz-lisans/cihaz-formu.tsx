@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { cihazKaydet, type CihazFormDurumu } from "./actions";
 import type { Cihaz } from "./queries";
+import { CIHAZ_MODELLERI, URUN_BILGI } from "@/lib/urunler";
+import { tl } from "@/lib/format";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
 const IKINCIL_BTN = "inline-flex min-h-11 cursor-pointer items-center rounded-control border border-line-strong px-4 text-sm font-bold hover:bg-[#F4F5F0]";
@@ -55,6 +57,24 @@ export default function CihazFormu({
       <input type="hidden" name="mevcut" value={mevcutSeriler.join(",")} />
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 text-[15px] font-extrabold">Cihaz</legend>
+        <fieldset className="flex flex-col gap-2 sm:col-span-2">
+          <legend className="mb-1.5 text-[13px] font-bold">Model *</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {CIHAZ_MODELLERI.map((m) => (
+              <label
+                key={m}
+                className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-control border border-line-strong p-3 text-sm has-[:checked]:border-ink has-[:checked]:bg-[#F4F5F0]"
+              >
+                <input type="radio" name="model" value={m} defaultChecked={m === "ONE"} className="mt-0.5 accent-[#0E0F0C]" />
+                <span className="flex flex-col gap-0.5">
+                  <b>{URUN_BILGI[m].ad}</b>
+                  <span className="text-xs text-muted">{URUN_BILGI[m].ekran} · {tl(URUN_BILGI[m].fiyat)} + KDV</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <Hata id="hata-model" mesaj={h.model} />
+        </fieldset>
         <label className={ALAN}>
           Seri no *
           <input
@@ -94,7 +114,7 @@ export default function CihazFormu({
       </fieldset>
       <p className="text-xs text-muted">Cihaz lisanssız kaydedilir; lisansı listeden “Lisans tanımla” ile verebilirsiniz.</p>
 
-      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 -mb-5 border-t border-line bg-card px-5 py-4" : ""}`}>
+      <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 bg-card px-5 py-4" : ""}`}>
         {onVazgec ? (
           <button type="button" onClick={onVazgec} className={IKINCIL_BTN}>Vazgeç</button>
         ) : (

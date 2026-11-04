@@ -1,4 +1,3 @@
-import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
 import OzetKartlari from "@/components/genel-bakis/ozet-kartlari";
 import GelirGrafigi from "@/components/genel-bakis/gelir-grafigi";
@@ -8,7 +7,7 @@ import SuresiDolanlar from "@/components/genel-bakis/suresi-dolanlar";
 import SonTalepler from "@/components/genel-bakis/son-talepler";
 import SonIslemler from "@/components/genel-bakis/son-islemler";
 import LeadKaynaklari from "@/components/genel-bakis/lead-kaynaklari";
-import AracKapsamiTalepleri from "@/components/genel-bakis/arac-kapsami-talepleri";
+import { getCihazlar } from "@/components/cihaz-lisans/queries";
 
 // Satır düzeni: geniş ekranda yan yana, dar ekranda alt alta
 const SATIR = "flex flex-wrap items-stretch gap-4";
@@ -16,7 +15,8 @@ const GENIS = "flex min-w-0 flex-[2_1_560px]";
 const DAR = "flex min-w-0 flex-[1_1_300px]";
 const YARIM = "flex min-w-0 flex-[1_1_420px]";
 
-export default function GenelBakisPage() {
+export default async function GenelBakisPage() {
+  const cihazlar = await getCihazlar();
   return (
     <>
       <PageHeader title="Genel Bakış" description="Satış, lisans ve destek durumunun özeti">
@@ -31,7 +31,7 @@ export default function GenelBakisPage() {
 
       <div className={SATIR}>
         <div className={YARIM}><SatisHattiOzeti /></div>
-        <div className={YARIM}><SuresiDolanlar /></div>
+        <div className={YARIM}><SuresiDolanlar cihazlar={cihazlar} /></div>
       </div>
 
       <div className={SATIR}>
@@ -39,10 +39,7 @@ export default function GenelBakisPage() {
         <div className={DAR}><SonIslemler /></div>
       </div>
 
-      <div className={SATIR}>
-        <div className={YARIM}><LeadKaynaklari /></div>
-        <div className={YARIM}><AracKapsamiTalepleri /></div>
-      </div>
+      <LeadKaynaklari />
     </>
   );
 }

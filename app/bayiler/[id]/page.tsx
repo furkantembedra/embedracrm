@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import BayiGorunumu from "@/components/bayiler/bayi-gorunumu";
 import { getAktifBayiler, getBasvurular } from "@/components/bayiler/queries";
+import { getMusteriler } from "@/components/musteriler/queries";
 
 // /bayiler/polska → bayi ekranı bu başvuru seçili açılır.
 // params istek anında belli olur; Suspense dışında okunursa tüm sayfa bekletilir (cacheComponents).
@@ -15,9 +16,9 @@ export default function BasvuruPage({ params }: { params: Promise<{ id: string }
 
 async function BasvuruIcerik({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [basvurular, bayiler] = await Promise.all([getBasvurular(), getAktifBayiler()]);
+  const [basvurular, bayiler, musteriler] = await Promise.all([getBasvurular(), getAktifBayiler(), getMusteriler()]);
   if (!basvurular.some((b) => b.id === id)) notFound();
-  return <BayiGorunumu basvurular={basvurular} bayiler={bayiler} seciliIlk={id} />;
+  return <BayiGorunumu basvurular={basvurular} bayiler={bayiler} musteriler={musteriler} seciliIlk={id} />;
 }
 
 function Yukleniyor() {

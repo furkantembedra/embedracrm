@@ -1,7 +1,7 @@
 // Satış Hattı: veri okuma. Şimdilik demo veri döner;
 // Supabase bağlanınca getFirsatlar() içini supabase.from("deals")... ile değiştirin.
 
-export const ASAMALAR = ["yeni", "demo", "teklif", "muzakere", "kazanildi"] as const;
+export const ASAMALAR = ["yeni", "demo", "teklif", "muzakere", "kazanildi", "kaybedildi"] as const;
 export type Asama = (typeof ASAMALAR)[number];
 
 export const ASAMA_BILGI: Record<Asama, { ad: string; renk: string }> = {
@@ -10,7 +10,15 @@ export const ASAMA_BILGI: Record<Asama, { ad: string; renk: string }> = {
   teklif: { ad: "Teklif gönderildi", renk: "#E58A2B" },
   muzakere: { ad: "Müzakere", renk: "#0E0F0C" },
   kazanildi: { ad: "Kazanıldı", renk: "#B6DD2E" },
+  kaybedildi: { ad: "Kaybedildi", renk: "#D93F3F" },
 };
+
+/** Kazanıldı ve Kaybedildi kapalı aşamalardır: açık fırsat değerine ve gecikme uyarısına girmez */
+export const KAPALI_ASAMALAR: readonly Asama[] = ["kazanildi", "kaybedildi"];
+
+export const KAYIP_NEDENLERI = ["Fiyat yüksek bulundu", "Rakibi seçti", "Bütçe yok", "Yanıt vermiyor", "İhtiyacı kalmadı", "Diğer"] as const;
+export type KayipNedeni = (typeof KAYIP_NEDENLERI)[number];
+export type KayipBilgisi = { neden: KayipNedeni; aciklama?: string };
 
 export const KAYNAKLAR = ["Web sitesi", "WhatsApp", "Instagram", "Bayi", "Fuar", "Mevcut müşteri"] as const;
 export type Kaynak = (typeof KAYNAKLAR)[number];
@@ -25,6 +33,8 @@ export type Firsat = {
   asama: Asama;
   sonrakiAdim: string;
   sonrakiTarih: string; // "2026-11-05"
+  kayipNedeni?: KayipNedeni; // yalnızca Kaybedildi aşamasında
+  kayipAciklama?: string; // "Diğer" seçilince yazılan sebep
 };
 
 const DEMO: Firsat[] = [
@@ -39,6 +49,7 @@ const DEMO: Firsat[] = [
   { id: "f9", firma: "Nordic Steering AB", konum: "Göteborg, SE", kaynak: "Mevcut müşteri", icerik: "Pro+ yenileme · 2 yıl", tutar: 234_000, asama: "muzakere", sonrakiAdim: "İndirim onayı", sonrakiTarih: "2026-11-12" },
   { id: "f10", firma: "Volant Lenkung Service", konum: "Stuttgart, DE", kaynak: "Fuar", icerik: "2× ONE + Pro+", tutar: 359_000, asama: "kazanildi", sonrakiAdim: "Sevkiyat hazırlanıyor", sonrakiTarih: "2026-11-03" },
   { id: "f11", firma: "Bursa ECU Lab", konum: "Bursa, TR", kaynak: "WhatsApp", icerik: "Pro+ yenileme", tutar: 96_000, asama: "kazanildi", sonrakiAdim: "Fatura kesildi", sonrakiTarih: "2026-11-01" },
+  { id: "f12", firma: "Rota Servis Konya", konum: "Konya, TR", kaynak: "Web sitesi", icerik: "1× ONE + Pro", tutar: 178_000, asama: "kaybedildi", sonrakiAdim: "6 ay sonra tekrar ara", sonrakiTarih: "2027-04-15", kayipNedeni: "Bütçe yok" },
 ];
 
 export async function getFirsatlar(): Promise<Firsat[]> {

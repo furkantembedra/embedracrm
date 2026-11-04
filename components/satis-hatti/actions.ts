@@ -2,7 +2,7 @@
 // Satış Hattı: kaydetme ve güncelleme (Server Actions)
 import { revalidatePath } from "next/cache";
 import { musteriBulAdla, musteriEkle, type Musteri, type Plan, type Segment } from "@/components/musteriler/queries";
-import { ASAMALAR, KAYNAKLAR, type Asama, type Firsat, type Kaynak } from "./queries";
+import { ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, type Asama, type Firsat, type KayipBilgisi, type Kaynak } from "./queries";
 
 const ULKE_KODU: Record<string, string> = {
   TR: "Türkiye", DE: "Almanya", ES: "İspanya", FR: "Fransa", PL: "Polonya", SE: "İsveç",
@@ -36,10 +36,14 @@ const ISLENENLER = (g.__embedraKazanilanlar ??= new Set());
 
 export type AsamaSonucu = { musteri?: { id: string; ad: string; yeni: boolean } };
 
-export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama): Promise<AsamaSonucu> {
+export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?: KayipBilgisi): Promise<AsamaSonucu> {
   if (!ASAMALAR.includes(asama)) throw new Error("Geçersiz aşama");
+  if (asama === "kaybedildi") {
+    if (!kayip || !KAYIP_NEDENLERI.includes(kayip.neden)) throw new Error("Kayıp nedeni seçin");
+    if (kayip.neden === "Diğer" && !kayip.aciklama?.trim()) throw new Error("Diğer seçildiyse sebebi yazın");
+  }
   // TODO: Supabase bağlanınca:
-  // await supabase.from("deals").update({ stage: asama }).eq("id", firsat.id);
+  // await supabase.from("deals").update({ stage: asama, lost_reason: kayip?.neden ?? null, lost_note: kayip?.aciklama ?? null }).eq("id", firsat.id);
 
   return asama === "kazanildi" ? kazanilinca(firsat) : {};
 }
@@ -57,6 +61,7 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
     mevcut.toplamDeger = (mevcut.toplamDeger ?? 0) + firsat.tutar;
     mevcut.sonTemas = "Bugün";
     revalidatePath("/musteriler");
+    revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
     return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false } };
   }
 
@@ -72,16 +77,15 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
     toplamDeger: firsat.tutar,
     sonTemas: "Bugün",
     durum: "Yeni müşteri",
-    yetkili: "—",
-    telefon: "—",
-    eposta: "—",
-    vergiNo: "—",
+    yetkililer: [], // müşteri panelinden "Yetkili ekle" ile girilir
+    vergiNo: "",
     acikTalep: 0,
     cihazlar: [],
     olaylar: [olay, { metin: `Satış hattından müşteriye dönüştü (kaynak: ${firsat.kaynak})`, zaman: "Bugün", tur: "not" }],
   };
   await musteriEkle(musteri);
   revalidatePath("/musteriler");
+    revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
   return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true } };
 }
 
@@ -90,28 +94,37 @@ export type FirsatFormDurumu = { hatalar?: Record<string, string>; firsat?: Firs
 export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): Promise<FirsatFormDurumu> {
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const firma = metin("firma");
-  const tutar = Number(metin("tutar").replace(/\./g, "").replace(",", "."));
+  const tutarMetni = metin("tutar");
+  const tutar = Number(tutarMetni.replace(/\./g, "").replace(",", "."));
+  const konum = metin("konum");
+  const icerik = metin("icerik");
   const kaynak = metin("kaynak");
   const asama = metin("asama");
+  const sonrakiAdim = metin("sonrakiAdim");
   const sonrakiTarih = metin("sonrakiTarih");
 
+  // Tüm alanlar zorunlu; eksik olanların hepsi aynı anda bildirilir
   const hatalar: Record<string, string> = {};
-  if (!firma) hatalar.firma = "Firma adı zorunlu.";
-  if (!Number.isFinite(tutar) || tutar <= 0) hatalar.tutar = "Tutarı TL olarak girin (ör. 184000).";
+  if (!firma) hatalar.firma = "Firma adını girin.";
+  if (!konum) hatalar.konum = "Konumu girin (şehir, ülke).";
   if (!KAYNAKLAR.includes(kaynak as Kaynak)) hatalar.kaynak = "Kaynak seçin.";
-  if (!ASAMALAR.includes(asama as Asama)) hatalar.asama = "Aşama seçin.";
+  if (!icerik) hatalar.icerik = "Fırsatın içeriğini girin (ör. 2× ONE + Pro+ lisans).";
+  if (!tutarMetni) hatalar.tutar = "Tutarı girin.";
+  else if (!Number.isFinite(tutar) || tutar <= 0) hatalar.tutar = "Tutarı TL olarak girin (ör. 184000).";
+  if (!ASAMALAR.includes(asama as Asama) || asama === "kaybedildi") hatalar.asama = "Aşama seçin.";
+  if (!sonrakiAdim) hatalar.sonrakiAdim = "Sonraki adımı girin (ör. Demo planla).";
   if (!sonrakiTarih) hatalar.sonrakiTarih = "Sonraki adım için bir tarih girin.";
   if (Object.keys(hatalar).length) return { hatalar };
 
   const firsat: Firsat = {
     id: crypto.randomUUID(),
     firma,
-    konum: metin("konum") || "—",
+    konum,
     kaynak: kaynak as Kaynak,
-    icerik: metin("icerik") || "—",
+    icerik,
     tutar,
     asama: asama as Asama,
-    sonrakiAdim: metin("sonrakiAdim") || "—",
+    sonrakiAdim,
     sonrakiTarih,
   };
 

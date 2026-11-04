@@ -2,7 +2,7 @@
 // Destek: kaydetme ve güncelleme (Server Actions)
 import { revalidatePath } from "next/cache";
 import { KANALLAR, ONCELIKLER } from "@/lib/constants";
-import { getMusteri } from "@/components/musteriler/queries";
+import { getMusteri, musteriyiGuncelle } from "@/components/musteriler/queries";
 import { KONULAR, talebiGuncelle, talepEkle, type Kanal, type Konu, type Oncelik, type Talep, type TalepDurumu, type TalepNotu } from "./queries";
 import { simdiIso } from "./ortak";
 
@@ -57,16 +57,19 @@ export async function talepKaydet(_onceki: TalepFormDurumu, form: FormData): Pro
     dosya,
     musteriId: musteri.id,
     musteri: musteri.ad,
-    yetkili: musteri.yetkili,
-    telefon: musteri.telefon,
-    eposta: musteri.eposta,
+    // Talep birincil yetkiliyle açılır
+    yetkili: musteri.yetkililer[0]?.ad || "—",
+    telefon: musteri.yetkililer[0]?.telefon || "—",
+    eposta: musteri.yetkililer[0]?.eposta || "—",
     seriNo: cihaz?.seriNo ?? null,
     plan: musteri.plan,
     firmware: cihaz?.firmware ?? "—",
     arac: metin("arac") || "—",
     notlar: [{ tur: "acilis", metin: `${kanal} ile gelen talep kaydedildi${dosya ? ", dosya eklendi" : ""}.`, zaman }],
   });
-  musteri.acikTalep += 1;
+  await musteriyiGuncelle(musteri.id, (m) => {
+    m.acikTalep += 1;
+  });
 
   yenile();
   revalidatePath("/musteriler");

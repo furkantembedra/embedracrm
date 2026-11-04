@@ -66,3 +66,21 @@ export function lisansUygula(c: Cihaz, l: LisansKaydi & { seriNo: string }): Cih
     gecmis: [{ plan: l.plan, baslangic: l.baslangic, bitis: l.bitis }, ...c.gecmis],
   };
 }
+
+/** Bu kadar gündür bildirim gelmeyen cihaz "uzun süredir bağlanmadı" sayılır */
+export const BAGLANTI_UYARI_GUNU = 30;
+
+/** "2026-11-04T13:20:00Z" → "Az önce" / "12 dk önce" / "3 sa önce" / "5 gün önce". simdi: useSimdi() değeri */
+export function sonGorulmeYaz(zaman: string | null | undefined, simdi: number | null) {
+  if (!zaman) return { metin: "Bağlanmadı", uyari: false };
+  if (simdi === null) return { metin: "—", uyari: false };
+  const dk = Math.max(0, Math.round((simdi - new Date(zaman).getTime()) / 60_000));
+  const gun = Math.floor(dk / 1440);
+  const metin = dk < 1 ? "Az önce" : dk < 60 ? `${dk} dk önce` : dk < 1440 ? `${Math.floor(dk / 60)} sa önce` : `${gun} gün önce`;
+  return { metin, uyari: gun >= BAGLANTI_UYARI_GUNU };
+}
+
+/** ISO zaman → "04.11.2026 16:20" */
+export function zamanYaz(zaman: string) {
+  return new Date(zaman).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}

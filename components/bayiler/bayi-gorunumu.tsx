@@ -16,14 +16,18 @@ import BayiPerformansi from "./bayi-performansi";
 import BolgeKapsamasi from "./bolge-kapsamasi";
 import BasvuruFormu from "./basvuru-formu";
 import GorusmeFormu from "./gorusme-formu";
+import MusteriDetay from "@/components/musteriler/musteri-detay";
+import type { Musteri } from "@/components/musteriler/queries";
 
 export default function BayiGorunumu({
   basvurular: ilk,
   bayiler: ilkBayiler,
+  musteriler,
   seciliIlk,
 }: {
   basvurular: Basvuru[];
   bayiler: AktifBayi[];
+  musteriler: Musteri[]; // lansman sonrası "Müşteriyi aç" penceresi için
   seciliIlk?: string; // /bayiler/[id] adresinden gelindiyse
 }) {
   const [basvurular, setBasvurular] = useState(ilk);
@@ -35,6 +39,9 @@ export default function BayiGorunumu({
   const [bildirim, setBildirim] = useState<DetayBildirimi | null>(null);
   const [ekleAcik, setEkleAcik] = useState(false);
   const [gorusmeAcik, setGorusmeAcik] = useState(false);
+  const [acikMusteri, setAcikMusteri] = useState<string | null>(null);
+  const musteriKaydi = musteriler.find((m) => m.id === acikMusteri) ?? null;
+  const musteriKapat = useCallback(() => setAcikMusteri(null), []);
   const [bekliyor, baslat] = useTransition();
 
   const sayilar = useMemo(() => {
@@ -105,7 +112,7 @@ export default function BayiGorunumu({
         metin: m
           ? `Lansman tamam. ${m.ad} aktif bayilere ${m.yeni ? "ve müşterilere eklendi." : "eklendi, müşteri kaydı bayi olarak güncellendi."}`
           : `${ASAMA_BILGI[yeni.asama].ad} aşamasına alındı.`,
-        link: m ? { href: `/musteriler/${m.id}`, ad: "Müşteriyi aç →" } : undefined,
+        link: m ? { href: `/musteriler/${m.id}`, ad: "Müşteriyi aç →", onAc: () => setAcikMusteri(m.id) } : undefined,
       });
     });
   };
@@ -186,6 +193,19 @@ export default function BayiGorunumu({
         aciklama={secili ? `${secili.sirket} · ${secili.yetkili}` : undefined}
       >
         {secili && <GorusmeFormu key={secili.id} basvuru={secili} onKaydedildi={gorusmeKaydedildi} onVazgec={gorusmeKapat} />}
+      </Modal>
+
+      <Modal
+        acik={acikMusteri !== null}
+        onKapat={musteriKapat}
+        baslik="Müşteri"
+        aciklama={musteriKaydi ? `${musteriKaydi.sehir}, ${musteriKaydi.ulke}` : undefined}
+      >
+        {musteriKaydi ? (
+          <MusteriDetay musteri={musteriKaydi} yalin />
+        ) : (
+          <p className="pb-5 text-sm text-muted">Müşteri kaydı yükleniyor…</p>
+        )}
       </Modal>
     </>
   );
