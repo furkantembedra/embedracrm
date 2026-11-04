@@ -2,7 +2,7 @@
 
 // Yeni fırsat formu (sağdan açılan panelin içinde gösterilir)
 import { useActionState, useEffect, useRef } from "react";
-import { firsatKaydet, type FirsatFormDurumu } from "./actions";
+import { firsatKaydet, type AsamaSonucu, type FirsatFormDurumu } from "./actions";
 import { ASAMALAR, ASAMA_BILGI, KAYNAKLAR, type Asama, type Firsat } from "./queries";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
@@ -19,7 +19,7 @@ export default function FirsatFormu({
   onVazgec,
 }: {
   baslangicAsamasi?: Asama;
-  onKaydedildi: (f: Firsat) => void;
+  onKaydedildi: (f: Firsat, musteri?: AsamaSonucu["musteri"]) => void;
   onVazgec: () => void;
 }) {
   const [durum, gonder, bekliyor] = useActionState<FirsatFormDurumu, FormData>(firsatKaydet, {});
@@ -29,9 +29,9 @@ export default function FirsatFormu({
   useEffect(() => {
     if (durum.firsat && bildirildi.current !== durum.firsat.id) {
       bildirildi.current = durum.firsat.id;
-      onKaydedildi(durum.firsat);
+      onKaydedildi(durum.firsat, durum.musteri);
     }
-  }, [durum.firsat, onKaydedildi]);
+  }, [durum.firsat, durum.musteri, onKaydedildi]);
 
   return (
     <form action={gonder} noValidate className="flex flex-col gap-5">

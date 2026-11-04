@@ -1,13 +1,13 @@
 import PageHeader from "@/components/layout/page-header";
 import CihazFormu from "@/components/cihaz-lisans/cihaz-formu";
-import LisansFormu from "@/components/cihaz-lisans/lisans-formu";
+import { getMusteriler } from "@/components/musteriler/queries";
 
-export default function YeniCihazPage() {
+export default async function YeniCihazPage() {
+  const musteriler = await getMusteriler();
   return (
     <>
       <PageHeader title="Yeni cihaz" />
-      <CihazFormu />
-      <LisansFormu />
+      <CihazFormu musteriler={musteriler.map((m) => ({ id: m.id, ad: m.ad, ulke: m.ulke }))} />
     </>
   );
 }

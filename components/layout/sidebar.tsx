@@ -1,8 +1,11 @@
 "use client";
 
 // Koyu kenar menü. Geniş ekranda solda sabit sütun, telefonda üstte yatay kaydırılan menü.
+// Yola bağlı kısım (seçili öğe) Suspense içinde: cacheComponents açıkken parametreli
+// rotalarda (/musteriler/[id] vb.) usePathname istek anına kadar askıda kalır.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 type MenuOgesi = { href: string; label: string; icon: string };
 
@@ -49,11 +52,22 @@ function MenuBolumu({ baslik, ogeler, aktif }: { baslik: string; ogeler: MenuOge
   );
 }
 
-export default function Sidebar() {
-  const aktif = usePathname() ?? "";
+function Menu({ aktif }: { aktif: string }) {
   // /bayiler/raporlama açıkken "Bayi & Distribütör" de seçili görünmesin
   const bayiAktif = aktif.startsWith("/bayiler/raporlama") ? "" : aktif;
+  return (
+    <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:gap-6 lg:overflow-visible lg:p-0">
+      <MenuBolumu baslik="ANA MENÜ" ogeler={ANA_MENU} aktif={bayiAktif} />
+      <MenuBolumu baslik="OPERASYON" ogeler={OPERASYON} aktif={aktif} />
+    </div>
+  );
+}
 
+function AktifMenu() {
+  return <Menu aktif={usePathname() ?? ""} />;
+}
+
+export default function Sidebar() {
   return (
     <aside className="bg-ink text-white lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0">
       <nav aria-label="Ana menü" className="flex h-full flex-col gap-4 px-3.5 py-4 lg:gap-6 lg:py-5">
@@ -63,10 +77,9 @@ export default function Sidebar() {
           <span className="ml-auto rounded-full bg-[#23251F] px-2 py-0.5 text-[11px] font-bold text-lime">CRM</span>
         </div>
 
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:gap-6 lg:overflow-visible lg:p-0">
-          <MenuBolumu baslik="ANA MENÜ" ogeler={ANA_MENU} aktif={bayiAktif} />
-          <MenuBolumu baslik="OPERASYON" ogeler={OPERASYON} aktif={aktif} />
-        </div>
+        <Suspense fallback={<Menu aktif="" />}>
+          <AktifMenu />
+        </Suspense>
 
         <div className="mt-auto hidden items-center gap-3 border-t border-[#23251F] px-2 pt-3 lg:flex">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue text-sm font-bold">DA</div>

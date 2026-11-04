@@ -1,15 +1,14 @@
-import PageHeader from "@/components/layout/page-header";
-import TalepListesi from "@/components/destek/talep-listesi";
-import TalepDetay from "@/components/destek/talep-detay";
-import MusteriBilgiPaneli from "@/components/destek/musteri-bilgi-paneli";
+import DestekGorunumu from "@/components/destek/destek-gorunumu";
+import { getTalepler, sonrakiTalepNo } from "@/components/destek/queries";
+import { getMusteriler } from "@/components/musteriler/queries";
 
-export default function DestekPage() {
+export default async function DestekPage() {
+  const [talepler, musteriler, sonrakiNo] = await Promise.all([getTalepler(), getMusteriler(), sonrakiTalepNo()]);
   return (
-    <>
-      <PageHeader title="Destek" />
-      <TalepListesi />
-      <TalepDetay />
-      <MusteriBilgiPaneli />
-    </>
+    <DestekGorunumu
+      talepler={talepler}
+      sonrakiNo={sonrakiNo}
+      musteriler={musteriler.map((m) => ({ id: m.id, ad: m.ad, cihazlar: m.cihazlar.map((c) => ({ seriNo: c.seriNo, firmware: c.firmware })) }))}
+    />
   );
 }

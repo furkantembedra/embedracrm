@@ -1,19 +1,20 @@
-import PageHeader from "@/components/layout/page-header";
-import OzetKartlari from "@/components/cihaz-lisans/ozet-kartlari";
-import CihazTablosu from "@/components/cihaz-lisans/cihaz-tablosu";
-import FirmwareDagilimi from "@/components/cihaz-lisans/firmware-dagilimi";
-import ServisKuyrugu from "@/components/cihaz-lisans/servis-kuyrugu";
-import LisansPlanlari from "@/components/cihaz-lisans/lisans-planlari";
+import CihazGorunumu from "@/components/cihaz-lisans/cihaz-gorunumu";
+import { getCihazlar, getCihazOzeti, getRmaKuyrugu } from "@/components/cihaz-lisans/queries";
+import { getMusteriler } from "@/components/musteriler/queries";
 
-export default function CihazLisansPage() {
+export default async function CihazLisansPage() {
+  const [cihazlar, ozet, rma, musteriler] = await Promise.all([
+    getCihazlar(),
+    getCihazOzeti(),
+    getRmaKuyrugu(),
+    getMusteriler(),
+  ]);
   return (
-    <>
-      <PageHeader title="Cihaz & Lisans" />
-      <OzetKartlari />
-      <CihazTablosu />
-      <FirmwareDagilimi />
-      <ServisKuyrugu />
-      <LisansPlanlari />
-    </>
+    <CihazGorunumu
+      cihazlar={cihazlar}
+      ozet={ozet}
+      rma={rma}
+      musteriler={musteriler.map((m) => ({ id: m.id, ad: m.ad, ulke: m.ulke }))}
+    />
   );
 }

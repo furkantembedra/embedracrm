@@ -1,6 +1,7 @@
 "use server";
 // Müşteriler: kaydetme, güncelleme ve silme (Server Actions)
-import type { Musteri, Plan, Segment } from "./queries";
+import { revalidatePath } from "next/cache";
+import { musteriEkle, type Musteri, type Plan, type Segment } from "./queries";
 
 const SEGMENTLER: Segment[] = ["servis", "muhendislik", "egitim", "bayi"];
 const PLANLAR: Plan[] = ["Lead", "Basic", "Pro", "Pro+"];
@@ -47,7 +48,8 @@ export async function musteriKaydet(_onceki: FormDurumu, form: FormData): Promis
     ],
   };
 
-  // TODO: Supabase bağlanınca: await supabase.from("customers").insert({ ... }).select().single();
+  await musteriEkle(musteri);
+  revalidatePath("/musteriler");
 
   return { musteri };
 }

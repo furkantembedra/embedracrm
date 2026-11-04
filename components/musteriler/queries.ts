@@ -126,10 +126,29 @@ const DEMO: Musteri[] = [
   },
 ];
 
+// Demo depo: sunucu belleğinde tutulur, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
+// globalThis'te durur ki geliştirmede dosya kaydedilince (HMR) eklenenler kaybolmasın.
+const g = globalThis as { __embedraMusteriler?: Musteri[] };
+const DEPO = (g.__embedraMusteriler ??= [...DEMO]);
+
 export async function getMusteriler(): Promise<Musteri[]> {
-  return DEMO;
+  return DEPO;
 }
 
 export async function getMusteri(id: string): Promise<Musteri | null> {
-  return DEMO.find((m) => m.id === id) ?? null;
+  return DEPO.find((m) => m.id === id) ?? null;
+}
+
+/** "Volant Lenkung Service" ile "Volant Lenkung Service GmbH" aynı firma sayılır. */
+export async function musteriBulAdla(ad: string): Promise<Musteri | null> {
+  const n = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const aranan = n(ad);
+  if (!aranan) return null;
+  return DEPO.find((m) => n(m.ad) === aranan || n(m.ad).startsWith(aranan + " ") || aranan.startsWith(n(m.ad) + " ")) ?? null;
+}
+
+/** Yalnızca sunucu tarafındaki actions dosyalarından çağrılır. */
+export async function musteriEkle(m: Musteri) {
+  DEPO.unshift(m);
+  // TODO: Supabase bağlanınca: await supabase.from("customers").insert({ ... });
 }
