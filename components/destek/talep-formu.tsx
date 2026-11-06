@@ -2,6 +2,7 @@
 
 // Yeni talep formu: müşteri, cihaz, kanal, konu, öncelik, dosya.
 // Destek sayfasında ortada açılan pencerede, /destek/yeni adresinde ise tek başına gösterilir.
+import { dosyaSecildi } from "./ortak";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
@@ -37,6 +38,7 @@ export default function TalepFormu({
   const [durum, gonder, bekliyor] = useActionState<TalepFormDurumu, FormData>(talepKaydet, {});
   const [musteriId, setMusteriId] = useState("");
   const [dosya, setDosya] = useState<string | null>(null);
+  const [dosyaHata, setDosyaHata] = useState<string | null>(null);
   const bildirildi = useRef<string | null>(null);
   const h = durum.hatalar ?? {};
   const pencerede = Boolean(onKaydedildi);
@@ -81,7 +83,7 @@ export default function TalepFormu({
           <select key={musteriId} name="seriNo" defaultValue={cihazlar[0]?.seriNo ?? ""} disabled={!musteriId} className={GIRDI}>
             {!musteriId && <option value="">Önce müşteri seçin</option>}
             {musteriId && cihazlar.length === 0 && <option value="">Kayıtlı cihaz yok</option>}
-            {cihazlar.map((c) => <option key={c.seriNo} value={c.seriNo}>{c.seriNo} · {c.firmware}</option>)}
+            {cihazlar.map((c) => <option key={c.seriNo} value={c.seriNo}>{c.seriNo}</option>)}
             {musteriId && cihazlar.length > 0 && <option value="">Cihaz belirtilmedi</option>}
           </select>
         </label>
@@ -145,8 +147,18 @@ export default function TalepFormu({
       <label className="flex min-h-16 cursor-pointer items-center justify-center gap-2.5 rounded-[14px] border-[1.5px] border-dashed border-[#C9CCC2] bg-[#FAFBF8] px-4 text-[13px] font-semibold text-[#474A42] hover:border-ink">
         <Paperclip size={18} aria-hidden="true" />
         <span className="truncate">{dosya ?? "Log dosyası veya fotoğraf ekleyin"}</span>
-        <input type="file" name="dosya" className="sr-only" onChange={(e) => setDosya(e.target.files?.[0]?.name ?? null)} />
+        <input
+          type="file"
+          name="dosya"
+          className="sr-only"
+          onChange={(e) => {
+            const { ad, hata } = dosyaSecildi(e.target);
+            setDosya(ad);
+            setDosyaHata(hata);
+          }}
+        />
       </label>
+      {dosyaHata && <span role="alert" className="-mt-2 text-xs font-semibold text-err">{dosyaHata}</span>}
 
       <div className={`flex justify-end gap-2 ${pencerede ? "sticky bottom-0 -mx-5 bg-card px-5 py-4" : ""}`}>
         {onVazgec ? (

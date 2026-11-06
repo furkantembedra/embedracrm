@@ -14,7 +14,23 @@ import MusteriZamanCizelgesi from "./musteri-zaman-cizelgesi";
 import MusteriNotFormu from "./musteri-not-formu";
 
 const ILETISIM_BTN =
-  "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border border-line-strong bg-card px-2 text-[13px] font-bold transition-colors hover:bg-[#F4F5F0] aria-disabled:pointer-events-none aria-disabled:opacity-40";
+  "inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control border border-line-strong bg-card px-2 text-[13px] font-bold transition-colors hover:bg-[#F4F5F0] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-card";
+
+/** Ara / WhatsApp / E-posta: bağlantı yoksa devre dışı düğme olur, title nedeni söyler */
+function IletisimDugmesi({ href, ikon, etiket, baslik, yeniSekme }: { href: string | null; ikon: React.ReactNode; etiket: string; baslik: string; yeniSekme?: boolean }) {
+  if (!href) {
+    return (
+      <span title={baslik} className="flex">
+        <button type="button" disabled aria-label={`${etiket}: ${baslik}`} className={ILETISIM_BTN}>{ikon}{etiket}</button>
+      </span>
+    );
+  }
+  return (
+    <a href={href} title={baslik} className={ILETISIM_BTN} {...(yeniSekme ? { target: "_blank", rel: "noreferrer" } : {})}>
+      {ikon}{etiket}
+    </a>
+  );
+}
 
 export default function MusteriDetay({
   musteri,
@@ -42,7 +58,11 @@ export default function MusteriDetay({
   }
   const m: Musteri = yerel.id === musteri.id ? { ...musteri, ...yerel, id: musteri.id } : musteri;
   const kisi = birincilYetkili(m);
-  const telefon = kisi?.telefon ? telefonSade(kisi.telefon) : "";
+  // Birincil yetkilide yoksa telefonu / e-postası olan ilk yetkili kullanılır
+  const telefonlu = kisi?.telefon ? kisi : m.yetkililer.find((y) => y.telefon) ?? null;
+  const epostali = kisi?.eposta ? kisi : m.yetkililer.find((y) => y.eposta) ?? null;
+  const telefon = telefonlu?.telefon ? telefonSade(telefonlu.telefon) : "";
+  const yetkiliYok = m.yetkililer.length === 0;
 
   function iletisimDegisti(d: IletisimDegisikligi) {
     setYerel((y) => ({ ...(y.id === m.id ? y : {}), ...d, id: m.id }));
@@ -75,16 +95,26 @@ export default function MusteriDetay({
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {/* Birincil yetkiliyi kullanır; numara / e-posta yoksa düğme pasif görünür */}
-        <a href={telefon ? `tel:${telefon}` : undefined} aria-disabled={!telefon} title={kisi ? kisi.ad : "Önce yetkili ekleyin"} className={ILETISIM_BTN}>
-          <Phone size={16} aria-hidden="true" />Ara
-        </a>
-        <a href={telefon ? `https://wa.me/${telefon.replace("+", "")}` : undefined} aria-disabled={!telefon} target="_blank" rel="noreferrer" className={ILETISIM_BTN}>
-          <MessageCircle size={16} aria-hidden="true" />WhatsApp
-        </a>
-        <a href={kisi?.eposta ? `mailto:${kisi.eposta}` : undefined} aria-disabled={!kisi?.eposta} className={ILETISIM_BTN}>
-          <Mail size={16} aria-hidden="true" />E-posta
-        </a>
+        {/* Numara / e-posta yoksa düğme devre dışı; üzerine gelince nedeni yazar */}
+        <IletisimDugmesi
+          href={telefon ? `tel:${telefon}` : null}
+          ikon={<Phone size={16} aria-hidden="true" />}
+          etiket="Ara"
+          baslik={telefonlu ? `${telefonlu.ad} · ${telefonlu.telefon}` : yetkiliYok ? "Önce yetkili ekleyin" : "Yetkililerde telefon numarası yok"}
+        />
+        <IletisimDugmesi
+          href={telefon ? `https://wa.me/${telefon.replace("+", "")}` : null}
+          yeniSekme
+          ikon={<MessageCircle size={16} aria-hidden="true" />}
+          etiket="WhatsApp"
+          baslik={telefonlu ? `${telefonlu.ad} · ${telefonlu.telefon}` : yetkiliYok ? "Önce yetkili ekleyin" : "Yetkililerde telefon numarası yok"}
+        />
+        <IletisimDugmesi
+          href={epostali ? `mailto:${epostali.eposta}` : null}
+          ikon={<Mail size={16} aria-hidden="true" />}
+          etiket="E-posta"
+          baslik={epostali ? `${epostali.ad} · ${epostali.eposta}` : yetkiliYok ? "Önce yetkili ekleyin" : "Yetkililerde e-posta adresi yok"}
+        />
       </div>
 
       <dl className="grid grid-cols-3 gap-2">
@@ -124,7 +154,7 @@ export default function MusteriDetay({
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-mono text-xs font-semibold">{c.seriNo}</span>
-                <span className="text-xs text-muted"><b className="font-bold text-ink">{c.model}</b> · Firmware {c.firmware}</span>
+                <span className="text-xs text-muted"><b className="font-bold text-ink">{c.model}</b></span>
               </div>
               <Chip ton={CIHAZ_TONU[c.durum]}>{c.durum}</Chip>
             </div>

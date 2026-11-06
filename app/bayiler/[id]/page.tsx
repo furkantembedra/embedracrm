@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import BayiGorunumu from "@/components/bayiler/bayi-gorunumu";
-import { getAktifBayiler, getBasvurular } from "@/components/bayiler/queries";
+import { getAktifBayiler, getBasvurular, getBayiHareketleri } from "@/components/bayiler/queries";
+import { getCihazlar } from "@/components/cihaz-lisans/queries";
 import { getMusteriler } from "@/components/musteriler/queries";
 
 // /bayiler/polska → bayi ekranı bu başvuru seçili açılır.
@@ -16,9 +17,9 @@ export default function BasvuruPage({ params }: { params: Promise<{ id: string }
 
 async function BasvuruIcerik({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [basvurular, bayiler, musteriler] = await Promise.all([getBasvurular(), getAktifBayiler(), getMusteriler()]);
+  const [basvurular, bayiler, musteriler, hareketler, cihazlar] = await Promise.all([getBasvurular(), getAktifBayiler(), getMusteriler(), getBayiHareketleri(), getCihazlar()]);
   if (!basvurular.some((b) => b.id === id)) notFound();
-  return <BayiGorunumu basvurular={basvurular} bayiler={bayiler} musteriler={musteriler} seciliIlk={id} />;
+  return <BayiGorunumu basvurular={basvurular} bayiler={bayiler} musteriler={musteriler} hareketler={hareketler} bayiCihazlari={cihazlar.filter((c) => c.bayiId)} seciliIlk={id} />;
 }
 
 function Yukleniyor() {

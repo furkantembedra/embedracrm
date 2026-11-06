@@ -1,7 +1,16 @@
 "use server";
 // Müşteriler: kaydetme, güncelleme ve silme (Server Actions)
 import { revalidatePath } from "next/cache";
-import { musteriEkle, musteriyiGuncelle, type Musteri, type Olay, type Plan, type Segment, type Yetkili } from "./queries";
+import {
+  IZIN_KANALLARI, IZIN_KANAL_ADI, IZIN_KAYNAKLARI, musteriEkle, musteriyiGuncelle,
+  type IzinKanali, type IzinKaydi, type Musteri, type Olay, type Plan, type Segment, type Yetkili,
+} from "./queries";
+
+/** Yerel tarih "2026-11-06" */
+function bugunIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const SEGMENTLER: Segment[] = ["servis", "muhendislik", "egitim", "bayi"];
 const PLANLAR: Plan[] = ["Lead", "Basic", "Pro", "Pro+"];
@@ -36,7 +45,7 @@ export async function musteriKaydet(_onceki: FormDurumu, form: FormData): Promis
     toplamDeger: null,
     sonTemas: "Bugün",
     durum: plan === "Lead" ? "Yeni lead" : "Yeni müşteri",
-    yetkililer: [{ id: crypto.randomUUID(), ad: metin("yetkili") || ad, unvan: "", telefon, eposta }],
+    yetkililer: [{ id: crypto.randomUUID(), ad: metin("yetkili") || ad, unvan: "", telefon, eposta, izinler: formIzinleri(form) }],
     vergiNo: metin("vergiNo"),
     acikTalep: 0,
     cihazlar: [],
@@ -90,6 +99,7 @@ export async function yetkiliKaydet(_onceki: YetkiliFormDurumu, form: FormData):
   const yetkiliId = metin("yetkiliId");
   const kisi: Yetkili = {
     id: yetkiliId || crypto.randomUUID(),
+    izinler: {},
     ad: metin("ad"),
     unvan: metin("unvan"),
     telefon: metin("telefon"),
@@ -105,7 +115,7 @@ export async function yetkiliKaydet(_onceki: YetkiliFormDurumu, form: FormData):
 
   const m = await musteriyiGuncelle(musteriId, (x) => {
     const i = x.yetkililer.findIndex((y) => y.id === kisi.id);
-    if (i >= 0) x.yetkililer[i] = kisi;
+    if (i >= 0) x.yetkililer[i] = { ...kisi, izinler: x.yetkililer[i].izinler ?? {} }; // izin kayıtları bilgi düzenlenirken korunur
     else x.yetkililer.push(kisi);
   });
   if (!m) return { hatalar: { ad: "Müşteri bulunamadı." } };
@@ -152,4 +162,55 @@ export async function vergiNoKaydet(_onceki: VergiNoDurumu, form: FormData): Pro
   // TODO: await supabase.from("customers").update({ tax_no: vergiNo }).eq("id", musteriId);
   musteriSayfalariniYenile(musteriId);
   return { vergiNo, zaman: Date.now() };
+}
+
+/* ---------- İletişim izinleri ---------- */
+
+/** Yeni müşteri formundaki izin kutuları: izin_eposta, izin_whatsapp… + izinKaynagi */
+function formIzinleri(form: FormData): Partial<Record<IzinKanali, IzinKaydi>> {
+  const kaynak = String(form.get("izinKaynagi") ?? "") || "Müşteri formu";
+  const tarih = bugunIso();
+  return Object.fromEntries(
+    IZIN_KANALLARI.filter((k) => form.get(`izin_${k}`) === "on").map((k) => [k, { verildi: true, tarih, kaynak, cekilme: null }]),
+  );
+}
+
+export type IzinSonucu = { yetkililer?: Yetkili[]; hata?: string };
+
+/** Yetkilinin kanal izinlerini günceller. Yeni verilen izne bugünün tarihi ve kaynak yazılır;
+ *  kaldırılan izin silinmez, geri çekilme tarihiyle saklanır. Değişiklik müşteri geçmişine işlenir. */
+export async function izinleriKaydet(musteriId: string, yetkiliId: string, secim: Record<IzinKanali, boolean>, kaynak: string): Promise<IzinSonucu> {
+  const tarih = bugunIso();
+  const verilen: string[] = [];
+  const cekilen: string[] = [];
+  let hata: string | undefined;
+  const m = await musteriyiGuncelle(musteriId, (x) => {
+    const y = x.yetkililer.find((k) => k.id === yetkiliId);
+    if (!y) return;
+    const izinler = { ...(y.izinler ?? {}) };
+    for (const kanal of IZIN_KANALLARI) {
+      const eski = izinler[kanal];
+      if (secim[kanal] && !eski?.verildi) {
+        if (!(IZIN_KAYNAKLARI as readonly string[]).includes(kaynak)) {
+          hata = "İznin nereden alındığını seçin.";
+          return;
+        }
+        izinler[kanal] = { verildi: true, tarih, kaynak, cekilme: null };
+        verilen.push(IZIN_KANAL_ADI[kanal]);
+      } else if (!secim[kanal] && eski?.verildi) {
+        izinler[kanal] = { ...eski, verildi: false, cekilme: tarih };
+        cekilen.push(IZIN_KANAL_ADI[kanal]);
+      }
+    }
+    if (hata) return;
+    y.izinler = izinler;
+    const parca = [verilen.length && `${verilen.join(", ")} izni verildi (${kaynak})`, cekilen.length && `${cekilen.join(", ")} izni geri çekildi`].filter(Boolean);
+    if (parca.length) x.olaylar.unshift({ metin: `${y.ad}: ${parca.join("; ")}`, zaman: "Bugün · İletişim izni", tur: "not" });
+  });
+  if (hata) return { hata };
+  if (!m) return { hata: "Müşteri bulunamadı." };
+  // TODO: Supabase bağlanınca: contact_consents tablosuna (contact_id, channel, granted, granted_at, source, revoked_at) yazın; İYS'ye bildirin.
+  musteriSayfalariniYenile(musteriId);
+  revalidatePath("/pazarlama");
+  return { yetkililer: structuredClone(m.yetkililer) };
 }

@@ -3,14 +3,16 @@
 // Müşteri panelindeki "İletişim" bölümü: vergi no (tek değer) ve birden fazla yetkili.
 // Ekleme / düzenleme formları panelin içinde açılır; başka sayfaya gidilmez.
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { Mail, MessageCircle, Pencil, Phone, Plus, Star, Trash2 } from "lucide-react";
+import { Mail, MessageCircle, Pencil, Phone, Plus, ShieldCheck, Star, Trash2 } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { useFormGonder } from "@/lib/use-form-gonder";
 import {
   birincilYap, vergiNoKaydet, yetkiliKaydet, yetkiliSil,
   type VergiNoDurumu, type YetkiliFormDurumu,
 } from "./actions";
-import { telefonSade } from "./ortak";
+import { izinliKanallar, telefonSade } from "./ortak";
+import { IZIN_KANAL_ADI } from "./izin";
+import IzinPaneli from "./izin-paneli";
 import type { Yetkili } from "./queries";
 
 const GIRDI =
@@ -43,6 +45,7 @@ export default function MusteriIletisim({
   // null: form kapalı · "yeni": yeni yetkili · başka değer: o yetkili düzenleniyor
   const [acikForm, setAcikForm] = useState<string | null>(null);
   const [silinecek, setSilinecek] = useState<string | null>(null);
+  const [acikIzin, setAcikIzin] = useState<string | null>(null);
   const [bekliyor, baslat] = useTransition();
 
   function sil(id: string) {
@@ -151,6 +154,34 @@ export default function MusteriIletisim({
                   </a>
                 )}
               </div>
+
+              {acikIzin === y.id ? (
+                <IzinPaneli
+                  musteriId={musteriId}
+                  yetkili={y}
+                  onKaydedildi={(l) => {
+                    onDegisti({ yetkililer: l });
+                    setAcikIzin(null);
+                  }}
+                  onVazgec={() => setAcikIzin(null)}
+                />
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {izinliKanallar(y).length ? (
+                    izinliKanallar(y).map((k) => <Chip key={k} ton="ok" className="h-5 px-2 text-[11px]">{IZIN_KANAL_ADI[k]} izni</Chip>)
+                  ) : (
+                    <span className="text-xs text-muted">Duyuru izni yok</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAcikIzin(y.id)}
+                    className="ml-auto inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[10px] px-2 text-xs font-bold text-info hover:bg-info-bg"
+                  >
+                    <ShieldCheck size={14} aria-hidden="true" />
+                    İzinler
+                  </button>
+                </div>
+              )}
 
               {silinecek === y.id && (
                 <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl bg-err-bg p-2.5 text-xs font-semibold text-err">

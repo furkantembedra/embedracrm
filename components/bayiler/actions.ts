@@ -6,11 +6,16 @@ import {
   KONTROL_LISTESI,
   ULKELER,
   aktifBayiEkle,
+  hareketEkle,
   basvuruEkle,
   basvuruyuGuncelle,
+  basvuruyuSil,
+  bosSozlesme,
+  DESTEK_KALEMLERI,
   type Basvuru,
+  type SozlesmeDetayi,
 } from "./queries";
-import { sonrakiAsama } from "./ortak";
+import { maddeTamam, sonrakiAsama } from "./ortak";
 
 const metinAl = (form: FormData) => (ad: string) => String(form.get(ad) ?? "").trim();
 
@@ -61,6 +66,7 @@ export async function basvuruKaydet(_onceki: BasvuruFormDurumu, form: FormData):
     telefon,
     vergiNo,
     kontroller: KONTROL_LISTESI.map(() => false),
+    sozlesme: bosSozlesme(metin("bolge") || ULKELER[ulkeKodu]),
     gorusme: null,
   };
   await basvuruEkle(basvuru);
@@ -68,12 +74,57 @@ export async function basvuruKaydet(_onceki: BasvuruFormDurumu, form: FormData):
   return { basvuru };
 }
 
+/** Başvuruyu listeden kaldırır. Lansmanı yapılmış bayinin aktif bayi ve müşteri kaydı silinmez. */
+export async function basvuruSil(id: string): Promise<{ hata?: string }> {
+  if (!(await basvuruyuSil(id))) return { hata: "Başvuru bulunamadı." };
+  // TODO: Supabase bağlanınca: await supabase.from("dealer_applications").delete().eq("id", id);
+  yenile(id);
+  return {};
+}
+
 export async function kontrolDegistir(id: string, sira: number, deger: boolean) {
   if (sira < 0 || sira >= KONTROL_LISTESI.length) throw new Error("Geçersiz madde");
   await basvuruyuGuncelle(id, (b) => {
+    if (b.asama !== "sozlesme") return; // kontrol listesi yalnızca Sözleşme aşamasında değişir
     b.kontroller[sira] = deger;
   });
   yenile(id);
+}
+
+const sayiVeyaBos = (n: unknown, en: number, enCok: number) =>
+  typeof n === "number" && Number.isFinite(n) && n >= en && n <= enCok ? Math.round(n) : null;
+
+/** Sözleşme maddesinin ayrıntısını kaydeder; zorunlu alanlar dolunca madde kendiliğinden işaretlenir. */
+export async function sozlesmeKaydet(id: string, sira: number, d: SozlesmeDetayi): Promise<{ hata?: string; sozlesme?: SozlesmeDetayi; kontroller?: boolean[] }> {
+  if (sira < 0 || sira >= KONTROL_LISTESI.length) return { hata: "Geçersiz madde" };
+  const temiz: SozlesmeDetayi = {
+    bolge: { kapsam: String(d.bolge.kapsam ?? "").trim().slice(0, 120), munhasir: typeof d.bolge.munhasir === "boolean" ? d.bolge.munhasir : null },
+    moq: {
+      one: sayiVeyaBos(d.moq.one, 0, 10_000),
+      lite: sayiVeyaBos(d.moq.lite, 0, 10_000),
+      yillik: sayiVeyaBos(d.moq.yillik, 0, 100_000),
+      indirim: sayiVeyaBos(d.moq.indirim, 0, 60),
+    },
+    marka: {
+      kitTarihi: /^\d{4}-\d{2}-\d{2}$/.test(d.marka.kitTarihi) ? d.marka.kitTarihi : "",
+      logoOnay: !!d.marka.logoOnay,
+      not: String(d.marka.not ?? "").trim().slice(0, 300),
+    },
+    destek: {
+      bayi: DESTEK_KALEMLERI.filter((k) => d.destek.bayi.includes(k)),
+    },
+  };
+  const mevcut = await basvuruyuGuncelle(id, () => {});
+  if (mevcut && mevcut.asama !== "sozlesme") return { hata: "Kontrol listesi yalnızca Sözleşme aşamasında düzenlenebilir." };
+  const b = await basvuruyuGuncelle(id, (x) => {
+    x.sozlesme = temiz;
+    if (maddeTamam(sira, temiz)) x.kontroller[sira] = true;
+    if (sira === 0 && temiz.bolge.kapsam) x.bolge = temiz.bolge.kapsam;
+  });
+  if (!b) return { hata: "Başvuru bulunamadı." };
+  // TODO: Supabase bağlanınca: await supabase.from("dealer_applications").update({ contract: temiz, checklist: b.kontroller }).eq("id", id);
+  yenile(id);
+  return { sozlesme: structuredClone(temiz), kontroller: [...b.kontroller] };
 }
 
 export async function puanKaydet(id: string, puan: number): Promise<{ hata?: string }> {
@@ -85,7 +136,7 @@ export async function puanKaydet(id: string, puan: number): Promise<{ hata?: str
   return {};
 }
 
-export type IlerletmeSonucu = { hata?: string; basvuru?: Basvuru; musteri?: { id: string; ad: string; yeni: boolean } };
+export type IlerletmeSonucu = { hata?: string; eksikMadde?: number; basvuru?: Basvuru; musteri?: { id: string; ad: string; yeni: boolean } };
 
 /** Başvuruyu bir sonraki aşamaya taşır. Lansmanda bayi aktif bayilere ve müşterilere eklenir. */
 export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
@@ -96,7 +147,7 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
   if (hedef === "sozlesme" && b.puan === null) return { hata: "Sözleşmeye geçmeden önce uygunluk puanı verin." };
   if (hedef === "lansman" && b.kontroller.some((k) => !k)) {
     const eksik = KONTROL_LISTESI.filter((_, i) => !b.kontroller[i]).map((k) => k.baslik);
-    return { hata: `Lansman için kontrol listesi tamamlanmalı: ${eksik.join(", ")}.` };
+    return { hata: `Lansman için kontrol listesi tamamlanmalı: ${eksik.join(", ")}.`, eksikMadde: b.kontroller.findIndex((k) => !k) };
   }
 
   b.asama = hedef;
@@ -110,10 +161,18 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
       bolge: b.bolge,
       ulkeKodu: b.ulkeKodu,
       satilan: 0,
-      stok: b.ilkSiparis,
-      moqHedef: Math.max(b.ilkSiparis, 1) * 2,
+      stok: (b.sozlesme.moq.one ?? 0) + (b.sozlesme.moq.lite ?? 0) || b.ilkSiparis,
+      moqHedef: b.sozlesme.moq.yillik ? Math.ceil(b.sozlesme.moq.yillik / 4) : Math.max(b.ilkSiparis, 1) * 2, // çeyreklik
       moqGerceklesen: 0,
     });
+
+    // İlk stok: sözleşmedeki ilk sipariş adetleri sevkiyat olarak işlenir (seri no sonradan girilebilir)
+    const ilkKalemler = [
+      ...Array.from({ length: b.sozlesme.moq.one ?? 0 }, () => ({ model: "ONE" as const, seriNo: null })),
+      ...Array.from({ length: b.sozlesme.moq.lite ?? 0 }, () => ({ model: "ONE Lite" as const, seriNo: null })),
+    ];
+    if (!ilkKalemler.length) ilkKalemler.push(...Array.from({ length: b.ilkSiparis }, () => ({ model: "ONE" as const, seriNo: null })));
+    await hareketEkle({ id: crypto.randomUUID(), bayiId: b.id, tur: "sevkiyat", tarih: bugunIso(), kalemler: ilkKalemler, not: "İlk stok (lansman)" });
 
     const olay = { metin: `Bayi lansmanı · ${b.bolge}`, zaman: "Bugün · Bayi ağı", tur: "siparis" as const };
     const mevcut = await musteriBulAdla(b.sirket);

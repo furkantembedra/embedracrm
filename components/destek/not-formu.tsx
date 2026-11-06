@@ -4,6 +4,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Paperclip } from "lucide-react";
 import { notKaydet, type NotFormDurumu } from "./actions";
+import { dosyaSecildi } from "./ortak";
 import type { TalepDurumu, TalepNotu } from "./queries";
 
 const IKINCIL_BTN =
@@ -20,6 +21,7 @@ export default function NotFormu({
 }) {
   const [sonuc, gonder, bekliyor] = useActionState<NotFormDurumu, FormData>(notKaydet, {});
   const [dosya, setDosya] = useState<string | null>(null);
+  const [dosyaHata, setDosyaHata] = useState<string | null>(null);
   const bildirilen = useRef<TalepNotu | null>(null);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function NotFormu({
           className="resize-y rounded-[14px] border border-line-strong bg-card p-3 text-sm outline-none focus:border-ink aria-[invalid=true]:border-err"
         />
       </label>
+      {dosyaHata && <span role="alert" className="text-xs font-semibold text-err">{dosyaHata}</span>}
       {sonuc.hata && <span id={`not-hata-${talepId}`} className="text-xs font-semibold text-err">{sonuc.hata}</span>}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -55,19 +58,22 @@ export default function NotFormu({
             type="file"
             name="dosya"
             className="sr-only"
-            onChange={(e) => setDosya(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => {
+              const { ad, hata } = dosyaSecildi(e.target);
+              setDosya(ad);
+              setDosyaHata(hata);
+            }}
           />
         </label>
         <div className="ml-auto flex flex-wrap gap-2">
-          {kapali ? (
+          {kapali && (
             <button type="submit" name="islem" value="yeniden" disabled={bekliyor} className={IKINCIL_BTN}>Yeniden aç</button>
-          ) : (
-            durum !== "beklemede" && (
-              <button type="submit" name="islem" value="beklemede" disabled={bekliyor} className={IKINCIL_BTN}>Beklemeye al</button>
-            )
           )}
-          {durum === "beklemede" && (
-            <button type="submit" name="islem" value="yeniden" disabled={bekliyor} className={IKINCIL_BTN}>Açığa al</button>
+          {(durum === "yeni" || durum === "beklemede") && (
+            <button type="submit" name="islem" value="islemde" disabled={bekliyor} className={IKINCIL_BTN}>İşleme al</button>
+          )}
+          {(durum === "yeni" || durum === "islemde") && (
+            <button type="submit" name="islem" value="beklemede" disabled={bekliyor} className={IKINCIL_BTN}>Beklemeye al</button>
           )}
           <button type="submit" name="islem" value="not" disabled={bekliyor} className={IKINCIL_BTN}>
             {bekliyor ? "Kaydediliyor…" : "Notu kaydet"}

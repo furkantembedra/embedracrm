@@ -19,6 +19,14 @@ import type { Cihaz } from "@/components/cihaz-lisans/queries";
 import type { YeniLisans } from "@/components/cihaz-lisans/actions";
 import { lisansUygula } from "@/components/cihaz-lisans/ortak";
 
+const BOS_METIN: Record<TalepDurumu | "arama", { baslik: string; aciklama: string }> = {
+  yeni: { baslik: "Yeni talep yok", aciklama: "Bekleyen yeni bir talep yok. Gelen talepler burada görünecek." },
+  islemde: { baslik: "Çözülmesi gereken talep yok", aciklama: "Şu an üzerinde çalışılan bir talep bulunmuyor." },
+  beklemede: { baslik: "Bekleyen talep yok", aciklama: "Müşteri veya parça beklenen bir talep bulunmuyor." },
+  cozuldu: { baslik: "Henüz çözülen talep yok", aciklama: "Çözüldü olarak kapatılan talepler burada listelenir." },
+  arama: { baslik: "Sonuç bulunamadı", aciklama: "Aramanızla eşleşen talep yok. Farklı bir kelime deneyin." },
+};
+
 export default function DestekGorunumu({
   talepler: ilk,
   musteriler,
@@ -33,8 +41,8 @@ export default function DestekGorunumu({
   seciliIlk?: string; // /destek/[id] adresinden gelindiyse
 }) {
   const [talepler, setTalepler] = useState(ilk);
-  const baslangic = ilk.find((t) => t.id === seciliIlk) ?? ilk.find((t) => t.durum === "acik") ?? ilk[0];
-  const [filtre, setFiltre] = useState<TalepDurumu>(baslangic?.durum ?? "acik");
+  const baslangic = ilk.find((t) => t.id === seciliIlk) ?? ilk.find((t) => t.durum === "yeni") ?? ilk.find((t) => t.durum === "islemde") ?? ilk[0];
+  const [filtre, setFiltre] = useState<TalepDurumu>(baslangic?.durum ?? "yeni");
   const [arama, setArama] = useState("");
   const [seciliId, setSeciliId] = useState<string | null>(baslangic?.id ?? null);
   const [yeniAcik, setYeniAcik] = useState(false);
@@ -53,7 +61,7 @@ export default function DestekGorunumu({
   const [, baslat] = useTransition();
 
   const sayilar = useMemo(() => {
-    const s: Record<TalepDurumu, number> = { acik: 0, beklemede: 0, cozuldu: 0 };
+    const s: Record<TalepDurumu, number> = { yeni: 0, islemde: 0, beklemede: 0, cozuldu: 0 };
     for (const t of talepler) s[t.durum]++;
     return s;
   }, [talepler]);
@@ -91,7 +99,7 @@ export default function DestekGorunumu({
   const kapat = useCallback(() => setYeniAcik(false), []);
   const eklendi = useCallback((t: Talep) => {
     setTalepler((l) => [t, ...l]);
-    setFiltre("acik");
+    setFiltre("yeni");
     setArama("");
     setSeciliId(t.id);
     setYeniAcik(false);
@@ -130,12 +138,13 @@ export default function DestekGorunumu({
           />
         </div>
         <div className="flex min-w-0 flex-[2_1_460px]">
-          <TalepDetay talep={secili} onNot={notEklendi} />
+          <TalepDetay talep={secili} onNot={notEklendi} bos={gorunen.length === 0 ? BOS_METIN[arama.trim() ? "arama" : filtre] : undefined} />
         </div>
         {secili && (
           <div className="flex min-w-0 flex-[1_1_280px] items-start">
             <MusteriBilgiPaneli
               talep={secili}
+              musteri={secili.musteriId ? musteriler.find((m) => m.id === secili.musteriId) ?? null : null}
               onAracKapsami={aracKapsami}
               onMusteriAc={musteriler.length ? setAcikMusteri : undefined}
               onCihazAc={setAcikCihaz}

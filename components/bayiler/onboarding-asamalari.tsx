@@ -1,4 +1,4 @@
-// Başvuru → Değerlendirme → Sözleşme → Lansman kartları; tıklayınca başvuruları filtreler
+// Tümü + Başvuru → Değerlendirme → Sözleşme → Lansman kartları; tıklayınca başvuruları filtreler
 import { ASAMALAR, ASAMA_BILGI, type BayiAsamasi } from "./queries";
 
 export default function OnboardingAsamalari({
@@ -16,7 +16,27 @@ export default function OnboardingAsamalari({
         <h2 id="ob-baslik" className="text-[17px] font-extrabold">Onboarding süreci</h2>
         <span className="ml-auto text-xs font-semibold text-muted">Bir aşamaya tıklayarak başvuruları filtreleyin</span>
       </div>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <button
+          type="button"
+          aria-pressed={secili === null}
+          onClick={() => onSec(null)}
+          className={`flex cursor-pointer flex-col gap-2.5 rounded-2xl border p-4 text-left transition-colors ${
+            secili === null ? "border-ink bg-ink text-white" : "border-line bg-card hover:bg-[#F6F7F2]"
+          }`}
+        >
+          <span className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className={`flex h-7 items-center justify-center rounded-full px-2 text-[11px] font-extrabold text-ink ${secili === null ? "bg-lime" : "bg-bg"}`}
+            >
+              Tümü
+            </span>
+            <span className="text-sm font-extrabold">Tüm başvurular</span>
+            <span className="ml-auto text-[22px] font-extrabold tabular-nums">{ASAMALAR.reduce((t, a) => t + sayilar[a], 0)}</span>
+          </span>
+          <span className={`text-xs leading-snug ${secili === null ? "text-[#C3C6BC]" : "text-[#474A42]"}`}>Bütün aşamalardaki başvurular bir arada</span>
+        </button>
         {ASAMALAR.map((a, i) => {
           const aktif = a === secili;
           return (

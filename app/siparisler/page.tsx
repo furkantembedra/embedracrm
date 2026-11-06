@@ -1,19 +1,11 @@
-import PageHeader from "@/components/layout/page-header";
-import OzetKartlari from "@/components/siparisler/ozet-kartlari";
-import SiparisTablosu from "@/components/siparisler/siparis-tablosu";
-import SiparisDetay from "@/components/siparisler/siparis-detay";
-import DepoStoku from "@/components/siparisler/depo-stoku";
-import IadeListesi from "@/components/siparisler/iade-listesi";
+import SiparisGorunumu from "@/components/siparisler/siparis-gorunumu";
+import { getIadeler, getSiparisler, getStok } from "@/components/siparisler/queries";
+import { getMusteriler } from "@/components/musteriler/queries";
+import { getFiyatListesi, getHavuz, getKargoFirmalari } from "@/components/operasyon/queries";
 
-export default function SiparislerPage() {
-  return (
-    <>
-      <PageHeader title="Sipariş & Sevkiyat" />
-      <OzetKartlari />
-      <SiparisTablosu />
-      <SiparisDetay />
-      <DepoStoku />
-      <IadeListesi />
-    </>
-  );
+export default async function SiparislerPage() {
+  const [siparisler, stok, iadeler, musteriler, havuz, kargoFirmalari, fiyatListesi] = await Promise.all([
+    getSiparisler(), getStok(), getIadeler(), getMusteriler(), getHavuz(), getKargoFirmalari(), getFiyatListesi(),
+  ]);
+  return <SiparisGorunumu siparisler={siparisler} stok={stok} iadeler={iadeler} musteriler={musteriler} havuz={havuz} kargoFirmalari={kargoFirmalari} fiyatListesi={fiyatListesi} />;
 }

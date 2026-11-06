@@ -6,9 +6,9 @@
 
   --color-ink: #0e0f0c;        /* ana siyah: menü, birincil buton */
   --color-ink-soft: #2a2c26;   /* hover */
-  --color-lime: #d4f65a;       /* vurgu */
-  --color-lime-dark: #b6dd2e;
-  --color-lime-bg: #eaf8bf;
+  --color-lime: #fbe222;       /* vurgu */
+  --color-lime-dark: #fbe21d;
+  --color-lime-bg: #ead10d;
   --color-blue: #2f4bff;
   --color-bg: #eeefea;         /* sayfa zemini */
   --color-card: #ffffff;
@@ -17,13 +17,20 @@
   --color-muted: #5e6259;      /* ikincil metin */
 
   /* Durum chip'leri: arka plan / metin */
-  --color-ok-bg: #e2f4e7;   --color-ok: #16633a;
+  --color-ok-bg: #f5f1b3;   --color-ok: #000000;
   --color-warn-bg: #ffeedb; --color-warn: #8f4500;
   --color-err-bg: #fde5e5;  --color-err: #a42525;
-  --color-info-bg: #e6eaff; --color-info: #2338c9;
+  --color-info-bg: #f5f1b3; --color-info: #2338c9;
 
   --radius-card: 20px;
   --radius-control: 12px;
+}
+
+/* Uygulama yalnızca açık temada tasarlandı: tarayıcının / eklentilerin koyu tema varsayılanları
+   (beyaz metin, koyu form alanları) devreye girmesin; metin rengi miras beklemeden her yerde koyu kalsın */
+:root {
+  color-scheme: light;
+  color: var(--color-ink);
 }
 
 body {

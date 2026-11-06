@@ -2,6 +2,7 @@
 
 // Yeni müşteri formu. Müşteriler sayfasında ortada açılan pencerenin içinde,
 // /musteriler/yeni adresinde ise tek başına gösterilir.
+import { IZIN_KANALLARI, IZIN_KANAL_ADI, IZIN_KAYNAKLARI } from "./izin";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
@@ -102,10 +103,23 @@ export default function MusteriFormu({
           <input name="eposta" type="email" className={GIRDI} aria-invalid={!!h.eposta} aria-describedby="hata-eposta" />
           <Hata id="hata-eposta" mesaj={h.eposta} />
         </label>
-        <label className="flex items-center gap-2.5 text-[13px] font-semibold sm:col-span-2">
-          <input type="checkbox" name="duyuruIzni" className="h-5 w-5 accent-[#0E0F0C]" />
-          Duyuru ve kampanya mesajlarına izin verdi
-        </label>
+        <fieldset className="flex flex-col gap-2 sm:col-span-2">
+          <legend className="mb-1.5 text-[13px] font-bold">Duyuru ve kampanya izni <span className="font-normal text-muted">(yetkili kişi için, kanal bazında)</span></legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {IZIN_KANALLARI.map((k) => (
+              <label key={k} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] font-semibold">
+                <input type="checkbox" name={`izin_${k}`} className="h-4.5 w-4.5 accent-[#0E0F0C]" />
+                {IZIN_KANAL_ADI[k]}
+              </label>
+            ))}
+          </div>
+          <label className={ALAN}>
+            İzin nereden alındı
+            <select name="izinKaynagi" defaultValue="Müşteri formu" className={GIRDI}>
+              {IZIN_KAYNAKLARI.map((k) => <option key={k}>{k}</option>)}
+            </select>
+          </label>
+        </fieldset>
       </fieldset>
 
       <label className={ALAN}>

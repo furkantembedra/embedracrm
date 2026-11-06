@@ -57,7 +57,6 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
   const metin = metinAl(form);
   const seriNo = metin("seriNo").toUpperCase();
   const musteri = metin("musteri"); // "id|Ad|Ülke"
-  const firmware = metin("firmware");
   const plan = metin("plan") as LisansPlani;
   const model = metin("model") as CihazModeli;
 
@@ -66,7 +65,6 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
   if (!SERI_NO.test(seriNo)) hatalar.seriNo = "Seri no EO1-YYAA-NNNN biçiminde olmalı.";
   else if (metin("mevcut").split(",").includes(seriNo)) hatalar.seriNo = "Bu seri no zaten kayıtlı.";
   if (!musteri) hatalar.musteri = "Müşteri seçin.";
-  if (!/^v\d+\.\d+\.\d+$/.test(firmware)) hatalar.firmware = "Örn: v2.4.1";
   if (!PLANLAR.includes(plan)) hatalar.plan = "Plan seçin.";
   if (Object.keys(hatalar).length) return { hatalar };
 
@@ -80,7 +78,7 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
     plan,
     lisansBaslangic: null,
     lisansBitis: null,
-    firmware,
+    firmware: "—", // firmware takibi şimdilik kapalı
     durum: "lisanssiz",
     gecmis: [],
   };

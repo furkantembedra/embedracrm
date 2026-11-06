@@ -1,6 +1,7 @@
 // Müşteriler bileşenlerinin paylaştığı küçük yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import type { CihazDurumu, Plan, Yetkili } from "./queries";
+import type { CihazDurumu, IzinKanali, Plan, Yetkili } from "./queries";
+import { IZIN_KANALLARI } from "./izin";
 
 export const PLAN_TONU: Record<Plan, ChipTon> = { Basic: "gray", Pro: "ink", "Pro+": "info", Lead: "warn" };
 
@@ -51,3 +52,13 @@ export function birincilYetkili(m: { yetkililer: Yetkili[] }): Yetkili | null {
 
 /** "+90 532 410 22 18" → "+905324102218" (tel: ve wa.me bağlantıları için) */
 export const telefonSade = (t: string) => t.replace(/[^\d+]/g, "");
+
+/** Yetkilinin verilmiş (geri çekilmemiş) izni olan kanallar */
+export const izinliKanallar = (y: Pick<Yetkili, "izinler">) => IZIN_KANALLARI.filter((k) => y.izinler?.[k]?.verildi);
+
+/** Yetkilinin bu kanalda (kanal yoksa herhangi bir kanalda) izni var mı */
+export const izinVar = (y: Pick<Yetkili, "izinler">, kanal?: IzinKanali) =>
+  kanal ? !!y.izinler?.[kanal]?.verildi : izinliKanallar(y).length > 0;
+
+/** "2026-03-14" → "14.03.2026" */
+export const gunYaz = (iso: string) => iso.split("-").reverse().join(".");

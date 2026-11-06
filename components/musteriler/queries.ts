@@ -11,8 +11,11 @@ export type OlayTuru = "siparis" | "destek" | "demo" | "teklif" | "arama" | "not
 export type Cihaz = { seriNo: string; model: CihazModeli; firmware: string; durum: CihazDurumu };
 export type Olay = { metin: string; zaman: string; tur: OlayTuru };
 
+import { type IzinKanali, type IzinKaydi } from "./izin";
+export * from "./izin";
+
 /** Firmadaki iletişim kişisi. Boş alanlar "" olarak tutulur. İlk sıradaki birincil yetkilidir. */
-export type Yetkili = { id: string; ad: string; unvan: string; telefon: string; eposta: string };
+export type Yetkili = { id: string; ad: string; unvan: string; telefon: string; eposta: string; izinler?: Partial<Record<IzinKanali, IzinKaydi>> };
 
 export type Musteri = {
   id: string;
@@ -28,6 +31,8 @@ export type Musteri = {
   yetkililer: Yetkili[]; // ilk sıradaki birincil yetkili (Ara / WhatsApp / E-posta düğmeleri)
   vergiNo: string; // boşsa ""
   acikTalep: number;
+  /** @deprecated izinler artık yetkili ve kanal bazında: Yetkili.izinler */
+  duyuruIzni?: boolean;
   cihazlar: Cihaz[];
   olaylar: Olay[];
 };
@@ -139,6 +144,30 @@ const DEMO: Musteri[] = [
 // globalThis'te durur ki geliştirmede dosya kaydedilince (HMR) eklenenler kaybolmasın.
 const g = globalThis as { __embedraMusteriler?: Musteri[] };
 const DEPO = (g.__embedraMusteriler ??= [...DEMO]);
+// Model alanı sonradan eklendi: belleğe daha önce alınmış müşteri cihazlarına modeli işle
+// İletişim izinleri sonradan eklendi: demo müşterilerin birincil yetkilisine izin işlenir,
+// eski firma bazlı "duyuruIzni" alanı yetkili + kanal bazına taşınır (sunucu yeniden başlatılmadan)
+const DEMO_IZIN: Record<string, { kanallar: IzinKanali[]; tarih: string; kaynak: string }> = {
+  volant: { kanallar: ["eposta", "whatsapp"], tarih: "2026-03-14", kaynak: "Lisans aktivasyonu" },
+  akdeniz: { kanallar: ["whatsapp", "arama"], tarih: "2025-11-06", kaynak: "Telefon görüşmesi" },
+  kaya: { kanallar: ["eposta", "whatsapp", "sms"], tarih: "2026-06-02", kaynak: "Lisans aktivasyonu" },
+  ege: { kanallar: ["eposta"], tarih: "2025-11-19", kaynak: "Fuar formu" },
+  bursa: { kanallar: ["eposta", "whatsapp"], tarih: "2025-11-11", kaynak: "Web sitesi formu" },
+  baskent: { kanallar: ["whatsapp"], tarih: "2026-04-11", kaynak: "WhatsApp onayı" },
+  nordic: { kanallar: ["eposta"], tarih: "2025-11-28", kaynak: "Sipariş" },
+};
+for (const m of DEPO) {
+  const ilk = m.yetkililer?.[0];
+  if (!ilk || ilk.izinler) continue;
+  const d = DEMO_IZIN[m.id] ?? (m.duyuruIzni ? { kanallar: ["eposta"] as IzinKanali[], tarih: "2026-11-01", kaynak: "Müşteri formu" } : null);
+  ilk.izinler = d ? Object.fromEntries(d.kanallar.map((k) => [k, { verildi: true, tarih: d.tarih, kaynak: d.kaynak, cekilme: null }])) : {};
+}
+
+for (const m of DEPO) {
+  for (const c of m.cihazlar) {
+    if (!c.model) c.model = DEMO.flatMap((d) => d.cihazlar).find((d) => d.seriNo === c.seriNo)?.model ?? "ONE";
+  }
+}
 
 // Bellekte eski yapıyla (tek yetkili / telefon / eposta) kalmış kayıtları yeni yapıya çevirir.
 // Geliştirmede HMR globalThis'i silmediği için gerekli; Supabase'e geçince kaldırabilirsiniz.
@@ -154,7 +183,7 @@ for (const m of DEPO as (Musteri & { yetkili?: string; telefon?: string; eposta?
   delete m.eposta;
 }
 
-const CIHAZ_DURUMU = { aktif: "Lisans aktif", bitiyor: "Süresi doluyor", serviste: "Serviste", lisanssiz: "Lisanssız" } as const;
+const CIHAZ_DURUMU = { aktif: "Lisans aktif", bitiyor: "Süresi doluyor", serviste: "Serviste", lisanssiz: "Lisanssız", stokta: "Lisanssız" } as const; // stokta: müşteri cihazı olamaz, tip için
 
 /** Müşterinin cihazları: cihaz kayıtlarındakiler (güncel lisans/model) + yalnızca müşteri kaydında olanlar.
  *  TODO: Supabase'de devices.customer_id ile tek sorguda gelecek. */

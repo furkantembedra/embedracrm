@@ -2,13 +2,13 @@
 // Supabase bağlanınca fonksiyonların içini supabase.from("tickets")... ile değiştirin.
 import { KANALLAR, ONCELIKLER } from "@/lib/constants";
 
-export type TalepDurumu = "acik" | "beklemede" | "cozuldu";
+export type TalepDurumu = "yeni" | "islemde" | "beklemede" | "cozuldu";
 export type Oncelik = (typeof ONCELIKLER)[number];
 export type Kanal = (typeof KANALLAR)[number];
 export const KONULAR = ["Bağlantı", "Flash / yazılım", "Lisans", "Donanım arızası", "Araç kapsamı isteği", "Diğer"] as const;
 export type Konu = (typeof KONULAR)[number];
 
-export type NotTuru = "acilis" | "not" | "gorusme" | "yapilacak" | "beklemede" | "cozuldu" | "yeniden";
+export type NotTuru = "acilis" | "not" | "gorusme" | "yapilacak" | "beklemede" | "cozuldu" | "islemde" | "yeniden";
 export type TalepNotu = { tur: NotTuru; metin: string; zaman: string; dosya?: string }; // zaman: "2026-11-04T09:35"
 
 export type Talep = {
@@ -33,7 +33,7 @@ export type Talep = {
   notlar: TalepNotu[]; // eskiden yeniye
 };
 
-export const DURUM_ADI: Record<TalepDurumu, string> = { acik: "Açık", beklemede: "Beklemede", cozuldu: "Çözüldü" };
+export const DURUM_ADI: Record<TalepDurumu, string> = { yeni: "Yeni", islemde: "İşlemde", beklemede: "Beklemede", cozuldu: "Çözüldü" };
 
 export const NOT_BILGI: Record<NotTuru, { ad: string; renk: string }> = {
   acilis: { ad: "Talep açıldı", renk: "#C9CCC2" },
@@ -42,12 +42,13 @@ export const NOT_BILGI: Record<NotTuru, { ad: string; renk: string }> = {
   yapilacak: { ad: "Yapılacak", renk: "#E58A2B" },
   beklemede: { ad: "Beklemeye alındı", renk: "#E58A2B" },
   cozuldu: { ad: "Çözüldü", renk: "#1F8A4C" },
+  islemde: { ad: "İşleme alındı", renk: "#0E0F0C" },
   yeniden: { ad: "Yeniden açıldı", renk: "#0E0F0C" },
 };
 
 const DEMO: Talep[] = [
   {
-    id: "4821", durum: "acik", baslik: "Flash sonrası ECU yanıt vermiyor", oncelik: "Yüksek", konu: "Flash / yazılım", kanal: "E-posta",
+    id: "4821", durum: "islemde", baslik: "Flash sonrası ECU yanıt vermiyor", oncelik: "Yüksek", konu: "Flash / yazılım", kanal: "E-posta",
     acilis: "2026-11-04T09:02", dosya: "onesuite_log_0211.txt",
     aciklama: "Flash işlemi %96'da durmuş, ECU artık hiçbir protokolde yanıt vermiyor. Müşteri log dosyasını e-postayla gönderdi; dosya talebe eklendi.",
     musteriId: "volant", musteri: "Volant Lenkung Service GmbH", yetkili: "Jonas Weber", telefon: "+49 711 555 0142", eposta: "j.weber@volant-service.de",
@@ -59,7 +60,7 @@ const DEMO: Talep[] = [
     ],
   },
   {
-    id: "4819", durum: "acik", baslik: "Lisans aktivasyon kodu geçersiz", oncelik: "Yüksek", konu: "Lisans", kanal: "WhatsApp",
+    id: "4819", durum: "yeni", baslik: "Lisans aktivasyon kodu geçersiz", oncelik: "Yüksek", konu: "Lisans", kanal: "WhatsApp",
     acilis: "2026-11-04T10:15", dosya: null,
     aciklama: "İkinci cihazda aktivasyon kodu “geçersiz” hatası veriyor. Pro+ lisansı iki cihazı kapsıyor.",
     musteriId: "polska", musteri: "Polska EPS Serwis", yetkili: "Marta Nowak", telefon: "+48 61 555 0198", eposta: "marta@polskaeps.pl",
@@ -67,7 +68,7 @@ const DEMO: Talep[] = [
     notlar: [{ tur: "acilis", metin: "WhatsApp mesajından kaydedildi.", zaman: "2026-11-04T10:15" }],
   },
   {
-    id: "4817", durum: "acik", baslik: "K-Line bağlantı hatası", oncelik: "Orta", konu: "Bağlantı", kanal: "Telefon",
+    id: "4817", durum: "islemde", baslik: "K-Line bağlantı hatası", oncelik: "Orta", konu: "Bağlantı", kanal: "Telefon",
     acilis: "2026-11-04T08:40", dosya: null,
     aciklama: "Doblo kolonunda K-Line ile bağlantı kurulamıyor, cihaz “no response” gösteriyor.",
     musteriId: "kaya", musteri: "Kaya Oto Elektronik", yetkili: "Serkan Kaya", telefon: "+90 533 290 41 77", eposta: "serkan@kayaotoelektronik.com",
@@ -104,6 +105,10 @@ const DEMO: Talep[] = [
 // Demo depo: sunucu belleğinde, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
 const g = globalThis as { __embedraTalepler?: Talep[] };
 const DEPO = (g.__embedraTalepler ??= structuredClone(DEMO));
+// Eski "Açık" durumundaki kayıtlar: not yazılmışsa İşlemde, yoksa Yeni sayılır (sunucuyu yeniden başlatmadan geçiş)
+for (const t of DEPO) {
+  if ((t.durum as string) === "acik") t.durum = t.notlar.some((n) => n.tur !== "acilis") ? "islemde" : "yeni";
+}
 
 export async function getTalepler(): Promise<Talep[]> {
   return DEPO;

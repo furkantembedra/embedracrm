@@ -3,16 +3,19 @@
 // Satış hattının etkileşimli kısmı: kart aşamaları ve "Fırsat ekle" paneli burada yönetilir,
 // özet kartlar ve kanban aynı veriden beslenir. Kazanıldı'ya geçen firma müşterilere eklenir.
 import { useCallback, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { CheckCircle2, Plus, X } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import OzetKartlari from "./ozet-kartlari";
 import Kanban from "./kanban";
+import { yerlestir, type BirakmaKonumu } from "./ortak";
 import FirsatFormu from "./firsat-formu";
 import { firsatAsamasiGuncelle, type AsamaSonucu } from "./actions";
 import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type Firsat, type KayipBilgisi, type KayipNedeni } from "./queries";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import type { Musteri } from "@/components/musteriler/queries";
+import type { FiyatListesi } from "@/lib/urunler";
 
 type Bildirim = NonNullable<AsamaSonucu["musteri"]>;
 
@@ -32,6 +35,12 @@ function MusteriBildirimi({ bildirim, onKapat, onAc }: { bildirim: Bildirim; onK
         <b className="text-sm">{bildirim.yeni ? "Müşterilere eklendi" : "Müşteri kaydına işlendi"}</b>
         <span className="text-[13px] text-muted">
           {bildirim.ad} {bildirim.yeni ? "yeni müşteri olarak kaydedildi." : "zaten müşteriydi; kazanılan satış geçmişine eklendi."}
+          {bildirim.siparisNo && (
+            <>
+              {" "}Ödeme bekleyen sipariş açıldı:{" "}
+              <Link href={`/siparisler/${bildirim.siparisNo}`} className="font-bold text-info hover:underline">#{bildirim.siparisNo}</Link>
+            </>
+          )}
         </span>
         <button
           type="button"
@@ -115,12 +124,24 @@ function KayipNedeniFormu({ firsat, onOnayla, onVazgec }: { firsat: Firsat; onOn
 export default function SatisHattiGorunumu({
   firsatlar: ilk,
   musteriler,
+  kampanyalar = [],
+  fiyatListesi,
 }: {
   firsatlar: Firsat[];
   musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
+  kampanyalar?: { id: string; ad: string; durum: string }[];
+  fiyatListesi?: FiyatListesi;
 }) {
   const [firsatlar, setFirsatlar] = useState(ilk);
   const [ekleAsama, setEkleAsama] = useState<Asama | null>(null);
+  const [duzenleId, setDuzenleId] = useState<string | null>(null);
+  const duzenlenen = firsatlar.find((f) => f.id === duzenleId) ?? null;
+  const duzenleKapat = useCallback(() => setDuzenleId(null), []);
+  // Düzenlemede aşama ve kayıp nedeni korunur (onlar kart üzerinden değişir)
+  const duzenlendi = useCallback((f: Firsat) => {
+    setFirsatlar((l) => l.map((x) => (x.id === f.id ? { ...f, asama: x.asama, kayipNedeni: x.kayipNedeni, kayipAciklama: x.kayipAciklama } : x)));
+    setDuzenleId(null);
+  }, []);
   const [bildirim, setBildirim] = useState<Bildirim | null>(null);
   const [acikMusteri, setAcikMusteri] = useState<string | null>(null);
   const musteriKapat = useCallback(() => setAcikMusteri(null), []);
@@ -130,16 +151,34 @@ export default function SatisHattiGorunumu({
   const kayipFirsat = firsatlar.find((f) => f.id === kayipId) ?? null;
   const kayipKapat = useCallback(() => setKayipId(null), []);
 
-  function tasi(id: string, asama: Asama, kayip?: KayipBilgisi) {
+  /** Kartı sütununda bir yukarı (-1) ya da aşağı (+1) kaydırır (klavye / dokunmatik için). */
+  function sirala(id: string, yon: -1 | 1) {
+    setFirsatlar((l) => {
+      const f = l.find((x) => x.id === id);
+      if (!f) return l;
+      const sutun = l.filter((x) => x.asama === f.asama);
+      const i = sutun.findIndex((x) => x.id === id);
+      const komsu = sutun[i + yon];
+      return komsu ? yerlestir(l, f, { hedefId: komsu.id, once: yon === -1 }) : l;
+    });
+  }
+
+  function tasi(id: string, asama: Asama, kayip?: KayipBilgisi, konum?: BirakmaKonumu) {
     const firsat = firsatlar.find((f) => f.id === id);
-    if (!firsat || firsat.asama === asama) return;
+    if (!firsat) return;
+    if (firsat.asama === asama) {
+      // Aynı sütun: yalnızca sıra değişir
+      if (konum) setFirsatlar((l) => yerlestir(l, firsat, konum));
+      // TODO: Supabase bağlanınca sıra satis_hatti.f_sira sütununa yazılacak
+      return;
+    }
     if (asama === "kaybedildi" && !kayip) {
       setKayipId(id); // önce nedeni sor, kart onaylanınca taşınır
       return;
     }
-    // Taşınan kart yeni sütununun en altına gider
+    // Taşınan kart bırakıldığı yere, yer belli değilse yeni sütununun en altına gider
     const guncel: Firsat = { ...firsat, asama, kayipNedeni: kayip?.neden, kayipAciklama: kayip?.aciklama };
-    setFirsatlar((l) => [...l.filter((f) => f.id !== id), guncel]);
+    setFirsatlar((l) => yerlestir(l, guncel, konum));
     baslat(async () => {
       const sonuc = await firsatAsamasiGuncelle(firsat, asama, kayip);
       if (sonuc.musteri) setBildirim(sonuc.musteri);
@@ -168,7 +207,17 @@ export default function SatisHattiGorunumu({
       </PageHeader>
 
       <OzetKartlari firsatlar={firsatlar} />
-      <Kanban firsatlar={firsatlar} onTasi={tasi} onEkle={setEkleAsama} />
+      <Kanban
+        firsatlar={firsatlar}
+        onTasi={(id, asama, konum) => tasi(id, asama, undefined, konum)}
+        onSirala={sirala}
+        onEkle={setEkleAsama}
+        onDuzenle={setDuzenleId}
+      />
+
+      <Modal acik={duzenlenen !== null} onKapat={duzenleKapat} baslik="Fırsatı düzenle" aciklama={duzenlenen ? `${duzenlenen.firma} · ${ASAMA_BILGI[duzenlenen.asama].ad}` : undefined}>
+        {duzenlenen && <FirsatFormu key={duzenlenen.id} firsat={duzenlenen} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={duzenlendi} onVazgec={duzenleKapat} />}
+      </Modal>
 
       <Modal
         acik={ekleAsama !== null}
@@ -177,7 +226,7 @@ export default function SatisHattiGorunumu({
         aciklama={ekleAsama ? `${ASAMA_BILGI[ekleAsama].ad} aşamasına eklenecek` : undefined}
       >
         {ekleAsama && (
-          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} onKaydedildi={eklendi} onVazgec={kapat} />
+          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={eklendi} onVazgec={kapat} />
         )}
       </Modal>
 

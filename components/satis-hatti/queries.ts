@@ -35,6 +35,7 @@ export type Firsat = {
   sonrakiTarih: string; // "2026-11-05"
   kayipNedeni?: KayipNedeni; // yalnızca Kaybedildi aşamasında
   kayipAciklama?: string; // "Diğer" seçilince yazılan sebep
+  kampanyaId?: string | null; // lead hangi pazarlama kampanyasından geldi
 };
 
 const DEMO: Firsat[] = [
@@ -52,6 +53,28 @@ const DEMO: Firsat[] = [
   { id: "f12", firma: "Rota Servis Konya", konum: "Konya, TR", kaynak: "Web sitesi", icerik: "1× ONE + Pro", tutar: 178_000, asama: "kaybedildi", sonrakiAdim: "6 ay sonra tekrar ara", sonrakiTarih: "2027-04-15", kayipNedeni: "Bütçe yok" },
 ];
 
+// Lead'lerin geldiği kampanyalar (demo): pazarlama sayfasındaki "gelen lead / satışa dönen" buradan sayılır
+const DEMO_KAMPANYA: Record<string, string> = { f1: "k-reels", f6: "k-pro", f3: "k-pro", f5: "k-ekim", f9: "k-yenileme", f11: "k-yenileme", f12: "k-reels" };
+
+// Demo depo: sunucu belleğinde, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
+const g = globalThis as { __embedraFirsatlar?: Firsat[] };
+const DEPO = (g.__embedraFirsatlar ??= DEMO.map((f) => ({ ...f, kampanyaId: DEMO_KAMPANYA[f.id] ?? null })));
+
 export async function getFirsatlar(): Promise<Firsat[]> {
-  return DEMO;
+  return DEPO;
+}
+
+// Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
+export async function firsatKaydetDepo(f: Firsat) {
+  const i = DEPO.findIndex((x) => x.id === f.id);
+  if (i >= 0) DEPO[i] = { ...f, asama: DEPO[i].asama, kayipNedeni: DEPO[i].kayipNedeni, kayipAciklama: DEPO[i].kayipAciklama };
+  else DEPO.push(f);
+}
+
+export async function firsatAsamasiDepo(id: string, asama: Asama, kayip?: KayipBilgisi) {
+  const f = DEPO.find((x) => x.id === id);
+  if (!f) return;
+  f.asama = asama;
+  f.kayipNedeni = kayip?.neden;
+  f.kayipAciklama = kayip?.aciklama;
 }

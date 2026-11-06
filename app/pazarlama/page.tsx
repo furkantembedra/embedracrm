@@ -1,17 +1,22 @@
-import PageHeader from "@/components/layout/page-header";
-import OzetKartlari from "@/components/pazarlama/ozet-kartlari";
-import IcerikTakvimi from "@/components/pazarlama/icerik-takvimi";
-import KampanyaTablosu from "@/components/pazarlama/kampanya-tablosu";
-import HedefListeler from "@/components/pazarlama/hedef-listeler";
+import PazarlamaGorunumu from "@/components/pazarlama/pazarlama-gorunumu";
+import { getGonderimler, getIcerikler, getKampanyalar, getOzelListeler } from "@/components/pazarlama/queries";
+import { getListeVerisi } from "@/components/pazarlama/kitle";
+import { SEGMENT_ADI } from "@/components/musteriler/queries";
+import { getFirsatlar } from "@/components/satis-hatti/queries";
 
-export default function PazarlamaPage() {
+export default async function PazarlamaPage() {
+  const [icerikler, kampanyalar, ozelListeler, gonderimler, veri, firsatlar] = await Promise.all([
+    getIcerikler(), getKampanyalar(), getOzelListeler(), getGonderimler(), getListeVerisi(), getFirsatlar(),
+  ]);
   return (
-    <>
-      <PageHeader title="Pazarlama & Bülten" />
-      <OzetKartlari />
-      <IcerikTakvimi />
-      <KampanyaTablosu />
-      <HedefListeler />
-    </>
+    <PazarlamaGorunumu
+      icerikler={icerikler}
+      kampanyalar={kampanyalar}
+      ozelListeler={ozelListeler}
+      gonderimler={gonderimler}
+      veri={veri}
+      firsatlar={firsatlar.map((f) => ({ kampanyaId: f.kampanyaId ?? null, asama: f.asama }))}
+      segmentler={SEGMENT_ADI}
+    />
   );
 }

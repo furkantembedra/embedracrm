@@ -70,11 +70,11 @@ export const HAZIR_RAPORLAR: HazirRapor[] = [
     tablo: ({ cihazlar, bugun }) => {
       const satirlar = cihazlar
         .map((c) => ({ c, i: lisansIlerleme(c.lisansBaslangic, c.lisansBitis, bugun) }))
-        .filter((x) => x.i && x.i.kalan <= 90 && x.c.durum !== "serviste")
+        .filter((x) => x.i && x.i.kalan <= 90)
         .sort((a, b) => a.i!.kalan - b.i!.kalan);
       return [
-        ["Seri no", "Müşteri", "Ülke", "Plan", "Lisans bitişi", "Kalan gün", "Firmware"],
-        ...satirlar.map(({ c, i }) => [c.seriNo, c.musteri, c.ulke, c.plan, cihazTarihi(c.lisansBitis), i!.kalan, c.firmware]),
+        ["Seri no", "Müşteri", "Ülke", "Plan", "Lisans bitişi", "Kalan gün"],
+        ...satirlar.map(({ c, i }) => [c.seriNo, c.musteri, c.ulke, c.plan, cihazTarihi(c.lisansBitis), i!.kalan]),
       ];
     },
   },

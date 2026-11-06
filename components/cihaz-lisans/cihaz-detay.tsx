@@ -9,7 +9,7 @@ import { useBugun } from "@/lib/use-bugun";
 import { useSimdi } from "@/lib/use-simdi";
 import type { YeniLisans } from "./actions";
 import { DURUM_ADI, type Cihaz } from "./queries";
-import { DURUM_TONU, PLAN_TONU, eskiFirmware, guncelDurum, kalanYaz, lisansIlerleme, lisansUygula, sonGorulmeYaz, tarihYaz, zamanYaz } from "./ortak";
+import { DURUM_TONU, PLAN_TONU, guncelDurum, kalanYaz, lisansIlerleme, lisansUygula, sonGorulmeYaz, tarihYaz, zamanYaz } from "./ortak";
 import LisansFormu from "./lisans-formu";
 import { URUN_BILGI } from "@/lib/urunler";
 
@@ -25,8 +25,6 @@ export default function CihazDetay({
   const bugun = useBugun();
   const simdi = useSimdi();
   const [c, setC] = useState(ilk);
-  const gorulme = sonGorulmeYaz(c.sonGorulme, simdi);
-  const surumGecmisi = c.surumGecmisi ?? [];
   const [bildirim, setBildirim] = useState<string | null>(null);
   const durum = guncelDurum(c, bugun);
   const ilerleme = lisansIlerleme(c.lisansBaslangic, c.lisansBitis, bugun);
@@ -40,8 +38,6 @@ export default function CihazDetay({
   const bilgiler: [string, React.ReactNode][] = [
     ["Müşteri", c.musteriId ? <Link href={`/musteriler/${c.musteriId}`} className="hover:underline">{c.musteri}</Link> : c.musteri],
     ["Ülke", c.ulke],
-    ["Firmware", <span key="fw" className="inline-flex items-center gap-2 font-mono text-xs">{c.firmware}{eskiFirmware(c.firmware) && <Chip ton="warn" className="h-5 px-2 text-[11px]">Eski</Chip>}</span>],
-    ["Son görülme", <span key="sg" className={gorulme.uyari ? "text-warn" : undefined} title={c.sonGorulme ? zamanYaz(c.sonGorulme) : undefined}>{gorulme.metin}</span>],
     ["Aktivasyon", tarihYaz(c.lisansBaslangic)],
     ["Lisans bitişi", tarihYaz(c.lisansBitis)],
     ["Kalan", ilerleme ? kalanYaz(ilerleme.kalan) : "—"],
@@ -72,29 +68,6 @@ export default function CihazDetay({
             </div>
           ))}
         </dl>
-
-        <section className="flex flex-col gap-2.5">
-          <h3 className="text-sm font-extrabold">Sürüm geçmişi</h3>
-          {surumGecmisi.length === 0 ? (
-            <p className="text-[13px] text-muted">
-              {c.sonGorulme ? "Bildirim geldi; sürüm değişmedi." : "ONESuite bu cihazdan henüz sürüm bildirmedi."}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {surumGecmisi.map((k, i) => (
-                <li key={`${k.zaman}-${i}`} className="flex flex-wrap items-center gap-2 rounded-[14px] border border-line px-3 py-2.5 text-[13px]">
-                  <span className="font-mono text-xs text-muted line-through">{k.eski}</span>
-                  <span aria-hidden="true">→</span>
-                  <span className="font-mono text-xs font-bold">{k.yeni}</span>
-                  <Chip ton={k.kaynak === "cihaz" ? "info" : "gray"} className="h-5 px-2 text-[11px]">
-                    {k.kaynak === "cihaz" ? "Cihaz bildirdi" : "Elle"}
-                  </Chip>
-                  <span className="ml-auto text-xs tabular-nums text-muted">{zamanYaz(k.zaman)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
 
         <section className="flex flex-col gap-2.5">
           <h3 className="text-sm font-extrabold">Lisans geçmişi</h3>

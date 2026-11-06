@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { CalendarClock } from "lucide-react";
 import Chip from "@/components/ui/chip";
-import { ASAMA_BILGI, KONTROL_LISTESI, type Basvuru } from "./queries";
+import { ASAMA_BILGI, type Basvuru, type SozlesmeDetayi } from "./queries";
+import SozlesmeKontrolleri from "./sozlesme-kontrolleri";
 import { ASAMA_TONU, gorusmeYaz, sonrakiAsama } from "./ortak";
 
 const IKINCIL_BTN =
@@ -18,6 +19,10 @@ export default function BasvuruDetay({
   bekliyor = false,
   bildirim,
   onKontrol,
+  onSozlesme,
+  acikMadde = null,
+  onMaddeAc,
+  cakisanlar = [],
   onPuan,
   onIlerlet,
   onGorusme,
@@ -26,8 +31,12 @@ export default function BasvuruDetay({
   bekliyor?: boolean;
   bildirim?: DetayBildirimi | null;
   onKontrol: (sira: number, deger: boolean) => void;
+  onSozlesme: (sira: number, d: SozlesmeDetayi) => void;
+  acikMadde?: number | null;
+  onMaddeAc: (sira: number | null) => void;
+  cakisanlar?: string[];
   onPuan: (puan: number) => void;
-  onIlerlet: () => void;
+  onIlerlet: (kaydedilmemisPuan?: number) => void; // puan yazılıp Kaydet'e basılmadıysa önce o kaydedilir
   onGorusme: () => void;
 }) {
   const [puanTaslak, setPuanTaslak] = useState<{ id: string; deger: string } | null>(null);
@@ -43,7 +52,6 @@ export default function BasvuruDetay({
   const sonraki = sonrakiAsama(b.asama);
   const puanDegeri = puanTaslak?.id === b.id ? puanTaslak.deger : b.puan === null ? "" : String(b.puan);
   const puanDegisti = puanDegeri !== (b.puan === null ? "" : String(b.puan));
-  const tamamlanan = b.kontroller.filter(Boolean).length;
 
   return (
     <aside aria-label="Başvuru detayı" className="flex w-full min-w-0 flex-col gap-4 rounded-card border border-line bg-card p-5">
@@ -93,26 +101,14 @@ export default function BasvuruDetay({
         <button type="submit" disabled={!puanDegisti || puanDegeri === "" || bekliyor} className={IKINCIL_BTN}>Kaydet</button>
       </form>
 
-      <fieldset className="flex flex-col gap-1">
-        <legend className="mb-1.5 flex w-full items-center text-sm font-extrabold">
-          Sözleşme kontrol listesi
-          <span className="ml-auto text-xs font-semibold tabular-nums text-muted">{tamamlanan}/{KONTROL_LISTESI.length}</span>
-        </legend>
-        {KONTROL_LISTESI.map((k, i) => (
-          <label key={k.baslik} className="flex min-h-11 cursor-pointer items-center gap-3 text-[13px]">
-            <input
-              type="checkbox"
-              checked={b.kontroller[i]}
-              onChange={(e) => onKontrol(i, e.target.checked)}
-              className="h-5 w-5 flex-none accent-[#0E0F0C]"
-            />
-            <span className="flex flex-col gap-0.5">
-              <b>{k.baslik}</b>
-              <span className="text-xs text-muted">{k.not}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <SozlesmeKontrolleri
+        basvuru={b}
+        acikMadde={acikMadde}
+        onAc={onMaddeAc}
+        onKontrol={onKontrol}
+        onKaydet={onSozlesme}
+        cakisanlar={cakisanlar}
+      />
 
       {b.gorusme && (
         <p className="flex items-start gap-2 rounded-control border border-line px-3 py-2.5 text-[13px]">
@@ -144,7 +140,10 @@ export default function BasvuruDetay({
         </button>
         <button
           type="button"
-          onClick={onIlerlet}
+          onClick={() => {
+            // Yazılan puan silinmez: hata olursa alanda kalır, başarılıysa kayıtlı puanla aynı olur
+            onIlerlet(puanDegisti && puanDegeri !== "" ? Number(puanDegeri) : undefined);
+          }}
           disabled={!sonraki || bekliyor}
           className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-control bg-ink px-3 text-sm font-bold text-white transition-colors hover:bg-ink-soft disabled:cursor-default disabled:opacity-60"
         >

@@ -1,0 +1,968 @@
+{
+  ".playwright-cli/page-2026-11-04T08-53-29-341Z.yml": {
+    "mtime": 1793782409.3419101,
+    "seen": 1793949902.419232,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  ".playwright/cli.config.json": {
+    "mtime": 1793782404.0881052,
+    "seen": 1793949902.419235,
+    "ast_hash": "b42bc1d61de426a82f9df2b94c63de2b",
+    "semantic_hash": "b42bc1d61de426a82f9df2b94c63de2b"
+  },
+  "app/api/cihaz-bildirimi/route.ts": {
+    "mtime": 1793800817.3964548,
+    "seen": 1793949902.4192362,
+    "ast_hash": "8429e9fe54bab6cee12f82712e10fb28",
+    "semantic_hash": "8429e9fe54bab6cee12f82712e10fb28"
+  },
+  "app/bayiler/[id]/page.tsx": {
+    "mtime": 1793889775.549266,
+    "seen": 1793949902.4192371,
+    "ast_hash": "e9ef934aa49c6c8cb155779c10ed988c",
+    "semantic_hash": "e9ef934aa49c6c8cb155779c10ed988c"
+  },
+  "app/bayiler/page.tsx": {
+    "mtime": 1793889775.549041,
+    "seen": 1793949902.4192379,
+    "ast_hash": "bf14530f6a2baf0f84fde25d3d2fed05",
+    "semantic_hash": "bf14530f6a2baf0f84fde25d3d2fed05"
+  },
+  "app/bayiler/raporlama/page.tsx": {
+    "mtime": 1793779439.5361514,
+    "seen": 1793949902.4192379,
+    "ast_hash": "b9ef56a455d80718718dca186898c0d8",
+    "semantic_hash": "b9ef56a455d80718718dca186898c0d8"
+  },
+  "app/bayiler/yeni/page.tsx": {
+    "mtime": 1793706148.010136,
+    "seen": 1793949902.4192388,
+    "ast_hash": "bce8f214630580fcc8659c4a84318fa8",
+    "semantic_hash": "bce8f214630580fcc8659c4a84318fa8"
+  },
+  "app/cihaz-lisans/[id]/page.tsx": {
+    "mtime": 1793775392.690206,
+    "seen": 1793949902.4192388,
+    "ast_hash": "ce07a38a9ef67e79e2179d0f156dec1e",
+    "semantic_hash": "ce07a38a9ef67e79e2179d0f156dec1e"
+  },
+  "app/cihaz-lisans/page.tsx": {
+    "mtime": 1793946638.696726,
+    "seen": 1793949902.41924,
+    "ast_hash": "14b7ef2b30df166045170cb64793d95c",
+    "semantic_hash": "14b7ef2b30df166045170cb64793d95c"
+  },
+  "app/cihaz-lisans/yeni/page.tsx": {
+    "mtime": 1793775139.5408227,
+    "seen": 1793949902.41924,
+    "ast_hash": "4a7d4d691605303989bcae1611fb5140",
+    "semantic_hash": "4a7d4d691605303989bcae1611fb5140"
+  },
+  "app/destek/[id]/page.tsx": {
+    "mtime": 1793784258.8625767,
+    "seen": 1793949902.419241,
+    "ast_hash": "d641845bdbe2c504cadb768d18770cec",
+    "semantic_hash": "d641845bdbe2c504cadb768d18770cec"
+  },
+  "app/destek/page.tsx": {
+    "mtime": 1793784258.8624573,
+    "seen": 1793949902.419241,
+    "ast_hash": "65b60a130c85105efffb85501e4bfeb3",
+    "semantic_hash": "65b60a130c85105efffb85501e4bfeb3"
+  },
+  "app/destek/yeni/page.tsx": {
+    "mtime": 1793776029.0838487,
+    "seen": 1793949902.419242,
+    "ast_hash": "8dfd3c2806c76ff551e082ce2c09ecec",
+    "semantic_hash": "8dfd3c2806c76ff551e082ce2c09ecec"
+  },
+  "app/genel-bakis/page.tsx": {
+    "mtime": 1793782849.4699273,
+    "seen": 1793949902.419242,
+    "ast_hash": "da39ff904ea42fc9861fdb1f6f91513c",
+    "semantic_hash": "da39ff904ea42fc9861fdb1f6f91513c"
+  },
+  "app/giris/page.tsx": {
+    "mtime": 1793706148.012734,
+    "seen": 1793949902.419243,
+    "ast_hash": "fdd4871e21bd22fffac7ad631fc109f1",
+    "semantic_hash": "fdd4871e21bd22fffac7ad631fc109f1"
+  },
+  "app/layout.tsx": {
+    "mtime": 1793706148.0130696,
+    "seen": 1793949902.419243,
+    "ast_hash": "6a56cb93e007b40470f41cd8badcdb6b",
+    "semantic_hash": "6a56cb93e007b40470f41cd8badcdb6b"
+  },
+  "app/musteriler/[id]/page.tsx": {
+    "mtime": 1793775392.6922023,
+    "seen": 1793949902.419243,
+    "ast_hash": "069a2ed2ed2b703c9d012f88fdcd1f71",
+    "semantic_hash": "069a2ed2ed2b703c9d012f88fdcd1f71"
+  },
+  "app/musteriler/page.tsx": {
+    "mtime": 1793716439.779237,
+    "seen": 1793949902.419244,
+    "ast_hash": "ae339f0fb010f39c03b7789bd7c6dea8",
+    "semantic_hash": "ae339f0fb010f39c03b7789bd7c6dea8"
+  },
+  "app/musteriler/yeni/page.tsx": {
+    "mtime": 1793715198.830869,
+    "seen": 1793949902.419244,
+    "ast_hash": "186b014b9d55a75dc6c8833be41febb1",
+    "semantic_hash": "186b014b9d55a75dc6c8833be41febb1"
+  },
+  "app/operasyon/page.tsx": {
+    "mtime": 1793706148.014041,
+    "seen": 1793949902.419245,
+    "ast_hash": "6f409db419d7a9c724dab8d1bef7a0da",
+    "semantic_hash": "6f409db419d7a9c724dab8d1bef7a0da"
+  },
+  "app/page.tsx": {
+    "mtime": 1793706148.0141792,
+    "seen": 1793949902.419245,
+    "ast_hash": "806b4a398ee73915fee0157d3bc97c22",
+    "semantic_hash": "806b4a398ee73915fee0157d3bc97c22"
+  },
+  "app/pazarlama/page.tsx": {
+    "mtime": 1793706148.0144258,
+    "seen": 1793949902.4192462,
+    "ast_hash": "e9c8130fea1dd1967aef34006dbaa953",
+    "semantic_hash": "e9c8130fea1dd1967aef34006dbaa953"
+  },
+  "app/satis-hatti/page.tsx": {
+    "mtime": 1793792634.7478876,
+    "seen": 1793949902.4192462,
+    "ast_hash": "00672a9ffbdf651b190139803f906f53",
+    "semantic_hash": "00672a9ffbdf651b190139803f906f53"
+  },
+  "app/siparisler/[id]/page.tsx": {
+    "mtime": 1793780356.4164145,
+    "seen": 1793949902.4192472,
+    "ast_hash": "1b363500ee4fca2bfc7c7776dda18ae1",
+    "semantic_hash": "1b363500ee4fca2bfc7c7776dda18ae1"
+  },
+  "app/siparisler/page.tsx": {
+    "mtime": 1793706148.0151951,
+    "seen": 1793949902.4192472,
+    "ast_hash": "6e7b97570072564eeae5a7e60c09bd84",
+    "semantic_hash": "6e7b97570072564eeae5a7e60c09bd84"
+  },
+  "app/siparisler/yeni/page.tsx": {
+    "mtime": 1793706148.0154312,
+    "seen": 1793949902.419248,
+    "ast_hash": "8101869b971ab7c588fe5b834bc07ac1",
+    "semantic_hash": "8101869b971ab7c588fe5b834bc07ac1"
+  },
+  "components.json": {
+    "mtime": 1793696925.9768693,
+    "seen": 1793949902.419248,
+    "ast_hash": "97f5925cd4aa38568caba9599842f9f0",
+    "semantic_hash": "97f5925cd4aa38568caba9599842f9f0"
+  },
+  "components/bayiler/actions.ts": {
+    "mtime": 1793889626.948031,
+    "seen": 1793949902.4192488,
+    "ast_hash": "f5fc806ef599b3652d6427d07750b970",
+    "semantic_hash": "f5fc806ef599b3652d6427d07750b970"
+  },
+  "components/bayiler/basvuru-detay.tsx": {
+    "mtime": 1793888038.0082197,
+    "seen": 1793949902.4192488,
+    "ast_hash": "6a1be917c4a10b640a397f4bf7047448",
+    "semantic_hash": "6a1be917c4a10b640a397f4bf7047448"
+  },
+  "components/bayiler/basvuru-formu.tsx": {
+    "mtime": 1793783786.8241315,
+    "seen": 1793949902.4192488,
+    "ast_hash": "0dd4390cf1510c270ed356f52eb92553",
+    "semantic_hash": "0dd4390cf1510c270ed356f52eb92553"
+  },
+  "components/bayiler/basvuru-tablosu.tsx": {
+    "mtime": 1793949307.9050949,
+    "seen": 1793949902.41925,
+    "ast_hash": "3f2c1925d7d248c3ffffff5ea80c7918",
+    "semantic_hash": "3f2c1925d7d248c3ffffff5ea80c7918"
+  },
+  "components/bayiler/bayi-detay.tsx": {
+    "mtime": 1793889735.666368,
+    "seen": 1793949902.41925,
+    "ast_hash": "f5f7e783a5f1cb1c5a22c8980d70f1bb",
+    "semantic_hash": "f5f7e783a5f1cb1c5a22c8980d70f1bb"
+  },
+  "components/bayiler/bayi-gorunumu.tsx": {
+    "mtime": 1793949435.4706933,
+    "seen": 1793949902.419251,
+    "ast_hash": "c9ad4956019cb94db7e2aaab91cd7576",
+    "semantic_hash": "c9ad4956019cb94db7e2aaab91cd7576"
+  },
+  "components/bayiler/bayi-hareket-formlari.tsx": {
+    "mtime": 1793949211.0479043,
+    "seen": 1793949902.419251,
+    "ast_hash": "552d6917bb9aa9c77ef8a2c6cb1880f4",
+    "semantic_hash": "552d6917bb9aa9c77ef8a2c6cb1880f4"
+  },
+  "components/bayiler/bayi-performansi.tsx": {
+    "mtime": 1793949317.46148,
+    "seen": 1793949902.419252,
+    "ast_hash": "d6c3e1443861c0ad44d86bacd402e4f3",
+    "semantic_hash": "d6c3e1443861c0ad44d86bacd402e4f3"
+  },
+  "components/bayiler/bolge-kapsamasi.tsx": {
+    "mtime": 1793888943.55378,
+    "seen": 1793949902.419252,
+    "ast_hash": "b0e8e91903ebd61fb62fad57cf360e61",
+    "semantic_hash": "b0e8e91903ebd61fb62fad57cf360e61"
+  },
+  "components/bayiler/gorusme-formu.tsx": {
+    "mtime": 1793783786.8256307,
+    "seen": 1793949902.419252,
+    "ast_hash": "faa300da454332607ebcd6df482bc5b2",
+    "semantic_hash": "faa300da454332607ebcd6df482bc5b2"
+  },
+  "components/bayiler/hareket-actions.ts": {
+    "mtime": 1793890628.065057,
+    "seen": 1793949902.419253,
+    "ast_hash": "57660fdad007c27e0ff7f20d0ce8ffdc",
+    "semantic_hash": "57660fdad007c27e0ff7f20d0ce8ffdc"
+  },
+  "components/bayiler/onboarding-asamalari.tsx": {
+    "mtime": 1793886296.710406,
+    "seen": 1793949902.419253,
+    "ast_hash": "90d5d00d770af8b0e61318dac21c8925",
+    "semantic_hash": "90d5d00d770af8b0e61318dac21c8925"
+  },
+  "components/bayiler/ortak.ts": {
+    "mtime": 1793889571.3591452,
+    "seen": 1793949902.419254,
+    "ast_hash": "100911b9d49c44bc42ae9ad00e0d5831",
+    "semantic_hash": "100911b9d49c44bc42ae9ad00e0d5831"
+  },
+  "components/bayiler/queries.ts": {
+    "mtime": 1793889860.3668458,
+    "seen": 1793949902.419254,
+    "ast_hash": "48f13bb2ecf60b15e4cf52c03f849f13",
+    "semantic_hash": "48f13bb2ecf60b15e4cf52c03f849f13"
+  },
+  "components/bayiler/sozlesme-kontrolleri.tsx": {
+    "mtime": 1793887623.131068,
+    "seen": 1793949902.419255,
+    "ast_hash": "a5d6422dcfb0d3ee763c7d7a9e9b6747",
+    "semantic_hash": "a5d6422dcfb0d3ee763c7d7a9e9b6747"
+  },
+  "components/cihaz-lisans/actions.ts": {
+    "mtime": 1793884399.325382,
+    "seen": 1793949902.419255,
+    "ast_hash": "870386240799ef809b12f2e13c178009",
+    "semantic_hash": "870386240799ef809b12f2e13c178009"
+  },
+  "components/cihaz-lisans/cihaz-detay.tsx": {
+    "mtime": 1793888456.9667854,
+    "seen": 1793949902.419256,
+    "ast_hash": "6f9169851418121877591d53e7bbaed2",
+    "semantic_hash": "6f9169851418121877591d53e7bbaed2"
+  },
+  "components/cihaz-lisans/cihaz-formu.tsx": {
+    "mtime": 1793884399.325205,
+    "seen": 1793949902.419256,
+    "ast_hash": "8f44f0aa362e98b2026bfe7e465835fa",
+    "semantic_hash": "8f44f0aa362e98b2026bfe7e465835fa"
+  },
+  "components/cihaz-lisans/cihaz-gorunumu.tsx": {
+    "mtime": 1793946645.4402912,
+    "seen": 1793949902.4192572,
+    "ast_hash": "52e2090cea53b7c9596361a858ba8abf",
+    "semantic_hash": "52e2090cea53b7c9596361a858ba8abf"
+  },
+  "components/cihaz-lisans/cihaz-modelleri.tsx": {
+    "mtime": 1793946622.8502004,
+    "seen": 1793949902.4192572,
+    "ast_hash": "dd29dbcd9e406e5b9380811451237721",
+    "semantic_hash": "dd29dbcd9e406e5b9380811451237721"
+  },
+  "components/cihaz-lisans/cihaz-tablosu.tsx": {
+    "mtime": 1793890653.054803,
+    "seen": 1793949902.419258,
+    "ast_hash": "1d6d03cb4c65a74098aae43670eaced1",
+    "semantic_hash": "1d6d03cb4c65a74098aae43670eaced1"
+  },
+  "components/cihaz-lisans/lisans-formu.tsx": {
+    "mtime": 1793800439.4776516,
+    "seen": 1793949902.419258,
+    "ast_hash": "4eff3e13ed305be9de9d977dd45387d9",
+    "semantic_hash": "4eff3e13ed305be9de9d977dd45387d9"
+  },
+  "components/cihaz-lisans/lisans-planlari.tsx": {
+    "mtime": 1793775057.5513294,
+    "seen": 1793949902.4192588,
+    "ast_hash": "3d4c0c5dcd1e7525be51aad2c96c3f80",
+    "semantic_hash": "3d4c0c5dcd1e7525be51aad2c96c3f80"
+  },
+  "components/cihaz-lisans/ortak.ts": {
+    "mtime": 1793890628.0647857,
+    "seen": 1793949902.4192588,
+    "ast_hash": "71a4bcfc4599646c50f2a5229470a968",
+    "semantic_hash": "71a4bcfc4599646c50f2a5229470a968"
+  },
+  "components/cihaz-lisans/ozet-kartlari.tsx": {
+    "mtime": 1793884901.2919514,
+    "seen": 1793949902.4192588,
+    "ast_hash": "7103cd706b8ccf5363cdf2874d643cdf",
+    "semantic_hash": "7103cd706b8ccf5363cdf2874d643cdf"
+  },
+  "components/cihaz-lisans/queries.ts": {
+    "mtime": 1793890628.064655,
+    "seen": 1793949902.4192598,
+    "ast_hash": "3bce6fb2fe23a7291beaeac4691892cd",
+    "semantic_hash": "3bce6fb2fe23a7291beaeac4691892cd"
+  },
+  "components/destek/actions.ts": {
+    "mtime": 1793885497.7994306,
+    "seen": 1793949902.4192598,
+    "ast_hash": "eda4c9d43f6257240648028c04117c34",
+    "semantic_hash": "eda4c9d43f6257240648028c04117c34"
+  },
+  "components/destek/destek-gorunumu.tsx": {
+    "mtime": 1793888103.7448394,
+    "seen": 1793949902.419261,
+    "ast_hash": "d1878f9d8c28a952a6211c72ea69ce14",
+    "semantic_hash": "d1878f9d8c28a952a6211c72ea69ce14"
+  },
+  "components/destek/musteri-bilgi-paneli.tsx": {
+    "mtime": 1793888103.7451122,
+    "seen": 1793949902.419261,
+    "ast_hash": "4e6a883613bd8e5127a2d99e6c570d23",
+    "semantic_hash": "4e6a883613bd8e5127a2d99e6c570d23"
+  },
+  "components/destek/not-formu.tsx": {
+    "mtime": 1793888289.284067,
+    "seen": 1793949902.419261,
+    "ast_hash": "9b2d737a44c4870ebf681a1d69c1f4bf",
+    "semantic_hash": "9b2d737a44c4870ebf681a1d69c1f4bf"
+  },
+  "components/destek/ortak.ts": {
+    "mtime": 1793888289.262474,
+    "seen": 1793949902.419262,
+    "ast_hash": "c9dc28c221ead40821c2a81a53bc2ae6",
+    "semantic_hash": "c9dc28c221ead40821c2a81a53bc2ae6"
+  },
+  "components/destek/queries.ts": {
+    "mtime": 1793885497.7988245,
+    "seen": 1793949902.419262,
+    "ast_hash": "0325edb874bea3426612e15debd853d5",
+    "semantic_hash": "0325edb874bea3426612e15debd853d5"
+  },
+  "components/destek/talep-detay.tsx": {
+    "mtime": 1793885600.2185094,
+    "seen": 1793949902.419263,
+    "ast_hash": "b86ab8104a5d3737ee39c12dc38b51e9",
+    "semantic_hash": "b86ab8104a5d3737ee39c12dc38b51e9"
+  },
+  "components/destek/talep-formu.tsx": {
+    "mtime": 1793888289.2846575,
+    "seen": 1793949902.419263,
+    "ast_hash": "db0c4e7e756176dce48981e0434908f4",
+    "semantic_hash": "db0c4e7e756176dce48981e0434908f4"
+  },
+  "components/destek/talep-listesi.tsx": {
+    "mtime": 1793885497.7990952,
+    "seen": 1793949902.419264,
+    "ast_hash": "2f817abc2bee8f0afc314743eabe2501",
+    "semantic_hash": "2f817abc2bee8f0afc314743eabe2501"
+  },
+  "components/genel-bakis/gelir-grafigi.tsx": {
+    "mtime": 1793706236.7972393,
+    "seen": 1793949902.419264,
+    "ast_hash": "c07da0fa2f3579b4e9edf5aab230d797",
+    "semantic_hash": "c07da0fa2f3579b4e9edf5aab230d797"
+  },
+  "components/genel-bakis/lead-kaynaklari.tsx": {
+    "mtime": 1793706236.7974284,
+    "seen": 1793949902.419264,
+    "ast_hash": "87e261b696943d62d7cf72467e6819a6",
+    "semantic_hash": "87e261b696943d62d7cf72467e6819a6"
+  },
+  "components/genel-bakis/lisans-dagilimi.tsx": {
+    "mtime": 1793706236.7975821,
+    "seen": 1793949902.419265,
+    "ast_hash": "7a10e64e2f1ce98667c868fb9dd59759",
+    "semantic_hash": "7a10e64e2f1ce98667c868fb9dd59759"
+  },
+  "components/genel-bakis/ozet-kartlari.tsx": {
+    "mtime": 1793706236.7977383,
+    "seen": 1793949902.419265,
+    "ast_hash": "a8fb196875fc4bc4d58d016b3f204c63",
+    "semantic_hash": "a8fb196875fc4bc4d58d016b3f204c63"
+  },
+  "components/genel-bakis/queries.ts": {
+    "mtime": 1793706236.7978892,
+    "seen": 1793949902.419266,
+    "ast_hash": "68768e1154ebe42379a8235463e43aaa",
+    "semantic_hash": "68768e1154ebe42379a8235463e43aaa"
+  },
+  "components/genel-bakis/satis-hatti-ozeti.tsx": {
+    "mtime": 1793706236.7980554,
+    "seen": 1793949902.419266,
+    "ast_hash": "761c7c5019388b1eff660f57d5e5e174",
+    "semantic_hash": "761c7c5019388b1eff660f57d5e5e174"
+  },
+  "components/genel-bakis/son-islemler.tsx": {
+    "mtime": 1793706236.7981818,
+    "seen": 1793949902.4192672,
+    "ast_hash": "3ec696848394f30734067020edbb0427",
+    "semantic_hash": "3ec696848394f30734067020edbb0427"
+  },
+  "components/genel-bakis/son-talepler.tsx": {
+    "mtime": 1793706236.7983022,
+    "seen": 1793949902.4192672,
+    "ast_hash": "8b97eefa7f0c76bfedf87e567f0755ee",
+    "semantic_hash": "8b97eefa7f0c76bfedf87e567f0755ee"
+  },
+  "components/genel-bakis/suresi-dolanlar.tsx": {
+    "mtime": 1793782621.9309547,
+    "seen": 1793949902.4192681,
+    "ast_hash": "717a2738de47769024981abe8aae4183",
+    "semantic_hash": "717a2738de47769024981abe8aae4183"
+  },
+  "components/giris/giris-formu.tsx": {
+    "mtime": 1793706236.8025932,
+    "seen": 1793949902.4192681,
+    "ast_hash": "853b9dbc5d08b7fdddfee79cba54c201",
+    "semantic_hash": "853b9dbc5d08b7fdddfee79cba54c201"
+  },
+  "components/layout/page-header.tsx": {
+    "mtime": 1793706236.805937,
+    "seen": 1793949902.4192681,
+    "ast_hash": "2985abd2eba156d3d688fbd97c93fc49",
+    "semantic_hash": "2985abd2eba156d3d688fbd97c93fc49"
+  },
+  "components/layout/sidebar.tsx": {
+    "mtime": 1793775356.9551475,
+    "seen": 1793949902.419269,
+    "ast_hash": "e05555115003fdfbe77276bd0f4206bf",
+    "semantic_hash": "e05555115003fdfbe77276bd0f4206bf"
+  },
+  "components/layout/topbar.tsx": {
+    "mtime": 1793706236.806277,
+    "seen": 1793949902.419269,
+    "ast_hash": "a99b0a1ee449d84aee121a3d52c87f2a",
+    "semantic_hash": "a99b0a1ee449d84aee121a3d52c87f2a"
+  },
+  "components/musteriler/actions.ts": {
+    "mtime": 1793799023.3291178,
+    "seen": 1793949902.4192698,
+    "ast_hash": "15ace85ec903323c0fa9ee903006eeb2",
+    "semantic_hash": "15ace85ec903323c0fa9ee903006eeb2"
+  },
+  "components/musteriler/musteri-detay.tsx": {
+    "mtime": 1793885812.880352,
+    "seen": 1793949902.4192698,
+    "ast_hash": "e693ff5dfdca91b0680981545ade9864",
+    "semantic_hash": "e693ff5dfdca91b0680981545ade9864"
+  },
+  "components/musteriler/musteri-formu.tsx": {
+    "mtime": 1793783786.8224878,
+    "seen": 1793949902.419271,
+    "ast_hash": "160b7f0c9e20f448379c72911d8a9137",
+    "semantic_hash": "160b7f0c9e20f448379c72911d8a9137"
+  },
+  "components/musteriler/musteri-gorunumu.tsx": {
+    "mtime": 1793799116.1940362,
+    "seen": 1793949902.419271,
+    "ast_hash": "79ccf0a144a3dcb66743430833c34723",
+    "semantic_hash": "79ccf0a144a3dcb66743430833c34723"
+  },
+  "components/musteriler/musteri-iletisim.tsx": {
+    "mtime": 1793799090.447227,
+    "seen": 1793949902.419271,
+    "ast_hash": "990faccc3535e74e855e629db3316c65",
+    "semantic_hash": "990faccc3535e74e855e629db3316c65"
+  },
+  "components/musteriler/musteri-not-formu.tsx": {
+    "mtime": 1793883259.354923,
+    "seen": 1793949902.419272,
+    "ast_hash": "1b2e676b075d9e6fa72e6a740087280f",
+    "semantic_hash": "1b2e676b075d9e6fa72e6a740087280f"
+  },
+  "components/musteriler/musteri-tablosu.tsx": {
+    "mtime": 1793784674.3430233,
+    "seen": 1793949902.419272,
+    "ast_hash": "ba66a30284093c576c574a7426bfde63",
+    "semantic_hash": "ba66a30284093c576c574a7426bfde63"
+  },
+  "components/musteriler/musteri-zaman-cizelgesi.tsx": {
+    "mtime": 1793799793.7826626,
+    "seen": 1793949902.419273,
+    "ast_hash": "59563145bf418c7cc0f732418babf791",
+    "semantic_hash": "59563145bf418c7cc0f732418babf791"
+  },
+  "components/musteriler/ortak.ts": {
+    "mtime": 1793799245.902098,
+    "seen": 1793949902.419273,
+    "ast_hash": "aa6e24950a0ee93a4930c526435e9dd3",
+    "semantic_hash": "aa6e24950a0ee93a4930c526435e9dd3"
+  },
+  "components/musteriler/queries.ts": {
+    "mtime": 1793890634.2514632,
+    "seen": 1793949902.419274,
+    "ast_hash": "467998105725ed29c4a7bf0891b621c7",
+    "semantic_hash": "467998105725ed29c4a7bf0891b621c7"
+  },
+  "components/musteriler/segment-kartlari.tsx": {
+    "mtime": 1793715017.4142246,
+    "seen": 1793949902.419274,
+    "ast_hash": "c36ec3005fd3f68ea7382b50f97b0b3b",
+    "semantic_hash": "c36ec3005fd3f68ea7382b50f97b0b3b"
+  },
+  "components/pazarlama/actions.ts": {
+    "mtime": 1793706236.8179972,
+    "seen": 1793949902.419275,
+    "ast_hash": "a5cb9d8cba62e57c109a7cce2ed12e85",
+    "semantic_hash": "a5cb9d8cba62e57c109a7cce2ed12e85"
+  },
+  "components/pazarlama/hedef-listeler.tsx": {
+    "mtime": 1793706236.8181586,
+    "seen": 1793949902.419276,
+    "ast_hash": "0b4a6f716d9265128425f6e466fe3b8c",
+    "semantic_hash": "0b4a6f716d9265128425f6e466fe3b8c"
+  },
+  "components/pazarlama/icerik-takvimi.tsx": {
+    "mtime": 1793706236.8182971,
+    "seen": 1793949902.419276,
+    "ast_hash": "95847531d598602b35bc175164aa3a61",
+    "semantic_hash": "95847531d598602b35bc175164aa3a61"
+  },
+  "components/pazarlama/kampanya-formu.tsx": {
+    "mtime": 1793706236.8184748,
+    "seen": 1793949902.419277,
+    "ast_hash": "e245e669f1e49f91a1cea28380740b32",
+    "semantic_hash": "e245e669f1e49f91a1cea28380740b32"
+  },
+  "components/pazarlama/kampanya-tablosu.tsx": {
+    "mtime": 1793706236.8186164,
+    "seen": 1793949902.419277,
+    "ast_hash": "c0fdab6cf9a473b3b10265a7689636ca",
+    "semantic_hash": "c0fdab6cf9a473b3b10265a7689636ca"
+  },
+  "components/pazarlama/ozet-kartlari.tsx": {
+    "mtime": 1793706236.818765,
+    "seen": 1793949902.4192781,
+    "ast_hash": "4d3edd8d05ddb4fa16c44e666edf722b",
+    "semantic_hash": "4d3edd8d05ddb4fa16c44e666edf722b"
+  },
+  "components/pazarlama/queries.ts": {
+    "mtime": 1793706236.8188846,
+    "seen": 1793949902.4192781,
+    "ast_hash": "35af2d5dfa185ff68e36125b7df582a2",
+    "semantic_hash": "35af2d5dfa185ff68e36125b7df582a2"
+  },
+  "components/raporlar/destek-konulari.tsx": {
+    "mtime": 1793779439.3245072,
+    "seen": 1793949902.4192781,
+    "ast_hash": "267e68cf14338d5099e7ec78f4b09aba",
+    "semantic_hash": "267e68cf14338d5099e7ec78f4b09aba"
+  },
+  "components/raporlar/donem-secici.tsx": {
+    "mtime": 1793779391.9992843,
+    "seen": 1793949902.419279,
+    "ast_hash": "136b8a0a2e103252223e5a4035a55649",
+    "semantic_hash": "136b8a0a2e103252223e5a4035a55649"
+  },
+  "components/raporlar/hazir-rapor-tanimlari.ts": {
+    "mtime": 1793885248.7398098,
+    "seen": 1793949902.419279,
+    "ast_hash": "b06f3792b78015beb1c776e7190bb1ac",
+    "semantic_hash": "b06f3792b78015beb1c776e7190bb1ac"
+  },
+  "components/raporlar/hazir-raporlar.tsx": {
+    "mtime": 1793779474.8700843,
+    "seen": 1793949902.4192798,
+    "ast_hash": "9cfeb00c34e8e8499634e5ab488e595f",
+    "semantic_hash": "9cfeb00c34e8e8499634e5ab488e595f"
+  },
+  "components/raporlar/kaynak-donusumu.tsx": {
+    "mtime": 1793779439.3384283,
+    "seen": 1793949902.4192798,
+    "ast_hash": "f0f7ae421d6391837c23c2d4b63e74a9",
+    "semantic_hash": "f0f7ae421d6391837c23c2d4b63e74a9"
+  },
+  "components/raporlar/ozet-kartlari.tsx": {
+    "mtime": 1793779474.8702977,
+    "seen": 1793949902.419281,
+    "ast_hash": "6810d68055ab556c54255a992f7edac3",
+    "semantic_hash": "6810d68055ab556c54255a992f7edac3"
+  },
+  "components/raporlar/queries.ts": {
+    "mtime": 1793779391.8907654,
+    "seen": 1793949902.419281,
+    "ast_hash": "011b9b9696880d9cd1d2cedfbef829b3",
+    "semantic_hash": "011b9b9696880d9cd1d2cedfbef829b3"
+  },
+  "components/raporlar/raporlar-gorunumu.tsx": {
+    "mtime": 1793779439.3928246,
+    "seen": 1793949902.419281,
+    "ast_hash": "fd5ef321ee01a0edbf670db93de21456",
+    "semantic_hash": "fd5ef321ee01a0edbf670db93de21456"
+  },
+  "components/raporlar/ulke-gelirleri.tsx": {
+    "mtime": 1793779439.3096857,
+    "seen": 1793949902.419282,
+    "ast_hash": "4c854ed6a651486d714be8a3e4bb05f4",
+    "semantic_hash": "4c854ed6a651486d714be8a3e4bb05f4"
+  },
+  "components/raporlar/yenileme-grafigi.tsx": {
+    "mtime": 1793779392.044341,
+    "seen": 1793949902.419282,
+    "ast_hash": "82b9a73e8eb44e1506f85c5f559c3728",
+    "semantic_hash": "82b9a73e8eb44e1506f85c5f559c3728"
+  },
+  "components/satis-hatti/actions.ts": {
+    "mtime": 1793948467.807532,
+    "seen": 1793949902.419283,
+    "ast_hash": "c5455bab203ef7d41ac36ec375bcd632",
+    "semantic_hash": "c5455bab203ef7d41ac36ec375bcd632"
+  },
+  "components/satis-hatti/firsat-formu.tsx": {
+    "mtime": 1793949011.198757,
+    "seen": 1793949902.419283,
+    "ast_hash": "3c6bf2175efb56f585b05790da101f2d",
+    "semantic_hash": "3c6bf2175efb56f585b05790da101f2d"
+  },
+  "components/satis-hatti/firsat-karti.tsx": {
+    "mtime": 1793947588.294493,
+    "seen": 1793949902.4192839,
+    "ast_hash": "bd34ec1c46eb1a14ddaf561088baba7f",
+    "semantic_hash": "bd34ec1c46eb1a14ddaf561088baba7f"
+  },
+  "components/satis-hatti/kanban.tsx": {
+    "mtime": 1793947588.2933757,
+    "seen": 1793949902.4192839,
+    "ast_hash": "83a02c2ea448c43b2c729320e8b45524",
+    "semantic_hash": "83a02c2ea448c43b2c729320e8b45524"
+  },
+  "components/satis-hatti/ortak.ts": {
+    "mtime": 1793860424.5140831,
+    "seen": 1793949902.419285,
+    "ast_hash": "c80e0ae49cbac58ddf2f7a99816c2997",
+    "semantic_hash": "c80e0ae49cbac58ddf2f7a99816c2997"
+  },
+  "components/satis-hatti/ozet-kartlari.tsx": {
+    "mtime": 1793793667.3977592,
+    "seen": 1793949902.419285,
+    "ast_hash": "5cea440f872e6c7cef87fda644f03862",
+    "semantic_hash": "5cea440f872e6c7cef87fda644f03862"
+  },
+  "components/satis-hatti/queries.ts": {
+    "mtime": 1793795808.9411964,
+    "seen": 1793949902.419286,
+    "ast_hash": "ab691f08b08a07ee77a07f878ded0d46",
+    "semantic_hash": "ab691f08b08a07ee77a07f878ded0d46"
+  },
+  "components/satis-hatti/satis-hatti-gorunumu.tsx": {
+    "mtime": 1793947588.2946455,
+    "seen": 1793949902.419286,
+    "ast_hash": "9add0616692f21a807bbb55936e8af9a",
+    "semantic_hash": "9add0616692f21a807bbb55936e8af9a"
+  },
+  "components/satis-hatti/urun-secimi.ts": {
+    "mtime": 1793949011.1984632,
+    "seen": 1793949902.419286,
+    "ast_hash": "d826ef785023d84ecf3338bcbfa8337c",
+    "semantic_hash": "d826ef785023d84ecf3338bcbfa8337c"
+  },
+  "components/shared/arama-kutusu.tsx": {
+    "mtime": 1793706236.8359308,
+    "seen": 1793949902.419287,
+    "ast_hash": "55bedf799f5bea1f81bc406a0eb8bd7f",
+    "semantic_hash": "55bedf799f5bea1f81bc406a0eb8bd7f"
+  },
+  "components/shared/cihaz-secici.tsx": {
+    "mtime": 1793706236.836086,
+    "seen": 1793949902.419287,
+    "ast_hash": "e6957b153c2d1dec04a8b794b0e518c3",
+    "semantic_hash": "e6957b153c2d1dec04a8b794b0e518c3"
+  },
+  "components/shared/dosya-yukleme.tsx": {
+    "mtime": 1793706236.8362222,
+    "seen": 1793949902.4192882,
+    "ast_hash": "6bb537bae2291caca5f004702f064038",
+    "semantic_hash": "6bb537bae2291caca5f004702f064038"
+  },
+  "components/shared/musteri-secici.tsx": {
+    "mtime": 1793706236.8363578,
+    "seen": 1793949902.4192882,
+    "ast_hash": "59d65ac46ae9d20ad7e1f7783900665f",
+    "semantic_hash": "59d65ac46ae9d20ad7e1f7783900665f"
+  },
+  "components/siparisler/actions.ts": {
+    "mtime": 1793706236.8415153,
+    "seen": 1793949902.419289,
+    "ast_hash": "5f23535fe84f976ddf695a241aa57dbc",
+    "semantic_hash": "5f23535fe84f976ddf695a241aa57dbc"
+  },
+  "components/siparisler/depo-stoku.tsx": {
+    "mtime": 1793706236.8442316,
+    "seen": 1793949902.419289,
+    "ast_hash": "808979f200026ae6127ba2a378a2893b",
+    "semantic_hash": "808979f200026ae6127ba2a378a2893b"
+  },
+  "components/siparisler/iade-listesi.tsx": {
+    "mtime": 1793706236.8445573,
+    "seen": 1793949902.419289,
+    "ast_hash": "1afbea2e53bd079d8e55fbb88f71f048",
+    "semantic_hash": "1afbea2e53bd079d8e55fbb88f71f048"
+  },
+  "components/siparisler/ozet-kartlari.tsx": {
+    "mtime": 1793706236.8456411,
+    "seen": 1793949902.41929,
+    "ast_hash": "d4572f850a358e24bbf2805ec2fb4c4a",
+    "semantic_hash": "d4572f850a358e24bbf2805ec2fb4c4a"
+  },
+  "components/siparisler/queries.ts": {
+    "mtime": 1793706236.8467183,
+    "seen": 1793949902.41929,
+    "ast_hash": "2289f110a6105e17847940d63438e88a",
+    "semantic_hash": "2289f110a6105e17847940d63438e88a"
+  },
+  "components/siparisler/siparis-adimlari.tsx": {
+    "mtime": 1793706236.846905,
+    "seen": 1793949902.4192908,
+    "ast_hash": "0f931e0726ea24ca3f204060bc69543a",
+    "semantic_hash": "0f931e0726ea24ca3f204060bc69543a"
+  },
+  "components/siparisler/siparis-detay.tsx": {
+    "mtime": 1793706236.8471034,
+    "seen": 1793949902.4192908,
+    "ast_hash": "0bd7aa65f9e927f70aee3544ff85c9a6",
+    "semantic_hash": "0bd7aa65f9e927f70aee3544ff85c9a6"
+  },
+  "components/siparisler/siparis-formu.tsx": {
+    "mtime": 1793706236.8475459,
+    "seen": 1793949902.419292,
+    "ast_hash": "91f842ac792049b683a56f7e76d44833",
+    "semantic_hash": "91f842ac792049b683a56f7e76d44833"
+  },
+  "components/siparisler/siparis-tablosu.tsx": {
+    "mtime": 1793706236.84777,
+    "seen": 1793949902.419292,
+    "ast_hash": "1cea71961c1caf2796f6020aeaa88401",
+    "semantic_hash": "1cea71961c1caf2796f6020aeaa88401"
+  },
+  "components/ui/avatar.tsx": {
+    "mtime": 1793715255.2823136,
+    "seen": 1793949902.419292,
+    "ast_hash": "4fa7bafddb1472038646e2284f9aafca",
+    "semantic_hash": "4fa7bafddb1472038646e2284f9aafca"
+  },
+  "components/ui/button.tsx": {
+    "mtime": 1793715255.2825632,
+    "seen": 1793949902.419293,
+    "ast_hash": "30f6a2a38990992759ed5f95c33ab9b5",
+    "semantic_hash": "30f6a2a38990992759ed5f95c33ab9b5"
+  },
+  "components/ui/card.tsx": {
+    "mtime": 1793715255.282769,
+    "seen": 1793949902.419293,
+    "ast_hash": "deb9d7b28bf07013acfd056b43478a21",
+    "semantic_hash": "deb9d7b28bf07013acfd056b43478a21"
+  },
+  "components/ui/chip.tsx": {
+    "mtime": 1793715255.2829409,
+    "seen": 1793949902.4192939,
+    "ast_hash": "68d7b4fe51d70bc722bc9a421de8671f",
+    "semantic_hash": "68d7b4fe51d70bc722bc9a421de8671f"
+  },
+  "components/ui/empty-state.tsx": {
+    "mtime": 1793715255.2831411,
+    "seen": 1793949902.4192939,
+    "ast_hash": "29970387effee9ada8d978ea7f3e8725",
+    "semantic_hash": "29970387effee9ada8d978ea7f3e8725"
+  },
+  "components/ui/input.tsx": {
+    "mtime": 1793715255.2833583,
+    "seen": 1793949902.419295,
+    "ast_hash": "f9a452d20346ed488ac98f1594a11c15",
+    "semantic_hash": "f9a452d20346ed488ac98f1594a11c15"
+  },
+  "components/ui/modal.tsx": {
+    "mtime": 1793947140.0078375,
+    "seen": 1793949902.419295,
+    "ast_hash": "7323c35fa977781eb6f19248537e3b36",
+    "semantic_hash": "7323c35fa977781eb6f19248537e3b36"
+  },
+  "components/ui/progress-bar.tsx": {
+    "mtime": 1793715255.283721,
+    "seen": 1793949902.419295,
+    "ast_hash": "7a40ed0c487c2f74353f6b72e8ea01c1",
+    "semantic_hash": "7a40ed0c487c2f74353f6b72e8ea01c1"
+  },
+  "components/ui/select.tsx": {
+    "mtime": 1793715255.2839038,
+    "seen": 1793949902.419296,
+    "ast_hash": "1f71197647535eaf320c4b13e1c84ae0",
+    "semantic_hash": "1f71197647535eaf320c4b13e1c84ae0"
+  },
+  "components/ui/stat-card.tsx": {
+    "mtime": 1793715255.284058,
+    "seen": 1793949902.419296,
+    "ast_hash": "606f574167481d2f29e5d0bc71adef8a",
+    "semantic_hash": "606f574167481d2f29e5d0bc71adef8a"
+  },
+  "components/ui/table.tsx": {
+    "mtime": 1793715255.284443,
+    "seen": 1793949902.419297,
+    "ast_hash": "bfb3f4882c06fbc9f4b7a15ab299a020",
+    "semantic_hash": "bfb3f4882c06fbc9f4b7a15ab299a020"
+  },
+  "components/ui/tabs.tsx": {
+    "mtime": 1793715255.2848465,
+    "seen": 1793949902.419297,
+    "ast_hash": "ab7daf6ef8c2381b691721b9d522fc35",
+    "semantic_hash": "ab7daf6ef8c2381b691721b9d522fc35"
+  },
+  "components/ui/textarea.tsx": {
+    "mtime": 1793715255.285051,
+    "seen": 1793949902.419298,
+    "ast_hash": "ecc4e1d038af09600de5332e7f0f7f5f",
+    "semantic_hash": "ecc4e1d038af09600de5332e7f0f7f5f"
+  },
+  "eslint.config.mjs": {
+    "mtime": 1793695257.4706209,
+    "seen": 1793949902.419298,
+    "ast_hash": "dfa1f5f6a7037bf39dc510f30b180002",
+    "semantic_hash": "dfa1f5f6a7037bf39dc510f30b180002"
+  },
+  "lib/cihaz-anahtari.ts": {
+    "mtime": 1793800817.3951685,
+    "seen": 1793949902.419298,
+    "ast_hash": "902dc8262b5129599de9d1ef200fe692",
+    "semantic_hash": "902dc8262b5129599de9d1ef200fe692"
+  },
+  "lib/constants.ts": {
+    "mtime": 1793715198.8350906,
+    "seen": 1793949902.4192991,
+    "ast_hash": "6ca32458865fc8cef103b14d4f441582",
+    "semantic_hash": "6ca32458865fc8cef103b14d4f441582"
+  },
+  "lib/disa-aktar.ts": {
+    "mtime": 1793779298.922604,
+    "seen": 1793949902.4192991,
+    "ast_hash": "bd444b6492f68bbbcaf55112a9d8c81f",
+    "semantic_hash": "bd444b6492f68bbbcaf55112a9d8c81f"
+  },
+  "lib/format.ts": {
+    "mtime": 1793715198.8352404,
+    "seen": 1793949902.4193,
+    "ast_hash": "4b4b1338bb9a2652878974b116b40b04",
+    "semantic_hash": "4b4b1338bb9a2652878974b116b40b04"
+  },
+  "lib/supabase/client.ts": {
+    "mtime": 1793715198.8354259,
+    "seen": 1793949902.4193,
+    "ast_hash": "93836641bf502c118fe13c8d83ff507b",
+    "semantic_hash": "93836641bf502c118fe13c8d83ff507b"
+  },
+  "lib/supabase/server.ts": {
+    "mtime": 1793715198.8355656,
+    "seen": 1793949902.419301,
+    "ast_hash": "f9b21812282c0e4fc081d9fcf4a83529",
+    "semantic_hash": "f9b21812282c0e4fc081d9fcf4a83529"
+  },
+  "lib/urunler.ts": {
+    "mtime": 1793949011.1981943,
+    "seen": 1793949902.419301,
+    "ast_hash": "dae9dd0e8fcbbe74b830b024879060eb",
+    "semantic_hash": "dae9dd0e8fcbbe74b830b024879060eb"
+  },
+  "lib/use-bugun.ts": {
+    "mtime": 1793714724.0,
+    "seen": 1793949902.419301,
+    "ast_hash": "c176e29f581e8eb4f758ba8e99a74d8b",
+    "semantic_hash": "c176e29f581e8eb4f758ba8e99a74d8b"
+  },
+  "lib/use-form-gonder.ts": {
+    "mtime": 1793798259.462498,
+    "seen": 1793949902.419302,
+    "ast_hash": "51ecae8638c64af6c33710c0e35cf5dd",
+    "semantic_hash": "51ecae8638c64af6c33710c0e35cf5dd"
+  },
+  "lib/use-simdi.ts": {
+    "mtime": 1793800791.9520068,
+    "seen": 1793949902.419302,
+    "ast_hash": "cad16f960ed3b764ee12074b711b537c",
+    "semantic_hash": "cad16f960ed3b764ee12074b711b537c"
+  },
+  "lib/utils.ts": {
+    "mtime": 1793715198.835702,
+    "seen": 1793949902.419303,
+    "ast_hash": "d7facfce93a8363d613eb430e64a5d11",
+    "semantic_hash": "d7facfce93a8363d613eb430e64a5d11"
+  },
+  "next.config.ts": {
+    "mtime": 1793888289.2622976,
+    "seen": 1793949902.419303,
+    "ast_hash": "737b901f94b0b16c62b90b15d2ac54f4",
+    "semantic_hash": "737b901f94b0b16c62b90b15d2ac54f4"
+  },
+  "package.json": {
+    "mtime": 1793800817.409416,
+    "seen": 1793949902.419304,
+    "ast_hash": "63153914899bf6f31671b3ea88fe8b82",
+    "semantic_hash": "63153914899bf6f31671b3ea88fe8b82"
+  },
+  "scripts/cihaz-simulator.mjs": {
+    "mtime": 1793800976.1367764,
+    "seen": 1793949902.419304,
+    "ast_hash": "a284e526008f8dd6f958438a9579326b",
+    "semantic_hash": "a284e526008f8dd6f958438a9579326b"
+  },
+  "supabase/migrations/20261104120000_sema_duzeltmeleri.sql": {
+    "mtime": 1793789675.6876593,
+    "seen": 1793949902.4193048,
+    "ast_hash": "07467fe4ee8b0c6b9b53692ae213c064",
+    "semantic_hash": "07467fe4ee8b0c6b9b53692ae213c064"
+  },
+  "tsconfig.json": {
+    "mtime": 1793696631.6833146,
+    "seen": 1793949902.4193048,
+    "ast_hash": "64f64e31c6ba8ead4b2faa06f9807acd",
+    "semantic_hash": "64f64e31c6ba8ead4b2faa06f9807acd"
+  },
+  "AGENTS.md": {
+    "mtime": 1793695314.3946712,
+    "seen": 1793949902.419306,
+    "ast_hash": "c98dbebb744eadc1acc4b9f58bfe0f42",
+    "semantic_hash": "c98dbebb744eadc1acc4b9f58bfe0f42"
+  },
+  "public/file.svg": {
+    "mtime": 1793695257.468744,
+    "seen": 1793949902.419306,
+    "ast_hash": "d09f95206c3fa0bb9bd9fefabfd0ea71",
+    "semantic_hash": "d09f95206c3fa0bb9bd9fefabfd0ea71"
+  },
+  "public/globe.svg": {
+    "mtime": 1793695257.4703562,
+    "seen": 1793949902.419307,
+    "ast_hash": "2aaafa6a49b6563925fe440891e32717",
+    "semantic_hash": "2aaafa6a49b6563925fe440891e32717"
+  },
+  "public/next.svg": {
+    "mtime": 1793695257.4710789,
+    "seen": 1793949902.419307,
+    "ast_hash": "8e061864f388b47f33a1c3780831193e",
+    "semantic_hash": "8e061864f388b47f33a1c3780831193e"
+  },
+  "public/vercel.svg": {
+    "mtime": 1793695257.4712026,
+    "seen": 1793949902.419307,
+    "ast_hash": "c0af2f507b369b085b35ef4bbe3bcf1e",
+    "semantic_hash": "c0af2f507b369b085b35ef4bbe3bcf1e"
+  },
+  "public/window.svg": {
+    "mtime": 1793695257.4711425,
+    "seen": 1793949902.419308,
+    "ast_hash": "a2760511c65806022ad20adf74370ff3",
+    "semantic_hash": "a2760511c65806022ad20adf74370ff3"
+  }
+}

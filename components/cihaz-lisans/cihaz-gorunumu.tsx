@@ -1,6 +1,6 @@
 "use client";
 
-// Cihaz & Lisans sayfasının etkileşimli kısmı: durum sekmeleri, arama, eski firmware filtresi,
+// Cihaz & Lisans sayfasının etkileşimli kısmı: durum sekmeleri, arama, model filtresi,
 // CSV dışa aktarma ve ortada açılan "Lisans tanımla" penceresi.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Plus } from "lucide-react";
@@ -10,17 +10,17 @@ import { csvIndir } from "@/lib/disa-aktar";
 import { useBugun } from "@/lib/use-bugun";
 import { simdiyiYenile } from "@/lib/use-simdi";
 import type { YeniLisans } from "./actions";
-import { DURUM_ADI, type Cihaz, type CihazOzeti, type RmaKaydi, type SurumKaydi } from "./queries";
-import { eskiFirmware, guncelDurum, lisansUygula, tarihYaz } from "./ortak";
+import { DURUM_ADI, type Cihaz, type LisansPlani, type CihazOzeti, type SurumKaydi } from "./queries";
+import { bayiStogunda, guncelDurum, lisansUygula, tarihYaz } from "./ortak";
 import OzetKartlari from "./ozet-kartlari";
-import CihazTablosu, { type DurumSekmesi } from "./cihaz-tablosu";
-import FirmwareDagilimi from "./firmware-dagilimi";
-import ServisKuyrugu from "./servis-kuyrugu";
+import CihazTablosu, { type DurumSekmesi, type ModelSecimi, type PlanSecimi } from "./cihaz-tablosu";
+import CihazModelleri, { type BayiSecimi } from "./cihaz-modelleri";
 import LisansPlanlari from "./lisans-planlari";
 import LisansFormu from "./lisans-formu";
 import CihazFormu from "./cihaz-formu";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import type { Musteri } from "@/components/musteriler/queries";
+import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 
 const IKINCIL_BTN =
   "inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0]";
@@ -28,19 +28,21 @@ const IKINCIL_BTN =
 export default function CihazGorunumu({
   cihazlar: ilk,
   ozet,
-  rma,
   musteriler,
+  bayiler,
 }: {
   cihazlar: Cihaz[];
   ozet: CihazOzeti;
-  rma: RmaKaydi[];
   musteriler: Musteri[];
+  bayiler: { id: string; ad: string }[];
 }) {
   const bugun = useBugun();
   const [cihazlar, setCihazlar] = useState(ilk);
   const [sekme, setSekme] = useState<DurumSekmesi>("tumu");
+  const [model, setModel] = useState<ModelSecimi>("tumu");
+  const [plan, setPlan] = useState<PlanSecimi>("tumu");
+  const [bayi, setBayi] = useState<BayiSecimi>("tumu");
   const [arama, setArama] = useState("");
-  const [eskiFiltre, setEskiFiltre] = useState(false);
   const [lisansAcik, setLisansAcik] = useState(false);
   const [cihazAcik, setCihazAcik] = useState(false);
   const [acikMusteri, setAcikMusteri] = useState<string | null>(null);
@@ -75,14 +77,7 @@ export default function CihazGorunumu({
         );
         setYeniBildirenler(new Set(gelen.map((x) => x.seriNo)));
         setTimeout(() => !iptal && setYeniBildirenler(new Set()), 4000);
-        const tek = gelen[0];
-        const sonDegisim = tek.surumGecmisi[0];
-        const guncellendi = sonDegisim?.zaman === tek.sonGorulme;
-        setBildirim(
-          gelen.length === 1
-            ? `${tek.seriNo} bağlandı · ${tek.firmware}${guncellendi ? ` (${sonDegisim.eski} sürümünden güncellendi)` : ""}`
-            : `${gelen.length} cihaz bağlandı ve sürümünü bildirdi`,
-        );
+        setBildirim(gelen.length === 1 ? `${gelen[0].seriNo} bağlandı` : `${gelen.length} cihaz bağlandı`);
       } catch {
         // ağ hatası: bir sonraki turda tekrar denenir
       }
@@ -100,30 +95,54 @@ export default function CihazGorunumu({
     return () => clearTimeout(t);
   }, [bildirim]);
 
+  // Bayi stoğundaki cihaza lisans verilmez; önce müşteriye satılmalı
+  const lisanslanabilir = useMemo(() => cihazlar.filter((c) => !bayiStogunda(c)), [cihazlar]);
   const musteriSecenekleri = useMemo(() => musteriler.map((m) => ({ id: m.id, ad: m.ad, ulke: m.ulke })), [musteriler]);
+
+  // Satış kanalı (bayi) seçimi: model / plan sayıları ve tablo buna göre süzülür
+  const kanaldakiler = useMemo(
+    () =>
+      bayi === "tumu"
+        ? cihazlar
+        : cihazlar.filter((c) => (bayi === "bayi" ? !!c.bayiId : bayi === "dogrudan" ? !c.bayiId : c.bayiId === bayi)),
+    [cihazlar, bayi],
+  );
+  const kanalSayilari = useMemo(() => {
+    if (bayi === "tumu") return { modeller: ozet.modeller, planlar: ozet.planlar };
+    const modeller = Object.fromEntries(CIHAZ_MODELLERI.map((m) => [m, 0])) as Record<CihazModeli, number>;
+    const planlar = { Basic: 0, Pro: 0, "Pro+": 0 } as Record<LisansPlani, number>;
+    for (const c of kanaldakiler) {
+      modeller[c.model]++;
+      if (c.durum !== "lisanssiz" && !bayiStogunda(c)) planlar[c.plan]++;
+    }
+    return { modeller, planlar };
+  }, [bayi, kanaldakiler, ozet]);
 
   const gorunen = useMemo(() => {
     const q = arama.trim().toLocaleLowerCase("tr-TR");
-    return cihazlar.filter((c) => {
+    return kanaldakiler.filter((c) => {
       if (sekme !== "tumu" && guncelDurum(c, bugun) !== sekme) return false;
-      if (eskiFiltre && !eskiFirmware(c.firmware)) return false;
+      if (model !== "tumu" && c.model !== model) return false;
+      if (plan !== "tumu" && (c.plan !== plan || c.durum === "lisanssiz")) return false;
       if (!q) return true;
       return [c.seriNo, c.model, c.musteri, c.ulke].some((a) => a.toLocaleLowerCase("tr-TR").includes(q));
-    });
-  }, [cihazlar, sekme, arama, eskiFiltre, bugun]);
+    })
+      // Bayi stoğundaki cihazlar listenin sonunda: müşteri cihazları önde kalsın
+      .sort((a, b) => Number(bayiStogunda(a)) - Number(bayiStogunda(b)));
+  }, [kanaldakiler, sekme, arama, model, plan, bugun]);
 
   // Sekme sayıları filo genelidir (özet); liste ise yüklenen kayıtlardır.
-  const sayilar: Record<DurumSekmesi, number> = {
-    tumu: ozet.kayitli,
-    aktif: ozet.aktif,
-    bitiyor: ozet.bitiyor,
-    serviste: ozet.serviste,
-  };
+  // Bayi seçiliyken sayılar o kanalın kayıtlarından hesaplanır.
+  const say = (d: DurumSekmesi) => kanaldakiler.filter((c) => guncelDurum(c, bugun) === d).length;
+  const sayilar: Record<DurumSekmesi, number> =
+    bayi === "tumu"
+      ? { tumu: ozet.kayitli, aktif: ozet.aktif, bitiyor: ozet.bitiyor, stokta: cihazlar.filter(bayiStogunda).length }
+      : { tumu: kanaldakiler.length, aktif: say("aktif"), bitiyor: say("bitiyor"), stokta: say("stokta") };
 
   const disaAktar = () => {
     csvIndir(
       [
-        ["Seri no", "Model", "Müşteri", "Ülke", "Plan", "Aktivasyon", "Lisans bitişi", "Firmware", "Durum"],
+        ["Seri no", "Model", "Müşteri", "Ülke", "Plan", "Aktivasyon", "Lisans bitişi", "Durum"],
         ...gorunen.map((c) => [
           c.seriNo,
           c.model,
@@ -132,7 +151,6 @@ export default function CihazGorunumu({
           c.plan,
           tarihYaz(c.lisansBaslangic),
           tarihYaz(c.lisansBitis),
-          c.firmware,
           DURUM_ADI[guncelDurum(c, bugun)],
         ]),
       ],
@@ -146,7 +164,6 @@ export default function CihazGorunumu({
     setCihazlar((l) => [c, ...l]);
     setSekme("tumu");
     setArama("");
-    setEskiFiltre(false);
     setCihazAcik(false);
   }, []);
   const kaydedildi = useCallback((l: YeniLisans) => {
@@ -182,35 +199,32 @@ export default function CihazGorunumu({
       <OzetKartlari ozet={ozet} />
 
       <div className="flex flex-wrap items-start gap-4">
-        <div className="flex min-w-0 flex-[2_1_640px]">
+        <div className="flex min-w-0 flex-[1_1_640px]">
           <CihazTablosu
             cihazlar={gorunen}
             sekme={sekme}
             sayilar={sayilar}
             arama={arama}
-            eskiFiltre={eskiFiltre}
             onSekme={setSekme}
             onArama={setArama}
-            onEskiFiltre={setEskiFiltre}
             onMusteriAc={setAcikMusteri}
             yeniBildirenler={yeniBildirenler}
+            model={model}
+            modelSayilari={kanalSayilari.modeller}
+            onModel={setModel}
+            plan={plan}
+            planSayilari={kanalSayilari.planlar}
+            onPlan={setPlan}
           />
         </div>
-        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          <FirmwareDagilimi
-            firmware={ozet.firmware}
-            onEskileriListele={() => {
-              setEskiFiltre(true);
-              setSekme("tumu");
-            }}
-          />
-          <ServisKuyrugu kayitlar={rma} acik={ozet.serviste} />
-          <LisansPlanlari planlar={ozet.planlar} />
+        <div className="flex w-full min-w-0 flex-col gap-4 lg:w-[272px] lg:flex-none">
+          <CihazModelleri modeller={kanalSayilari.modeller} secili={model} onSec={setModel} bayiler={bayiler} bayi={bayi} onBayi={setBayi} />
+          <LisansPlanlari planlar={kanalSayilari.planlar} />
         </div>
       </div>
 
       <Modal acik={lisansAcik} onKapat={kapat} baslik="Lisans tanımla" aciklama="Cihaza yeni lisans verin veya mevcut lisansı yenileyin">
-        <LisansFormu cihazlar={cihazlar} onKaydedildi={kaydedildi} onVazgec={kapat} />
+        <LisansFormu cihazlar={lisanslanabilir} onKaydedildi={kaydedildi} onVazgec={kapat} />
       </Modal>
 
       <Modal

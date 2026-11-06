@@ -2,7 +2,10 @@
 // Satış Hattı: kaydetme ve güncelleme (Server Actions)
 import { revalidatePath } from "next/cache";
 import { musteriBulAdla, musteriEkle, type Musteri, type Plan, type Segment } from "@/components/musteriler/queries";
-import { ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, type Asama, type Firsat, type KayipBilgisi, type Kaynak } from "./queries";
+import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
+import { LISANS_SECENEKLERI, icerikCoz, icerikYaz, type LisansSecenegi } from "./urun-secimi";
+import { firsattanSiparisAc, type Kalem } from "@/components/siparisler/queries";
+import { ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, firsatAsamasiDepo, firsatKaydetDepo, type Asama, type Firsat, type KayipBilgisi, type Kaynak } from "./queries";
 
 const ULKE_KODU: Record<string, string> = {
   TR: "Türkiye", DE: "Almanya", ES: "İspanya", FR: "Fransa", PL: "Polonya", SE: "İsveç",
@@ -34,7 +37,7 @@ function segmentBul(f: Firsat): Segment {
 const g = globalThis as { __embedraKazanilanlar?: Set<string> };
 const ISLENENLER = (g.__embedraKazanilanlar ??= new Set());
 
-export type AsamaSonucu = { musteri?: { id: string; ad: string; yeni: boolean } };
+export type AsamaSonucu = { musteri?: { id: string; ad: string; yeni: boolean; siparisNo?: string } };
 
 export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?: KayipBilgisi): Promise<AsamaSonucu> {
   if (!ASAMALAR.includes(asama)) throw new Error("Geçersiz aşama");
@@ -45,10 +48,24 @@ export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?
   // TODO: Supabase bağlanınca:
   // await supabase.from("deals").update({ stage: asama, lost_reason: kayip?.neden ?? null, lost_note: kayip?.aciklama ?? null }).eq("id", firsat.id);
 
+  await firsatAsamasiDepo(firsat.id, asama, kayip);
+  revalidatePath("/pazarlama"); // kampanya başına "satışa dönen" sayısı
+  revalidatePath("/satis-hatti");
   return asama === "kazanildi" ? kazanilinca(firsat) : {};
 }
 
-/** Kazanılan fırsatın firmasını müşterilere ekler; zaten müşteriyse kaydına işler. */
+/** Kazanılan fırsattan "ödeme bekliyor" sipariş açar (ürünler kart içeriğinden okunur) */
+async function siparisAc(firsat: Firsat, musteri: { id: string; ulke: string }) {
+  const u = icerikCoz(firsat.icerik);
+  const kalemler: Kalem[] = [];
+  if (u.model) kalemler.push({ tur: "cihaz", model: u.model, adet: u.adet });
+  if (u.lisans) kalemler.push({ tur: "lisans", paket: u.lisans, adet: u.lisansAdet, sureAy: 12 });
+  const s = await firsattanSiparisAc({ firma: firsat.firma, musteriId: musteri.id, ulke: musteri.ulke, konum: firsat.konum, icerik: firsat.icerik, tutar: firsat.tutar }, kalemler);
+  if (s) revalidatePath("/siparisler");
+  return s?.id;
+}
+
+/** Kazanılan fırsatın firmasını müşterilere ekler; zaten müşteriyse kaydına işler. Ürünleri belliyse sipariş açar. */
 async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
   if (ISLENENLER.has(firsat.id)) return {};
   ISLENENLER.add(firsat.id);
@@ -62,7 +79,7 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
     mevcut.sonTemas = "Bugün";
     revalidatePath("/musteriler");
     revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
-    return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false } };
+    return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false, siparisNo: await siparisAc(firsat, mevcut) } };
   }
 
   const { sehir, ulke } = konumAyir(firsat.konum);
@@ -86,10 +103,10 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
   await musteriEkle(musteri);
   revalidatePath("/musteriler");
     revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
-  return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true } };
+  return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true, siparisNo: await siparisAc(firsat, musteri) } };
 }
 
-export type FirsatFormDurumu = { hatalar?: Record<string, string>; firsat?: Firsat } & AsamaSonucu;
+export type FirsatFormDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; zaman?: number } & AsamaSonucu;
 
 export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): Promise<FirsatFormDurumu> {
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
@@ -97,7 +114,17 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   const tutarMetni = metin("tutar");
   const tutar = Number(tutarMetni.replace(/\./g, "").replace(",", "."));
   const konum = metin("konum");
-  const icerik = metin("icerik");
+  const model = metin("model");
+  const lisans = metin("lisans");
+  const adet = Number(metin("adet") || 1);
+  const lisansAdet = Number(metin("lisansAdet") || 1);
+  const icerik = icerikYaz({
+    model: CIHAZ_MODELLERI.includes(model as CihazModeli) ? (model as CihazModeli) : null,
+    adet: Number.isInteger(adet) && adet > 0 ? adet : 1,
+    lisans: LISANS_SECENEKLERI.includes(lisans as LisansSecenegi) ? (lisans as LisansSecenegi) : null,
+    lisansAdet: Number.isInteger(lisansAdet) && lisansAdet > 0 ? lisansAdet : 1,
+  });
+  const id = metin("id"); // doluysa düzenleme
   const kaynak = metin("kaynak");
   const asama = metin("asama");
   const sonrakiAdim = metin("sonrakiAdim");
@@ -108,19 +135,20 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   if (!firma) hatalar.firma = "Firma adını girin.";
   if (!konum) hatalar.konum = "Konumu girin (şehir, ülke).";
   if (!KAYNAKLAR.includes(kaynak as Kaynak)) hatalar.kaynak = "Kaynak seçin.";
-  if (!icerik) hatalar.icerik = "Fırsatın içeriğini girin (ör. 2× ONE + Pro+ lisans).";
-  if (!tutarMetni) hatalar.tutar = "Tutarı girin.";
-  else if (!Number.isFinite(tutar) || tutar <= 0) hatalar.tutar = "Tutarı TL olarak girin (ör. 184000).";
-  if (!ASAMALAR.includes(asama as Asama) || asama === "kaybedildi") hatalar.asama = "Aşama seçin.";
+  if (!icerik) hatalar.icerik = "En az bir cihaz ya da lisans seçin.";
+  if (!tutarMetni) hatalar.tutar = "Ürün seçin.";
+  else if (!Number.isFinite(tutar) || tutar <= 0) hatalar.tutar = "Tutar hesaplanamadı; özel paketse lisans ücretini girin.";
+  if (!ASAMALAR.includes(asama as Asama) || (asama === "kaybedildi" && !id)) hatalar.asama = "Aşama seçin.";
   if (!sonrakiAdim) hatalar.sonrakiAdim = "Sonraki adımı girin (ör. Demo planla).";
   if (!sonrakiTarih) hatalar.sonrakiTarih = "Sonraki adım için bir tarih girin.";
   if (Object.keys(hatalar).length) return { hatalar };
 
   const firsat: Firsat = {
-    id: crypto.randomUUID(),
+    id: id || crypto.randomUUID(),
     firma,
     konum,
     kaynak: kaynak as Kaynak,
+    kampanyaId: metin("kampanyaId") || null,
     icerik,
     tutar,
     asama: asama as Asama,
@@ -128,7 +156,10 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
     sonrakiTarih,
   };
 
-  // TODO: Supabase bağlanınca: await supabase.from("deals").insert({ ... }).select().single();
-
-  return { firsat, ...(firsat.asama === "kazanildi" ? await kazanilinca(firsat) : {}) };
+  // TODO: Supabase bağlanınca: yeni ise insert, id varsa update (aşama ve kayıp nedeni değişmez).
+  await firsatKaydetDepo(firsat);
+  revalidatePath("/satis-hatti");
+  revalidatePath("/pazarlama");
+  if (id) return { firsat, zaman: Date.now() };
+  return { firsat, zaman: Date.now(), ...(firsat.asama === "kazanildi" ? await kazanilinca(firsat) : {}) };
 }

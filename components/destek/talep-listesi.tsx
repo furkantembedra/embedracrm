@@ -7,7 +7,7 @@ import { useBugun } from "@/lib/use-bugun";
 import { DURUM_ADI, type Talep, type TalepDurumu } from "./queries";
 import { ONCELIK_TONU, zamanYaz } from "./ortak";
 
-const FILTRELER: TalepDurumu[] = ["acik", "beklemede", "cozuldu"];
+const FILTRELER: TalepDurumu[] = ["yeni", "islemde", "beklemede", "cozuldu"];
 
 export default function TalepListesi({
   talepler,

@@ -1,10 +1,9 @@
 // Cihaz & Lisans bileşenlerinin paylaştığı küçük yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import { GUNCEL_FIRMWARE, type Cihaz, type CihazDurumu, type LisansKaydi, type LisansPlani, type RmaAdimi } from "./queries";
+import { GUNCEL_FIRMWARE, type Cihaz, type CihazDurumu, type LisansKaydi, type LisansPlani } from "./queries";
 
 export const PLAN_TONU: Record<LisansPlani, ChipTon> = { Basic: "gray", Pro: "ink", "Pro+": "info" };
-export const DURUM_TONU: Record<CihazDurumu, ChipTon> = { aktif: "ok", bitiyor: "err", serviste: "info", lisanssiz: "gray" };
-export const RMA_TONU: Record<RmaAdimi, ChipTon> = { Teşhiste: "info", "Parça bekliyor": "warn", Kargoda: "ok" };
+export const DURUM_TONU: Record<CihazDurumu, ChipTon> = { aktif: "ok", bitiyor: "err", lisanssiz: "gray", stokta: "info" };
 
 export const eskiFirmware = (fw: string) => !fw.startsWith(GUNCEL_FIRMWARE);
 
@@ -45,9 +44,15 @@ export function ayEkle(tarih: string, ay: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Bayiye sevk edilmiş, henüz müşteriye satılmamış cihaz */
+export const bayiStogunda = (c: Cihaz) => !!c.bayiId && !c.musteriId;
+
+/** "Cael · stok" (eski kayıtlar) → "Cael" */
+export const bayiAdi = (c: Cihaz) => c.musteri.replace(/ · stok$/, "");
+
 /** Tarihe göre güncel durum; bugun bilinmiyorsa kayıttaki durum. */
 export function guncelDurum(c: Cihaz, bugun: number | null): CihazDurumu {
-  if (c.durum === "serviste") return "serviste";
+  if (bayiStogunda(c)) return "stokta";
   if (!c.lisansBitis) return "lisanssiz";
   const i = lisansIlerleme(c.lisansBaslangic, c.lisansBitis, bugun);
   if (!i) return c.durum;
@@ -62,7 +67,7 @@ export function lisansUygula(c: Cihaz, l: LisansKaydi & { seriNo: string }): Cih
     plan: l.plan,
     lisansBaslangic: l.baslangic,
     lisansBitis: l.bitis,
-    durum: c.durum === "serviste" ? "serviste" : "aktif",
+    durum: "aktif",
     gecmis: [{ plan: l.plan, baslangic: l.baslangic, bitis: l.bitis }, ...c.gecmis],
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 // Talep başlığı, açıklama, notlar ve not / durum formu
-import { Paperclip } from "lucide-react";
+import { CircleCheck, Paperclip } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { useBugun } from "@/lib/use-bugun";
 import { DURUM_ADI, NOT_BILGI, type Talep, type TalepDurumu, type TalepNotu } from "./queries";
@@ -11,11 +11,24 @@ import NotFormu from "./not-formu";
 export default function TalepDetay({
   talep,
   onNot,
+  bos,
 }: {
   talep: Talep | null;
+  bos?: { baslik: string; aciklama: string }; // listede hiç talep yoksa gösterilir
   onNot: (id: string, not: TalepNotu, durum?: TalepDurumu) => void;
 }) {
   const bugun = useBugun();
+  if (!talep && bos) {
+    return (
+      <section className="flex w-full flex-col items-center justify-center gap-2 rounded-card border border-line bg-card p-10 text-center">
+        <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-2xl bg-ok-bg text-ok">
+          <CircleCheck size={24} />
+        </span>
+        <b className="text-[15px] font-extrabold">{bos.baslik}</b>
+        <span className="max-w-xs text-[13px] text-muted">{bos.aciklama}</span>
+      </section>
+    );
+  }
   if (!talep) {
     return (
       <section className="flex w-full items-center justify-center rounded-card border border-line bg-card p-10 text-sm text-muted">

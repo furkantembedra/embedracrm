@@ -20,7 +20,6 @@ export default function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const baslikId = useId();
-  const basmaArkaPlanda = useRef(false);
 
   useEffect(() => {
     const d = ref.current;
@@ -34,21 +33,15 @@ export default function Modal({
       ref={ref}
       aria-labelledby={baslikId}
       onClose={onKapat}
-      onMouseDown={(e) => {
-        basmaArkaPlanda.current = e.target === e.currentTarget;
-      }}
       onClick={(e) => {
-        // Yalnızca arka plana basılıp orada bırakılınca kapanır; alanın içinde basıp
-        // fareyi dışarı kaydırınca (ör. metin seçerken) pencere kapanmaz.
-        if (e.target === e.currentTarget && basmaArkaPlanda.current) onKapat();
-        basmaArkaPlanda.current = false;
+        if (e.target === e.currentTarget) onKapat(); // arka plana tıklama
       }}
       className="m-auto w-[calc(100%-32px)] max-w-[720px] max-h-[calc(100dvh-64px)] overflow-hidden rounded-card border border-line bg-card p-0 text-ink shadow-[0_24px_64px_rgba(14,15,12,0.25)] backdrop:bg-ink/40 backdrop:backdrop-blur-[2px] open:scale-100 open:opacity-100 starting:open:scale-95 starting:open:opacity-0 transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none"
     >
       <div className="flex max-h-[inherit] flex-col">
         <header className="flex items-start gap-3 border-b border-line px-6 py-5">
           <div className="flex min-w-0 flex-col gap-1">
-            <h2 id={baslikId} className="text-xl font-extrabold">{baslik}</h2>
+           <h2 id={baslikId} className="text-xl font-extrabold">{baslik}</h2>
             {aciklama && <p className="text-[13px] text-muted">{aciklama}</p>}
           </div>
           <button

@@ -6,18 +6,30 @@ import { Plus } from "lucide-react";
 import { kisaTl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, type Asama, type Firsat } from "./queries";
 import FirsatKarti from "./firsat-karti";
+import type { BirakmaKonumu } from "./ortak";
 
 export default function Kanban({
   firsatlar,
   onTasi,
+  onSirala,
   onEkle,
+  onDuzenle,
 }: {
   firsatlar: Firsat[];
-  onTasi: (id: string, asama: Asama) => void;
+  onTasi: (id: string, asama: Asama, konum?: BirakmaKonumu) => void;
+  onSirala: (id: string, yon: -1 | 1) => void;
   onEkle: (asama: Asama) => void;
+  onDuzenle: (id: string) => void;
 }) {
   const [suruklenen, setSuruklenen] = useState<string | null>(null);
   const [hedef, setHedef] = useState<Asama | null>(null);
+  const [konum, setKonum] = useState<BirakmaKonumu | null>(null); // çizginin gösterileceği yer
+
+  const bitir = () => {
+    setSuruklenen(null);
+    setHedef(null);
+    setKonum(null);
+  };
 
   return (
     <div className="-mx-1 overflow-x-auto px-1 pb-2">
@@ -38,14 +50,18 @@ export default function Kanban({
                 if (hedef !== asama) setHedef(asama);
               }}
               onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHedef(null);
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setHedef(null);
+                  setKonum(null);
+                }
               }}
               onDrop={(e) => {
                 e.preventDefault();
                 const id = e.dataTransfer.getData("text/plain");
-                if (id) onTasi(id, asama);
-                setSuruklenen(null);
-                setHedef(null);
+                // Çizgi bu sütundaki bir kartın yanındaysa oraya, değilse sütunun sonuna
+                const yer = konum && liste.some((f) => f.id === konum.hedefId) ? konum : undefined;
+                if (id) onTasi(id, asama, yer);
+                bitir();
               }}
               className={`flex min-h-[420px] flex-col gap-2.5 rounded-card p-3 transition-colors ${
                 ustunde ? "bg-[#DCE9B0] outline-2 outline-dashed outline-lime-dark" : "bg-[#E4E6DF]"
@@ -66,9 +82,34 @@ export default function Kanban({
               </header>
               <p className="px-1 text-xs font-semibold tabular-nums text-[#474A42]">{kisaTl(toplam)}</p>
 
-              {liste.map((f) => (
-                <FirsatKarti key={f.id} firsat={f} onTasi={onTasi} onSurukleBasla={setSuruklenen} />
-              ))}
+              {liste.map((f, i) => {
+                const cizgiUstte = konum?.hedefId === f.id && konum.once && suruklenen !== f.id;
+                const cizgiAltta = konum?.hedefId === f.id && !konum.once && suruklenen !== f.id;
+                return (
+                  <div
+                    key={f.id}
+                    className={`relative ${suruklenen === f.id ? "opacity-40" : ""}`}
+                    onDragOver={(e) => {
+                      if (suruklenen === null) return;
+                      const r = e.currentTarget.getBoundingClientRect();
+                      const once = e.clientY < r.top + r.height / 2;
+                      if (konum?.hedefId !== f.id || konum.once !== once) setKonum({ hedefId: f.id, once });
+                    }}
+                  >
+                    {cizgiUstte && <span aria-hidden="true" className="absolute -top-[7px] left-1 right-1 h-[3px] rounded-full bg-ink" />}
+                    <FirsatKarti
+                      firsat={f}
+                      onTasi={onTasi}
+                      onDuzenle={() => onDuzenle(f.id)}
+                      onSurukleBasla={setSuruklenen}
+                      onSurukleBitti={bitir}
+                      onYukari={i > 0 ? () => onSirala(f.id, -1) : undefined}
+                      onAsagi={i < liste.length - 1 ? () => onSirala(f.id, 1) : undefined}
+                    />
+                    {cizgiAltta && <span aria-hidden="true" className="absolute -bottom-[7px] left-1 right-1 h-[3px] rounded-full bg-ink" />}
+                  </div>
+                );
+              })}
 
               {liste.length === 0 && (
                 <p className="rounded-2xl border border-dashed border-[#C9CCC2] p-4 text-center text-xs text-muted">

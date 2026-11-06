@@ -47,7 +47,7 @@ export async function talepKaydet(_onceki: TalepFormDurumu, form: FormData): Pro
   const dosya = dosyaAdi(form);
 
   const talep = await talepEkle({
-    durum: "acik",
+    durum: "yeni",
     baslik,
     aciklama,
     oncelik,
@@ -78,27 +78,29 @@ export async function talepKaydet(_onceki: TalepFormDurumu, form: FormData): Pro
 
 export type NotFormDurumu = { hata?: string; not?: TalepNotu; durum?: TalepDurumu; id?: string };
 
-/** Not kaydeder; "islem" alanı beklemede / cozuldu / yeniden ise talebin durumunu da değiştirir. */
+/** Not kaydeder; "islem" alanı islemde / beklemede / cozuldu / yeniden ise durumu da değiştirir.
+ *  Yeni talebe not yazılınca talep kendiliğinden İşlemde'ye geçer. */
 export async function notKaydet(_onceki: NotFormDurumu, form: FormData): Promise<NotFormDurumu> {
   const metin = metinAl(form);
   const id = metin("talepId");
-  const islem = metin("islem") as "not" | "beklemede" | "cozuldu" | "yeniden";
+  const islem = metin("islem") as "not" | "islemde" | "beklemede" | "cozuldu" | "yeniden";
   const yazi = metin("metin");
   const dosya = dosyaAdi(form);
 
   if (islem === "not" && !yazi && !dosya) return { hata: "Not yazın veya dosya ekleyin." };
 
-  const varsayilan = { beklemede: "Talep beklemeye alındı.", cozuldu: "Talep çözüldü olarak kapatıldı.", yeniden: "Talep yeniden açıldı." };
+  const varsayilan = { islemde: "Talep işleme alındı.", beklemede: "Talep beklemeye alındı.", cozuldu: "Talep çözüldü olarak kapatıldı.", yeniden: "Talep yeniden açıldı." };
   const not: TalepNotu = {
     tur: islem === "not" ? "not" : islem,
     metin: yazi || (islem === "not" ? "Dosya eklendi." : varsayilan[islem]),
     zaman: simdiIso(),
     ...(dosya ? { dosya } : {}),
   };
-  const durum: TalepDurumu | undefined =
-    islem === "beklemede" ? "beklemede" : islem === "cozuldu" ? "cozuldu" : islem === "yeniden" ? "acik" : undefined;
+  let durum: TalepDurumu | undefined =
+    islem === "islemde" || islem === "yeniden" ? "islemde" : islem === "beklemede" || islem === "cozuldu" ? islem : undefined;
 
   const talep = await talebiGuncelle(id, (t) => {
+    if (!durum && t.durum === "yeni") durum = "islemde";
     t.notlar.push(not);
     if (durum) t.durum = durum;
   });

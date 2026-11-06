@@ -1,7 +1,7 @@
 "use client";
 
 // Kanban içindeki tek fırsat kartı. Sürüklenebilir; menüden de aşama değiştirilebilir.
-import { ArrowRight } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama, type Firsat } from "./queries";
@@ -11,11 +11,19 @@ import { KAYNAK_TONU, tarihEtiketi } from "./ortak";
 export default function FirsatKarti({
   firsat,
   onTasi,
+  onDuzenle,
   onSurukleBasla,
+  onSurukleBitti,
+  onYukari,
+  onAsagi,
 }: {
   firsat: Firsat;
   onTasi: (id: string, asama: Asama) => void;
+  onDuzenle: () => void;
   onSurukleBasla: (id: string) => void;
+  onSurukleBitti?: () => void;
+  onYukari?: () => void; // sütunda bir yukarı (ilk kartta verilmez)
+  onAsagi?: () => void; // sütunda bir aşağı (son kartta verilmez)
 }) {
   const f = firsat;
   const bugun = useBugun();
@@ -30,6 +38,7 @@ export default function FirsatKarti({
         e.dataTransfer.effectAllowed = "move";
         onSurukleBasla(f.id);
       }}
+      onDragEnd={onSurukleBitti}
       className={`flex cursor-grab flex-col gap-2.5 rounded-2xl border bg-card p-3.5 transition-shadow hover:shadow-[0_6px_18px_rgba(14,15,12,0.08)] active:cursor-grabbing ${
         tarih.gecikti ? "border-[#F5C089]" : "border-line"
       } ${kaybedildi ? "opacity-75" : ""}`}
@@ -58,8 +67,9 @@ export default function FirsatKarti({
         </div>
       )}
 
-      <label className="flex items-center gap-2 border-t border-bg pt-2.5 text-xs font-semibold text-muted">
-        Aşama
+      <div className="flex items-center gap-2 border-t border-bg pt-2.5">
+      <label className="flex min-w-0 flex-1 items-center text-xs font-semibold text-muted">
+        <span className="sr-only">Aşama</span>
         <select
           value={f.asama}
           onChange={(e) => onTasi(f.id, e.target.value as Asama)}
@@ -70,6 +80,38 @@ export default function FirsatKarti({
           ))}
         </select>
       </label>
+      <div className="flex shrink-0 gap-0.5">
+        <button
+          type="button"
+          onClick={onDuzenle}
+          aria-label={`${f.firma} fırsatını düzenle`}
+          title="Düzenle"
+          className="flex h-9 w-8 cursor-pointer items-center justify-center rounded-lg text-[#474A42] transition-colors hover:bg-bg"
+        >
+          <Pencil size={15} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onYukari}
+          disabled={!onYukari}
+          aria-label={`${f.firma} kartını yukarı taşı`}
+          title="Yukarı taşı"
+          className="flex h-9 w-8 cursor-pointer items-center justify-center rounded-lg text-[#474A42] transition-colors hover:bg-bg disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronUp size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onAsagi}
+          disabled={!onAsagi}
+          aria-label={`${f.firma} kartını aşağı taşı`}
+          title="Aşağı taşı"
+          className="flex h-9 w-8 cursor-pointer items-center justify-center rounded-lg text-[#474A42] transition-colors hover:bg-bg disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+      </div>
+      </div>
     </article>
   );
 }

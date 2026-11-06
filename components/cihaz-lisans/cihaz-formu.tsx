@@ -88,11 +88,6 @@ export default function CihazFormu({
           <Hata id="hata-seriNo" mesaj={h.seriNo} />
         </label>
         <label className={ALAN}>
-          Firmware *
-          <input name="firmware" defaultValue="v2.4.1" className={`${GIRDI} font-mono`} aria-invalid={!!h.firmware} aria-describedby="hata-firmware" />
-          <Hata id="hata-firmware" mesaj={h.firmware} />
-        </label>
-        <label className={ALAN}>
           Müşteri *
           <select name="musteri" defaultValue="" className={GIRDI} aria-invalid={!!h.musteri} aria-describedby="hata-musteri">
             <option value="" disabled>Seçin</option>

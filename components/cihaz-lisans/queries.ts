@@ -4,8 +4,7 @@
 import type { CihazModeli } from "@/lib/urunler";
 
 export type LisansPlani = "Basic" | "Pro" | "Pro+";
-export type CihazDurumu = "aktif" | "bitiyor" | "serviste" | "lisanssiz";
-export type RmaAdimi = "Teşhiste" | "Parça bekliyor" | "Kargoda";
+export type CihazDurumu = "aktif" | "bitiyor" | "lisanssiz" | "stokta"; // stokta: bayiye sevk edildi, henüz müşteriye satılmadı
 
 export type LisansKaydi = { plan: LisansPlani; baslangic: string; bitis: string };
 
@@ -26,26 +25,25 @@ export type Cihaz = {
   gecmis: LisansKaydi[]; // yeniden eskiye
   sonGorulme?: string | null; // ONESuite'in son bildirim zamanı (ISO). Hiç bağlanmadıysa yok
   surumGecmisi?: SurumKaydi[]; // yeniden eskiye
+  bayiId?: string | null; // bayi üzerinden satıldıysa (bayi stoğundayken de dolu)
+  stogaGiris?: string | null; // bayiye sevk tarihi "2026-11-05"
 };
-
-export type RmaKaydi = { seriNo: string; sorun: string; adim: RmaAdimi };
 
 export type CihazOzeti = {
   kayitli: number;
   ulke: number;
   aktif: number;
   bitiyor: number; // 30 gün içinde
-  serviste: number;
-  ortDonusGun: number;
   planlar: Record<LisansPlani, number>;
+  modeller: Record<CihazModeli, number>; // kayıtlı cihazların model dağılımı
   firmware: { surum: string; adet: number; renk: string }[];
 };
 
 export const DURUM_ADI: Record<CihazDurumu, string> = {
   aktif: "Aktif",
   bitiyor: "Süresi doluyor",
-  serviste: "Serviste",
   lisanssiz: "Lisanssız",
+  stokta: "Bayi stoğunda",
 };
 
 export const PLAN_ACIKLAMASI: Record<LisansPlani, string> = {
@@ -105,9 +103,8 @@ const DEMO: Cihaz[] = [
     gecmis: [{ plan: "Pro+", baslangic: "2026-01-30", bitis: "2027-01-30" }],
   },
   {
-    // Destek #4815 ve RMA kuyruğundaki cihaz: OLED ekran arızası nedeniyle serviste
     seriNo: "EO1-2312-0412", model: "ONE", musteriId: "nordic", musteri: "Nordic Steering AB", ulke: "İsveç", plan: "Pro+",
-    lisansBaslangic: null, lisansBitis: null, firmware: "v2.4.1", durum: "serviste",
+    lisansBaslangic: null, lisansBitis: null, firmware: "v2.4.1", durum: "lisanssiz",
     gecmis: [{ plan: "Pro+", baslangic: "2025-12-04", bitis: "2026-12-04" }],
   },
   {
@@ -130,15 +127,9 @@ const DEMO: Cihaz[] = [
   },
   {
     seriNo: "EO1-2401-0533", model: "ONE Lite", musteriId: "baskent", musteri: "Başkent Rot & Direksiyon", ulke: "Türkiye", plan: "Basic",
-    lisansBaslangic: null, lisansBitis: null, firmware: "v2.4.1", durum: "serviste",
+    lisansBaslangic: null, lisansBitis: null, firmware: "v2.4.1", durum: "lisanssiz",
     gecmis: [{ plan: "Basic", baslangic: "2025-04-11", bitis: "2026-04-11" }],
   },
-];
-
-const RMA: RmaKaydi[] = [
-  { seriNo: "EO1-2401-0533", sorun: "Ana bağlantı portu temassızlık", adim: "Teşhiste" },
-  { seriNo: "EO1-2312-0412", sorun: "OLED ekran dokunmatik yanıt yok", adim: "Parça bekliyor" },
-  { seriNo: "EO1-2308-0099", sorun: "Batarya şarj olmuyor", adim: "Kargoda" },
 ];
 
 // Filo geneli sayılar. Supabase'de count sorgularıyla hesaplanacak (liste sayfalanırken de doğru kalır).
@@ -147,9 +138,8 @@ const OZET: CihazOzeti = {
   ulke: 23,
   aktif: 945,
   bitiyor: 64,
-  serviste: 7,
-  ortDonusGun: 4.2,
   planlar: { Basic: 473, Pro: 586, "Pro+": 187 },
+  modeller: { ONE: 712, "ONE Lite": 326 }, // toplam = kayitli
   firmware: [
     { surum: "v2.4.1 (güncel)", adet: 548, renk: "#B6DD2E" },
     { surum: "v2.4.0", adet: 116, renk: "#0E0F0C" },
@@ -161,6 +151,10 @@ const OZET: CihazOzeti = {
 // Demo depo: sunucu belleğinde, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
 const g = globalThis as { __embedraCihazlar?: Cihaz[] };
 const DEPO = (g.__embedraCihazlar ??= structuredClone(DEMO));
+// Model alanı sonradan eklendi: o tarihten önce belleğe alınmış kayıtlara modeli işle (sunucu yeniden başlatılmadan)
+for (const c of DEPO) {
+  if (!c.model) c.model = DEMO.find((d) => d.seriNo === c.seriNo)?.model ?? "ONE";
+}
 
 export async function getCihazlar(): Promise<Cihaz[]> {
   return DEPO;
@@ -187,10 +181,6 @@ export async function cihaziGuncelle(seriNo: string, yeni: (c: Cihaz) => Cihaz):
 /** Belirli bir zamandan sonra bildirim gönderen cihazlar (açık sayfanın canlı güncellenmesi için) */
 export async function getSonBildirenler(sonra: string): Promise<Cihaz[]> {
   return DEPO.filter((c) => c.sonGorulme && c.sonGorulme > sonra);
-}
-
-export async function getRmaKuyrugu(): Promise<RmaKaydi[]> {
-  return RMA;
 }
 
 export async function getCihazOzeti(): Promise<CihazOzeti> {

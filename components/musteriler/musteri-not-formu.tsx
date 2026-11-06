@@ -3,7 +3,7 @@
 // Müşteriye not ekleme. Kaydedilen not zaman çizelgesinin en üstüne düşer.
 // onEklendi verilirse ekran onunla güncellenir; verilmezse sayfa sunucudan yenilenir.
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { notEkle, type NotFormDurumu } from "./actions";
 import type { Olay } from "./queries";
 
@@ -19,11 +19,13 @@ export default function MusteriNotFormu({
   const bildirildi = useRef<number | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const hataId = `not-hata-${musteriId}`;
+  const [dolu, setDolu] = useState(false);
 
   useEffect(() => {
     if (!durum.olay || !durum.zaman || durum.id !== musteriId || bildirildi.current === durum.zaman) return;
     bildirildi.current = durum.zaman;
     formRef.current?.reset();
+    setDolu(false);
     if (onEklendi) onEklendi(musteriId, durum.olay);
     else router.refresh();
   }, [durum, musteriId, onEklendi, router]);
@@ -36,6 +38,7 @@ export default function MusteriNotFormu({
         id={`not-${musteriId}`}
         name="not"
         rows={3}
+        onChange={(e) => setDolu(e.target.value.trim().length > 0)}
         placeholder="Görüşme notu, teklif detayı, hatırlatma…"
         aria-invalid={!!durum.hata}
         aria-describedby={durum.hata ? hataId : undefined}
@@ -47,10 +50,10 @@ export default function MusteriNotFormu({
       )}
       <button
         type="submit"
-        disabled={bekliyor}
-        className="min-h-11 cursor-pointer rounded-control bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-ink-soft disabled:opacity-60"
+        disabled={bekliyor || !dolu}
+        className="min-h-11 cursor-pointer rounded-control bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {bekliyor ? "Kaydediliyor…" : "Kaydet"}
+        {bekliyor ? "Ekleniyor…" : "Notu ekle"}
       </button>
     </form>
   );
