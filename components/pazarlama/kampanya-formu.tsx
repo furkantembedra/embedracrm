@@ -56,6 +56,7 @@ export function IcerikFormu({
     baslik: icerik?.baslik ?? "",
     kampanyaId: icerik?.kampanyaId ?? "",
     aciklama: icerik?.aciklama ?? "",
+    bayiPaylas: icerik?.bayiPaylas ?? false,
   });
   const [hashtaglar, setHashtaglar] = useState<string[]>(icerik?.hashtaglar ?? []);
   const [etiket, setEtiket] = useState("");
@@ -246,6 +247,11 @@ export function IcerikFormu({
           <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[#474A42]">{paylasimMetni}</p>
         </div>
       )}
+
+      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-control border border-line-strong px-3 text-[13px] font-bold has-checked:border-ink has-checked:bg-lime-bg/50">
+        <input type="checkbox" checked={v.bayiPaylas} onChange={(e) => setV({ ...v, bayiPaylas: e.target.checked })} className="h-4 w-4 accent-ink" />
+        Bayiyle paylaş <span className="font-normal text-muted">(bayi portalının Dokümanlar bölümünde görünür)</span>
+      </label>
 
       <Altlik bekliyor={bekliyor || yukleniyor > 0} etiket={icerik ? "Değişiklikleri kaydet" : "İçeriği ekle"} onVazgec={onVazgec} />
     </form>

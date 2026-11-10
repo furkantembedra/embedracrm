@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
+import BildirimZili from "@/components/hatirlatmalar/bildirim-zili";
 
 type MenuOgesi = { href: string; label: string; icon: string };
 
@@ -13,6 +14,8 @@ const ANA_MENU: MenuOgesi[] = [
   { href: "/genel-bakis", label: "Genel Bakış", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" },
   { href: "/musteriler", label: "Müşteriler", icon: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" },
   { href: "/satis-hatti", label: "Satış Hattı", icon: "M3 3h18v18H3zM8 7v7M12 7v4M16 7v9" },
+  { href: "/teklifler", label: "Teklifler", icon: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" },
+  { href: "/hatirlatmalar", label: "Hatırlatmalar", icon: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" },
   { href: "/cihaz-lisans", label: "Cihaz & Lisans", icon: "M4 4h16v16H4zM9 9h6v6H9zM15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2" },
   { href: "/destek", label: "Destek", icon: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M4.93 4.93l4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24" },
   { href: "/bayiler", label: "Bayi & Distribütör", icon: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M2 12h20M12 2a15.3 15.3 0 0 1 4 10a15.3 15.3 0 0 1-4 10a15.3 15.3 0 0 1-4-10a15.3 15.3 0 0 1 4-10z" },
@@ -20,6 +23,7 @@ const ANA_MENU: MenuOgesi[] = [
 
 const OPERASYON: MenuOgesi[] = [
   { href: "/siparisler", label: "Sipariş & Sevkiyat", icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" },
+  { href: "/rma", label: "Garanti & RMA", icon: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" },
   { href: "/pazarlama", label: "Pazarlama & Bülten", icon: "m3 11 18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6" },
   { href: "/operasyon", label: "Operasyon", icon: "M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.2 14H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.17-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 10 3.2V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.8 10H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" },
   { href: "/bayiler/raporlama", label: "Raporlar", icon: "M3 3v18h18M18 17V9M13 17V5M8 17v-3" },
@@ -69,12 +73,17 @@ function AktifMenu() {
 
 export default function Sidebar() {
   return (
-    <aside className="bg-ink text-white lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0">
+    <aside className="bg-ink text-white print:hidden lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0">
       <nav aria-label="Ana menü" className="flex h-full flex-col gap-4 px-3.5 py-4 lg:gap-6 lg:py-5">
         <div className="flex items-center gap-2.5 px-2">
           <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-lime text-lg font-extrabold text-ink">e</div>
           <span className="text-[19px] font-extrabold tracking-tight">embedra</span>
-          <span className="ml-auto rounded-full bg-[#23251F] px-2 py-0.5 text-[11px] font-bold text-lime">CRM</span>
+          <span className="rounded-full bg-[#23251F] px-2 py-0.5 text-[11px] font-bold text-lime">CRM</span>
+          <div className="ml-auto">
+            <Suspense fallback={<div className="h-10 w-10" />}>
+              <BildirimZili />
+            </Suspense>
+          </div>
         </div>
 
         <Suspense fallback={<Menu aktif="" />}>

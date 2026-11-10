@@ -30,6 +30,7 @@ export async function icerikKaydet(v: {
   aciklama: string;
   hashtaglar: string[];
   medya: Medya[];
+  bayiPaylas?: boolean;
 }): Promise<IcerikSonucu> {
   const hatalar: Record<string, string> = {};
   if (!TARIH.test(v.tarih)) hatalar.tarih = "Tarih seçin.";
@@ -44,7 +45,7 @@ export async function icerikKaydet(v: {
   const kampanyaVar = v.kampanyaId && (await getKampanyalar()).some((k) => k.id === v.kampanyaId);
   const alanlar = {
     tarih: v.tarih, kanal: v.kanal as IcerikKanali, baslik: v.baslik.trim().slice(0, 120), kampanyaId: kampanyaVar ? v.kampanyaId : null,
-    aciklama: v.aciklama.trim(), hashtaglar, medya,
+    aciklama: v.aciklama.trim(), hashtaglar, medya, bayiPaylas: !!v.bayiPaylas,
   };
   if (v.id && (await getIcerikler()).some((x) => x.id === v.id)) {
     const icerik = await icerigiGuncelle(v.id, (x) => Object.assign(x, alanlar));

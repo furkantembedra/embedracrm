@@ -22,6 +22,7 @@ export type Icerik = {
   aciklama: string; // paylaşım metni (caption)
   hashtaglar: string[]; // "#" olmadan: ["CANFD", "otoelektrik"]
   medya: Medya[];
+  bayiPaylas?: boolean; // bayi portalının Dokümanlar bölümünde görünür
 };
 
 /** E-posta ve WhatsApp kampanyalarının mesajı. {ad} ve {firma} alanları kişiye göre doldurulur. */
@@ -87,7 +88,7 @@ export const HAZIR_LISTELER: { id: HazirListe; ad: string; ipucu: string }[] = [
 
 const DEMO_ICERIK_HAM: Omit<Icerik, "aciklama" | "hashtaglar" | "medya">[] = [
   { id: "i1", tarih: "2026-11-02", kanal: "Instagram", baslik: "Reels: AMOLED ekranda canlı voltaj", paylasildi: true, kampanyaId: "k-reels" },
-  { id: "i2", tarih: "2026-11-03", kanal: "Blog", baslik: "Kolon EPS'de en sık 10 hata kodu", paylasildi: true, kampanyaId: null },
+  { id: "i2", tarih: "2026-11-03", kanal: "Blog", baslik: "Kolon EPS'de en sık 10 hata kodu", paylasildi: true, kampanyaId: null, bayiPaylas: true },
   { id: "i3", tarih: "2026-11-04", kanal: "WhatsApp", baslik: "Basic kullanıcılara Pro teklifi", paylasildi: true, kampanyaId: "k-pro" },
   { id: "i4", tarih: "2026-11-04", kanal: "Instagram", baslik: "Story: müşteri atölyesi", paylasildi: false, kampanyaId: null },
   { id: "i5", tarih: "2026-11-05", kanal: "Bülten / e-posta", baslik: "Kasım duyurusu", paylasildi: true, kampanyaId: "k-kasim" },

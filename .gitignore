@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Örnek ortam değişkenleri depoya girer (gerçek değer içermez)
+!.env.example

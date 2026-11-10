@@ -23,6 +23,7 @@ export default function FirsatFormu({
   firsat,
   kampanyalar = [],
   fiyatListesi = VARSAYILAN_FIYAT,
+  bayiler = [],
   onKaydedildi,
   onVazgec,
 }: {
@@ -30,6 +31,7 @@ export default function FirsatFormu({
   firsat?: Firsat; // verilirse düzenleme
   kampanyalar?: { id: string; ad: string; durum: string }[]; // lead'in geldiği pazarlama kampanyası (isteğe bağlı)
   fiyatListesi?: FiyatListesi; // Operasyon › Ayarlar'daki güncel fiyatlar
+  bayiler?: { id: string; ad: string }[]; // lead bayiye yönlendirilebilir (bayi portalında görünür)
   onKaydedildi: (f: Firsat, musteri?: AsamaSonucu["musteri"]) => void;
   onVazgec: () => void;
 }) {
@@ -100,6 +102,18 @@ export default function FirsatFormu({
             {KAYNAKLAR.map((k) => <option key={k}>{k}</option>)}
           </select>
           <Hata id="hata-kaynak" mesaj={h.kaynak} />
+        </label>
+        <label className={ALAN}>
+          <span>Telefon <span className="font-normal text-muted">(WhatsApp)</span></span>
+          <input name="telefon" type="tel" inputMode="tel" defaultValue={firsat?.telefon} placeholder="+90 532 000 00 00" className={GIRDI} aria-invalid={!!h.telefon} aria-describedby="hata-telefon" />
+          <Hata id="hata-telefon" mesaj={h.telefon} />
+        </label>
+        <label className={ALAN}>
+          Bayiye yönlendir
+          <select name="bayiId" defaultValue={firsat?.bayiId ?? ""} className={GIRDI}>
+            <option value="">Yönlendirme yok</option>
+            {bayiler.map((b) => <option key={b.id} value={b.id}>{b.ad}</option>)}
+          </select>
         </label>
         {kampanyalar.length > 0 && (
           <label className={`${ALAN} sm:col-span-2`}>

@@ -2,6 +2,7 @@
 
 // Sağ panel: iletişim (yetkililer, vergi no), cihazlar, zaman çizelgesi, not ekleme
 import Link from "next/link";
+import HatirlatmaButonu from "@/components/hatirlatmalar/hatirlatma-butonu";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Cpu, Mail, MessageCircle, Phone } from "lucide-react";
@@ -92,6 +93,7 @@ export default function MusteriDetay({
             <Chip ton={durumTonu(m.durum)}>{m.durum}</Chip>
           </div>
         </div>
+        <HatirlatmaButonu kayit={{ tur: "musteri", id: m.id, ad: m.ad, href: `/musteriler/${m.id}` }} className="ml-auto shrink-0 max-sm:hidden" />
       </div>
 
       <div className="grid grid-cols-3 gap-2">

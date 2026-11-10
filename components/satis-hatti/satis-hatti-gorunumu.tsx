@@ -4,7 +4,8 @@
 // özet kartlar ve kanban aynı veriden beslenir. Kazanıldı'ya geçen firma müşterilere eklenir.
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { CheckCircle2, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, MessageCircle, Plus, X } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import OzetKartlari from "./ozet-kartlari";
@@ -14,6 +15,10 @@ import FirsatFormu from "./firsat-formu";
 import { firsatAsamasiGuncelle, type AsamaSonucu } from "./actions";
 import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type Firsat, type KayipBilgisi, type KayipNedeni } from "./queries";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
+import TeklifFormu from "@/components/teklifler/teklif-formu";
+import HatirlatmaFormu from "@/components/hatirlatmalar/hatirlatma-formu";
+import { MesajGecmisi, WhatsappSimulasyonu } from "./whatsapp-pencereleri";
+import type { KartEylemi } from "./firsat-karti";
 import type { Musteri } from "@/components/musteriler/queries";
 import type { FiyatListesi } from "@/lib/urunler";
 
@@ -126,20 +131,60 @@ export default function SatisHattiGorunumu({
   musteriler,
   kampanyalar = [],
   fiyatListesi,
+  bayiler = [],
 }: {
   firsatlar: Firsat[];
   musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
   kampanyalar?: { id: string; ad: string; durum: string }[];
   fiyatListesi?: FiyatListesi;
+  bayiler?: { id: string; ad: string }[];
 }) {
+  const router = useRouter();
   const [firsatlar, setFirsatlar] = useState(ilk);
+  // Sunucudan yeni liste gelince (ör. teklif sonrası tutar / aşama, WhatsApp'tan yeni lead) yerel sırayı koruyarak güncelle
+  const [oncekiIlk, setOncekiIlk] = useState(ilk);
+  if (ilk !== oncekiIlk) {
+    setOncekiIlk(ilk);
+    setFirsatlar((l) => {
+      const yeni = new Map(ilk.map((f) => [f.id, f]));
+      return [...l.filter((f) => yeni.has(f.id)).map((f) => yeni.get(f.id)!), ...ilk.filter((f) => !l.some((x) => x.id === f.id))];
+    });
+  }
+  const [eylem, setEylem] = useState<{ id: string; tur: KartEylemi } | null>(null);
+  const eylemFirsat = eylem ? firsatlar.find((f) => f.id === eylem.id) ?? null : null;
+  const eylemKapat = useCallback(() => setEylem(null), []);
+  const [simulasyon, setSimulasyon] = useState(false);
+  const simulasyonKapat = useCallback(() => setSimulasyon(false), []);
+  const [duyuru, setDuyuru] = useState<string | null>(null);
+  const teklifKaydedildi = useCallback(
+    (t: { id: string; durum: string }) => {
+      setEylem(null);
+      if (t.durum === "gonderildi") router.refresh();
+      router.push(`/teklifler/${t.id}`);
+    },
+    [router],
+  );
+  const hatirlatmaEklendi = useCallback(() => {
+    setEylem(null);
+    setDuyuru("Hatırlatma eklendi.");
+  }, []);
+  const whatsappIslendi = useCallback((f: Firsat, yeni: boolean) => {
+    setSimulasyon(false);
+    setFirsatlar((l) => (yeni ? [...l, f] : l.map((x) => (x.id === f.id ? f : x))));
+    setDuyuru(yeni ? `WhatsApp'tan yeni lead: ${f.firma}` : `${f.firma} fırsatına WhatsApp mesajı eklendi.`);
+  }, []);
+  useEffect(() => {
+    if (!duyuru) return;
+    const t = setTimeout(() => setDuyuru(null), 5000);
+    return () => clearTimeout(t);
+  }, [duyuru]);
   const [ekleAsama, setEkleAsama] = useState<Asama | null>(null);
   const [duzenleId, setDuzenleId] = useState<string | null>(null);
   const duzenlenen = firsatlar.find((f) => f.id === duzenleId) ?? null;
   const duzenleKapat = useCallback(() => setDuzenleId(null), []);
   // Düzenlemede aşama ve kayıp nedeni korunur (onlar kart üzerinden değişir)
   const duzenlendi = useCallback((f: Firsat) => {
-    setFirsatlar((l) => l.map((x) => (x.id === f.id ? { ...f, asama: x.asama, kayipNedeni: x.kayipNedeni, kayipAciklama: x.kayipAciklama } : x)));
+    setFirsatlar((l) => l.map((x) => (x.id === f.id ? { ...f, asama: x.asama, kayipNedeni: x.kayipNedeni, kayipAciklama: x.kayipAciklama, mesajlar: x.mesajlar } : x)));
     setDuzenleId(null);
   }, []);
   const [bildirim, setBildirim] = useState<Bildirim | null>(null);
@@ -198,6 +243,14 @@ export default function SatisHattiGorunumu({
       <PageHeader title="Satış Hattı" description="Cihaz + lisans fırsatları · Kazanıldı'ya taşınan firma müşterilere eklenir">
         <button
           type="button"
+          onClick={() => setSimulasyon(true)}
+          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0]"
+        >
+          <MessageCircle size={18} aria-hidden="true" className="text-[#1F8F4E]" />
+          WhatsApp mesajı simüle et
+        </button>
+        <button
+          type="button"
           onClick={() => setEkleAsama("yeni")}
           className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-ink-soft"
         >
@@ -213,10 +266,41 @@ export default function SatisHattiGorunumu({
         onSirala={sirala}
         onEkle={setEkleAsama}
         onDuzenle={setDuzenleId}
+        onEylem={(id, tur) => setEylem({ id, tur })}
       />
 
+      <Modal acik={simulasyon} onKapat={simulasyonKapat} baslik="WhatsApp mesajı simüle et" aciklama="Webhook'a gelen mesajla aynı akış">
+        <WhatsappSimulasyonu onIslendi={whatsappIslendi} onVazgec={simulasyonKapat} />
+      </Modal>
+
+      <Modal acik={eylem?.tur === "mesajlar" && !!eylemFirsat} onKapat={eylemKapat} baslik="WhatsApp mesajları" aciklama={eylemFirsat?.firma}>
+        {eylemFirsat && <MesajGecmisi firsat={eylemFirsat} />}
+      </Modal>
+
+      <Modal acik={eylem?.tur === "teklif" && !!eylemFirsat} onKapat={eylemKapat} baslik="Teklif oluştur" aciklama={eylemFirsat ? `${eylemFirsat.firma} · ${eylemFirsat.icerik}` : undefined}>
+        {eylemFirsat && <TeklifFormu key={eylemFirsat.id} firsat={eylemFirsat} fiyatListesi={fiyatListesi} onKaydedildi={teklifKaydedildi} onVazgec={eylemKapat} />}
+      </Modal>
+
+      <Modal acik={eylem?.tur === "hatirlatma" && !!eylemFirsat} onKapat={eylemKapat} baslik="Hatırlatma ekle" aciklama={eylemFirsat?.firma}>
+        {eylemFirsat && (
+          <HatirlatmaFormu
+            key={eylemFirsat.id}
+            kayit={{ tur: "firsat", id: eylemFirsat.id, ad: eylemFirsat.firma, href: "/satis-hatti" }}
+            varsayilanBaslik={`${eylemFirsat.firma} · ${eylemFirsat.sonrakiAdim}`}
+            onKaydedildi={hatirlatmaEklendi}
+            onVazgec={eylemKapat}
+          />
+        )}
+      </Modal>
+
+      {duyuru && (
+        <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-40px)] max-w-sm -translate-x-1/2 rounded-card bg-ink px-4 py-3 text-center text-sm font-bold text-white shadow-[0_16px_40px_rgba(14,15,12,0.25)]">
+          {duyuru}
+        </div>
+      )}
+
       <Modal acik={duzenlenen !== null} onKapat={duzenleKapat} baslik="Fırsatı düzenle" aciklama={duzenlenen ? `${duzenlenen.firma} · ${ASAMA_BILGI[duzenlenen.asama].ad}` : undefined}>
-        {duzenlenen && <FirsatFormu key={duzenlenen.id} firsat={duzenlenen} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={duzenlendi} onVazgec={duzenleKapat} />}
+        {duzenlenen && <FirsatFormu key={duzenlenen.id} firsat={duzenlenen} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} bayiler={bayiler} onKaydedildi={duzenlendi} onVazgec={duzenleKapat} />}
       </Modal>
 
       <Modal
@@ -226,7 +310,7 @@ export default function SatisHattiGorunumu({
         aciklama={ekleAsama ? `${ASAMA_BILGI[ekleAsama].ad} aşamasına eklenecek` : undefined}
       >
         {ekleAsama && (
-          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={eklendi} onVazgec={kapat} />
+          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} bayiler={bayiler} onKaydedildi={eklendi} onVazgec={kapat} />
         )}
       </Modal>
 

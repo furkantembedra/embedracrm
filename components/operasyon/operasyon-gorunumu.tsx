@@ -7,13 +7,18 @@ import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import { useBugun } from "@/lib/use-bugun";
 import type { FiyatListesi } from "@/lib/urunler";
-import { icUretimGirisiSil, kaliteyeGonder, tedarikTeslimAl, tedarikYolda, uretimeAl, type UretimSonucu } from "./actions";
+import { useSearchParams } from "next/navigation";
+import type { Siparis } from "@/components/siparisler/queries";
+import type { Firsat } from "@/components/satis-hatti/queries";
+import type { CihazModeli } from "@/lib/urunler";
+import MalzemeIhtiyaci from "./malzeme-ihtiyaci";
+import { ihtiyactanOlustur, icUretimGirisiSil, kaliteyeGonder, tedarikTeslimAl, tedarikYolda, uretimeAl, type UretimSonucu } from "./actions";
 import type { BilesenKalemi, HavuzSeri, IcUretimEmri, Kullanici, Recete, TedarikSiparisi, UretimPartisi } from "./queries";
 import { BilesenStoku, IcUretimListesi, SeriHavuzu, TedarikListesi, UretimOzeti, UretimPartileri } from "./uretim";
 import { GunlukGirisFormu, IcUretimFormu, KaliteFormu, PartiFormu, TedarikFormu } from "./uretim-formlari";
 import { EkipAyari, FiyatListesiAyari, KargoFirmalariAyari } from "./ayarlar";
 
-type Sekme = "uretim" | "ayarlar";
+type Sekme = "uretim" | "ihtiyac" | "ayarlar";
 type Pencere = null | { tur: "parti" } | { tur: "depo"; id: string } | { tur: "tamir"; id: string } | { tur: "tedarik" } | { tur: "icUretim" } | { tur: "giris"; id: string };
 
 export default function OperasyonGorunumu(p: {
@@ -28,10 +33,14 @@ export default function OperasyonGorunumu(p: {
   kablolar: { kod: string; ad: string }[];
   kargoFirmalari: string[];
   ekip: Kullanici[];
+  siparisler: Siparis[];
+  firsatlar: Firsat[];
+  cihazStogu: Record<CihazModeli, number>;
 }) {
   const bugun = useBugun();
   const bugunIso = bugun === null ? "" : new Date(bugun - new Date(bugun).getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-  const [sekme, setSekme] = useState<Sekme>("uretim");
+  const istenen = useSearchParams().get("sekme");
+  const [sekme, setSekme] = useState<Sekme>(istenen === "ihtiyac" || istenen === "ayarlar" ? istenen : "uretim");
   const [veri, setVeri] = useState({ partiler: p.partiler, bilesenler: p.bilesenler, tedarik: p.tedarik, havuz: p.havuz, recete: p.recete, icUretim: p.icUretim });
   const [fiyat, setFiyat] = useState(p.fiyat);
   const [aksesuarlar, setAksesuarlar] = useState(p.aksesuarlar);
@@ -87,8 +96,8 @@ export default function OperasyonGorunumu(p: {
         )}
       </PageHeader>
 
-      <div role="tablist" aria-label="Operasyon bölümleri" className="flex w-fit gap-1 rounded-control bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
-        {([["uretim", "Üretim & tedarik"], ["ayarlar", "Ayarlar & ekip"]] as const).map(([id, ad]) => (
+      <div role="tablist" aria-label="Operasyon bölümleri" className="flex w-full gap-1 overflow-x-auto sm:w-fit rounded-control bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
+        {([["uretim", "Üretim & tedarik"], ["ihtiyac", "Malzeme ihtiyacı"], ["ayarlar", "Ayarlar & ekip"]] as const).map(([id, ad]) => (
           <button
             key={id}
             type="button"
@@ -102,7 +111,16 @@ export default function OperasyonGorunumu(p: {
         ))}
       </div>
 
-      {sekme === "uretim" ? (
+      {sekme === "ihtiyac" ? (
+        <>
+          {hata && <p role="alert" className="rounded-control bg-err-bg px-4 py-2.5 text-[13px] font-semibold text-err">{hata}</p>}
+          <MalzemeIhtiyaci
+            girdi={{ siparisler: p.siparisler, firsatlar: p.firsatlar, cihazStogu: p.cihazStogu, partiler: veri.partiler, bilesenler: veri.bilesenler, recete: veri.recete, tedarik: veri.tedarik, icUretim: veri.icUretim, bugun: bugunIso || new Date(0).toISOString().slice(0, 10) }}
+            bekliyor={bekliyor}
+            onOlustur={(secimler) => calistir(() => ihtiyactanOlustur(secimler))}
+          />
+        </>
+      ) : sekme === "uretim" ? (
         <>
           <UretimOzeti partiler={veri.partiler} tedarik={veri.tedarik} havuz={veri.havuz} bilesenler={veri.bilesenler} icUretim={veri.icUretim} bugun={bugunIso} />
           {hata && <p role="alert" className="rounded-control bg-err-bg px-4 py-2.5 text-[13px] font-semibold text-err">{hata}</p>}

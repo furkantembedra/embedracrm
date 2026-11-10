@@ -1,12 +1,16 @@
 "use client";
 
 // Kanban içindeki tek fırsat kartı. Sürüklenebilir; menüden de aşama değiştirilebilir.
-import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, FileText, MessageCircle, Pencil } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama, type Firsat } from "./queries";
 import { useBugun } from "@/lib/use-bugun";
 import { KAYNAK_TONU, tarihEtiketi } from "./ortak";
+
+export type KartEylemi = "mesajlar" | "teklif" | "hatirlatma";
+
+const KUCUK = "inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-bold text-[#474A42] transition-colors hover:bg-bg";
 
 export default function FirsatKarti({
   firsat,
@@ -16,6 +20,7 @@ export default function FirsatKarti({
   onSurukleBitti,
   onYukari,
   onAsagi,
+  onEylem,
 }: {
   firsat: Firsat;
   onTasi: (id: string, asama: Asama) => void;
@@ -24,6 +29,7 @@ export default function FirsatKarti({
   onSurukleBitti?: () => void;
   onYukari?: () => void; // sütunda bir yukarı (ilk kartta verilmez)
   onAsagi?: () => void; // sütunda bir aşağı (son kartta verilmez)
+  onEylem?: (e: KartEylemi) => void;
 }) {
   const f = firsat;
   const bugun = useBugun();
@@ -64,6 +70,27 @@ export default function FirsatKarti({
         <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-err-bg px-2.5 py-2 text-xs text-err">
           <b>Neden: {f.kayipNedeni}</b>
           {f.kayipAciklama && <span className="break-words text-[#7A2020]">{f.kayipAciklama}</span>}
+        </div>
+      )}
+
+      {onEylem && (
+        <div className="-mx-1 flex flex-wrap items-center gap-0.5">
+          {!!f.mesajlar?.length && (
+            <button type="button" onClick={() => onEylem("mesajlar")} className={`${KUCUK} text-ok`} aria-label={`${f.firma} WhatsApp mesajları (${f.mesajlar.length})`}>
+              <MessageCircle size={14} aria-hidden="true" />
+              {f.mesajlar.length} mesaj
+            </button>
+          )}
+          {!KAPALI_ASAMALAR.includes(f.asama) && (
+            <button type="button" onClick={() => onEylem("teklif")} className={KUCUK} aria-label={`${f.firma} için teklif oluştur`}>
+              <FileText size={14} aria-hidden="true" />
+              Teklif
+            </button>
+          )}
+          <button type="button" onClick={() => onEylem("hatirlatma")} className={KUCUK} aria-label={`${f.firma} için hatırlatma ekle`}>
+            <Bell size={14} aria-hidden="true" />
+            Hatırlat
+          </button>
         </div>
       )}
 

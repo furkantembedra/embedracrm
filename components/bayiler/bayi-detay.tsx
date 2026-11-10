@@ -2,6 +2,8 @@
 
 // Aktif bayi detayı (ortada açılan pencere): dönem seçimi, sevk / satış / lisans özeti, çeyrek tablosu,
 // bayinin müşterilerindeki lisanslar, hareket geçmişi ve üç işlem (cihaz sevk et, satış bildir, lisans sat).
+import HatirlatmaButonu from "@/components/hatirlatmalar/hatirlatma-butonu";
+import PortalKontrolleri from "@/components/portal/portal-kontrolleri";
 import { useMemo, useState } from "react";
 import { PackagePlus, ReceiptText, ShoppingCart } from "lucide-react";
 import Chip from "@/components/ui/chip";
@@ -115,6 +117,11 @@ export default function BayiDetay({
             <a href={`mailto:${basvuru.eposta}`} className="hover:underline">{basvuru.eposta}</a>
           </>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <HatirlatmaButonu kayit={{ tur: "bayi", id: bayi.id, ad: bayi.ad, href: "/bayiler" }} />
+        <PortalKontrolleri bayiId={bayi.id} />
       </div>
 
       {/* Dönem seçici */}

@@ -367,3 +367,27 @@ export async function kullaniciKaydet(k: { id?: string; ad: string; eposta: stri
   revalidatePath("/operasyon");
   return { ekip: structuredClone(await getEkip()) };
 }
+
+/* ---------- Malzeme ihtiyacından toplu oluşturma ---------- */
+
+/** Seçilen eksik kalemler için: dış kaynaklılara tedarik siparişi (son tedarikçiyle), iç kaynaklılara iç üretim emri açar. */
+export async function ihtiyactanOlustur(secimler: { kod: string; adet: number }[]): Promise<UretimSonucu> {
+  if (!secimler.length) return { hata: "En az bir kalem seçin." };
+  const [bilesenler, tedarik] = await Promise.all([getBilesenler(), getTedarik()]);
+  const bugunIso = bugun();
+  const ikiHafta = new Date(Date.parse(bugunIso) + 14 * 86_400_000).toISOString().slice(0, 10);
+  for (const s of secimler) {
+    const b = bilesenler.find((x) => x.kod === s.kod);
+    if (!b || !tamSayi(s.adet, 1, 100_000)) return { hata: `Geçersiz kalem: ${s.kod}` };
+  }
+  for (const s of secimler) {
+    const b = bilesenler.find((x) => x.kod === s.kod)!;
+    const sonuc =
+      b.kaynak === "ic"
+        ? await icUretimBaslat({ kalemKodu: b.kod, hedef: s.adet, baslangic: bugunIso, gun: Math.min(60, Math.max(1, Math.ceil(s.adet / 10))), not: "Malzeme ihtiyacından", yeni: null })
+        : await tedarikVer({ tedarikci: tedarik.find((t) => t.kalemKodu === b.kod)?.tedarikci ?? "Belirlenecek", kalemKodu: b.kod, adet: s.adet, beklenen: ikiHafta, yeni: null });
+    if (sonuc.hata || sonuc.hatalar) return { hata: sonuc.hata ?? Object.values(sonuc.hatalar ?? {})[0] ?? "Oluşturulamadı." };
+  }
+  yenile();
+  return durum();
+}

@@ -7,6 +7,7 @@ import SuresiDolanlar from "@/components/genel-bakis/suresi-dolanlar";
 import SonTalepler from "@/components/genel-bakis/son-talepler";
 import SonIslemler from "@/components/genel-bakis/son-islemler";
 import LeadKaynaklari from "@/components/genel-bakis/lead-kaynaklari";
+import BugunYapilacaklar from "@/components/hatirlatmalar/bugun-yapilacaklar";
 import { getCihazlar } from "@/components/cihaz-lisans/queries";
 
 // Satır düzeni: geniş ekranda yan yana, dar ekranda alt alta
@@ -23,6 +24,8 @@ export default async function GenelBakisPage() {
       </PageHeader>
 
       <OzetKartlari />
+
+      <BugunYapilacaklar />
 
       <div className={SATIR}>
         <div className={GENIS}><GelirGrafigi /></div>

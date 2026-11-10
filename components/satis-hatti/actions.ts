@@ -5,6 +5,8 @@ import { musteriBulAdla, musteriEkle, type Musteri, type Plan, type Segment } fr
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { LISANS_SECENEKLERI, icerikCoz, icerikYaz, type LisansSecenegi } from "./urun-secimi";
 import { firsattanSiparisAc, type Kalem } from "@/components/siparisler/queries";
+import { telefonNormalize } from "@/components/whatsapp/telefon";
+import { whatsappMesajiIsle } from "@/components/whatsapp/isle";
 import { ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, firsatAsamasiDepo, firsatKaydetDepo, type Asama, type Firsat, type KayipBilgisi, type Kaynak } from "./queries";
 
 const ULKE_KODU: Record<string, string> = {
@@ -39,7 +41,8 @@ const ISLENENLER = (g.__embedraKazanilanlar ??= new Set());
 
 export type AsamaSonucu = { musteri?: { id: string; ad: string; yeni: boolean; siparisNo?: string } };
 
-export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?: KayipBilgisi): Promise<AsamaSonucu> {
+/** kalemler: teklif kabulünde siparişe teklifteki kalemler aynen aktarılır (verilmezse kart içeriğinden okunur) */
+export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?: KayipBilgisi, kalemler?: Kalem[]): Promise<AsamaSonucu> {
   if (!ASAMALAR.includes(asama)) throw new Error("Geçersiz aşama");
   if (asama === "kaybedildi") {
     if (!kayip || !KAYIP_NEDENLERI.includes(kayip.neden)) throw new Error("Kayıp nedeni seçin");
@@ -51,22 +54,22 @@ export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?
   await firsatAsamasiDepo(firsat.id, asama, kayip);
   revalidatePath("/pazarlama"); // kampanya başına "satışa dönen" sayısı
   revalidatePath("/satis-hatti");
-  return asama === "kazanildi" ? kazanilinca(firsat) : {};
+  return asama === "kazanildi" ? kazanilinca(firsat, kalemler) : {};
 }
 
 /** Kazanılan fırsattan "ödeme bekliyor" sipariş açar (ürünler kart içeriğinden okunur) */
-async function siparisAc(firsat: Firsat, musteri: { id: string; ulke: string }) {
+async function siparisAc(firsat: Firsat, musteri: { id: string; ulke: string }, verilen?: Kalem[]) {
   const u = icerikCoz(firsat.icerik);
-  const kalemler: Kalem[] = [];
-  if (u.model) kalemler.push({ tur: "cihaz", model: u.model, adet: u.adet });
-  if (u.lisans) kalemler.push({ tur: "lisans", paket: u.lisans, adet: u.lisansAdet, sureAy: 12 });
+  const kalemler: Kalem[] = verilen ? [...verilen] : [];
+  if (!verilen && u.model) kalemler.push({ tur: "cihaz", model: u.model, adet: u.adet });
+  if (!verilen && u.lisans) kalemler.push({ tur: "lisans", paket: u.lisans, adet: u.lisansAdet, sureAy: 12 });
   const s = await firsattanSiparisAc({ firma: firsat.firma, musteriId: musteri.id, ulke: musteri.ulke, konum: firsat.konum, icerik: firsat.icerik, tutar: firsat.tutar }, kalemler);
   if (s) revalidatePath("/siparisler");
   return s?.id;
 }
 
 /** Kazanılan fırsatın firmasını müşterilere ekler; zaten müşteriyse kaydına işler. Ürünleri belliyse sipariş açar. */
-async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
+async function kazanilinca(firsat: Firsat, kalemler?: Kalem[]): Promise<AsamaSonucu> {
   if (ISLENENLER.has(firsat.id)) return {};
   ISLENENLER.add(firsat.id);
 
@@ -79,7 +82,7 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
     mevcut.sonTemas = "Bugün";
     revalidatePath("/musteriler");
     revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
-    return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false, siparisNo: await siparisAc(firsat, mevcut) } };
+    return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false, siparisNo: await siparisAc(firsat, mevcut, kalemler) } };
   }
 
   const { sehir, ulke } = konumAyir(firsat.konum);
@@ -103,7 +106,7 @@ async function kazanilinca(firsat: Firsat): Promise<AsamaSonucu> {
   await musteriEkle(musteri);
   revalidatePath("/musteriler");
     revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
-  return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true, siparisNo: await siparisAc(firsat, musteri) } };
+  return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true, siparisNo: await siparisAc(firsat, musteri, kalemler) } };
 }
 
 export type FirsatFormDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; zaman?: number } & AsamaSonucu;
@@ -129,6 +132,8 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   const asama = metin("asama");
   const sonrakiAdim = metin("sonrakiAdim");
   const sonrakiTarih = metin("sonrakiTarih");
+  const telefonMetni = metin("telefon");
+  const telefon = telefonMetni ? telefonNormalize(telefonMetni) : "";
 
   // Tüm alanlar zorunlu; eksik olanların hepsi aynı anda bildirilir
   const hatalar: Record<string, string> = {};
@@ -141,6 +146,7 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   if (!ASAMALAR.includes(asama as Asama) || (asama === "kaybedildi" && !id)) hatalar.asama = "Aşama seçin.";
   if (!sonrakiAdim) hatalar.sonrakiAdim = "Sonraki adımı girin (ör. Demo planla).";
   if (!sonrakiTarih) hatalar.sonrakiTarih = "Sonraki adım için bir tarih girin.";
+  if (telefonMetni && !telefon) hatalar.telefon = "Telefonu ülke koduyla girin (+90…).";
   if (Object.keys(hatalar).length) return { hatalar };
 
   const firsat: Firsat = {
@@ -154,6 +160,8 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
     asama: asama as Asama,
     sonrakiAdim,
     sonrakiTarih,
+    telefon: telefon || undefined,
+    bayiId: metin("bayiId") || null,
   };
 
   // TODO: Supabase bağlanınca: yeni ise insert, id varsa update (aşama ve kayıp nedeni değişmez).
@@ -162,4 +170,23 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   revalidatePath("/pazarlama");
   if (id) return { firsat, zaman: Date.now() };
   return { firsat, zaman: Date.now(), ...(firsat.asama === "kazanildi" ? await kazanilinca(firsat) : {}) };
+}
+
+export type SimulasyonDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; yeni?: boolean; zaman?: number };
+
+/** Demo: Meta webhook'u gelmiş gibi WhatsApp mesajı işler (webhook'la aynı fonksiyon) */
+export async function whatsappSimuleEt(_o: SimulasyonDurumu, form: FormData): Promise<SimulasyonDurumu> {
+  const metin = (ad: string) => String(form.get(ad) ?? "").trim();
+  const telefon = telefonNormalize(metin("telefon"));
+  const mesaj = metin("mesaj");
+  const hatalar: Record<string, string> = {};
+  if (!telefon) hatalar.telefon = "Telefonu ülke koduyla girin (+90…).";
+  if (!mesaj) hatalar.mesaj = "Mesajı yazın.";
+  if (Object.keys(hatalar).length) return { hatalar };
+  const sonuc = await whatsappMesajiIsle({
+    waId: telefon.slice(1), ad: metin("ad"), metin: mesaj, tur: "text",
+    mesajId: `sim-${crypto.randomUUID()}`, zaman: new Date().toISOString(),
+  });
+  if (!sonuc) return { hatalar: { mesaj: "Mesaj işlenemedi." } };
+  return { firsat: sonuc.firsat, yeni: sonuc.yeni, zaman: Date.now() };
 }

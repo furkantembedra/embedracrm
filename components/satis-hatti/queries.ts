@@ -23,6 +23,9 @@ export type KayipBilgisi = { neden: KayipNedeni; aciklama?: string };
 export const KAYNAKLAR = ["Web sitesi", "WhatsApp", "Instagram", "Bayi", "Fuar", "Mevcut müşteri"] as const;
 export type Kaynak = (typeof KAYNAKLAR)[number];
 
+/** WhatsApp yazışması: gelen mesajlar webhook'tan, giden notlar CRM'den */
+export type WhatsappMesaji = { id: string; metin: string; zaman: string; yon: "gelen" | "giden"; tur: string }; // zaman: ISO
+
 export type Firsat = {
   id: string;
   firma: string;
@@ -36,6 +39,10 @@ export type Firsat = {
   kayipNedeni?: KayipNedeni; // yalnızca Kaybedildi aşamasında
   kayipAciklama?: string; // "Diğer" seçilince yazılan sebep
   kampanyaId?: string | null; // lead hangi pazarlama kampanyasından geldi
+  telefon?: string; // "+905321234567" (WhatsApp lead'lerinde otomatik dolar)
+  mesajlar?: WhatsappMesaji[]; // eskiden yeniye
+  bayiId?: string | null; // lead bir bayiye yönlendirildiyse (bayi portalında görünür)
+  sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
 };
 
 const DEMO: Firsat[] = [
@@ -60,6 +67,17 @@ const DEMO_KAMPANYA: Record<string, string> = { f1: "k-reels", f6: "k-pro", f3: 
 const g = globalThis as { __embedraFirsatlar?: Firsat[] };
 const DEPO = (g.__embedraFirsatlar ??= DEMO.map((f) => ({ ...f, kampanyaId: DEMO_KAMPANYA[f.id] ?? null })));
 
+// Sonradan eklenen alanların demo değerleri (bellekte eski depo varsa da tamamlanır)
+const DEMO_EK: Record<string, Partial<Firsat>> = {
+  f3: { telefon: "+905321112233", mesajlar: [{ id: "demo-wa-1", metin: "Merhaba, 2 adet ONE ve Pro+ lisans için fiyat alabilir miyim?", zaman: "2026-11-03T10:12:00.000Z", yon: "gelen", tur: "text" }] },
+  f11: { telefon: "+905441234567" },
+  f2: { bayiId: "autotech", sonHareket: "2026-10-30" },
+  f10: { bayiId: "volant-netz" },
+  f8: { sonHareket: "2026-11-02" },
+  f4: { sonHareket: "2026-11-04" },
+};
+for (const f of DEPO) for (const [k, v] of Object.entries(DEMO_EK[f.id] ?? {})) (f as Record<string, unknown>)[k] ??= v;
+
 export async function getFirsatlar(): Promise<Firsat[]> {
   return DEPO;
 }
@@ -67,14 +85,35 @@ export async function getFirsatlar(): Promise<Firsat[]> {
 // Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
 export async function firsatKaydetDepo(f: Firsat) {
   const i = DEPO.findIndex((x) => x.id === f.id);
-  if (i >= 0) DEPO[i] = { ...f, asama: DEPO[i].asama, kayipNedeni: DEPO[i].kayipNedeni, kayipAciklama: DEPO[i].kayipAciklama };
-  else DEPO.push(f);
+  const sonHareket = new Date().toISOString().slice(0, 10);
+  if (i >= 0) {
+    const e = DEPO[i];
+    DEPO[i] = { ...f, asama: e.asama, kayipNedeni: e.kayipNedeni, kayipAciklama: e.kayipAciklama, telefon: f.telefon ?? e.telefon, mesajlar: e.mesajlar, sonHareket };
+  } else DEPO.push({ ...f, sonHareket });
 }
 
 export async function firsatAsamasiDepo(id: string, asama: Asama, kayip?: KayipBilgisi) {
   const f = DEPO.find((x) => x.id === id);
   if (!f) return;
   f.asama = asama;
+  f.sonHareket = new Date().toISOString().slice(0, 10);
   f.kayipNedeni = kayip?.neden;
   f.kayipAciklama = kayip?.aciklama;
+}
+
+export async function getFirsat(id: string): Promise<Firsat | null> {
+  return DEPO.find((x) => x.id === id) ?? null;
+}
+
+/** Aşama dışındaki alanları günceller (teklif tutarı, WhatsApp mesajı, bayi yönlendirmesi) */
+export async function firsatiGuncelle(id: string, f: (x: Firsat) => void): Promise<Firsat | null> {
+  const x = DEPO.find((y) => y.id === id);
+  if (!x) return null;
+  f(x);
+  x.sonHareket = new Date().toISOString().slice(0, 10);
+  return x;
+}
+
+export async function firsatEkleDepo(f: Firsat) {
+  DEPO.push({ ...f, sonHareket: f.sonHareket ?? new Date().toISOString().slice(0, 10) });
 }

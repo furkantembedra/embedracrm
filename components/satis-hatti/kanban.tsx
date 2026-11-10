@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { kisaTl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, type Asama, type Firsat } from "./queries";
-import FirsatKarti from "./firsat-karti";
+import FirsatKarti, { type KartEylemi } from "./firsat-karti";
 import type { BirakmaKonumu } from "./ortak";
 
 export default function Kanban({
@@ -14,12 +14,14 @@ export default function Kanban({
   onSirala,
   onEkle,
   onDuzenle,
+  onEylem,
 }: {
   firsatlar: Firsat[];
   onTasi: (id: string, asama: Asama, konum?: BirakmaKonumu) => void;
   onSirala: (id: string, yon: -1 | 1) => void;
   onEkle: (asama: Asama) => void;
   onDuzenle: (id: string) => void;
+  onEylem: (id: string, eylem: KartEylemi) => void;
 }) {
   const [suruklenen, setSuruklenen] = useState<string | null>(null);
   const [hedef, setHedef] = useState<Asama | null>(null);
@@ -101,6 +103,7 @@ export default function Kanban({
                       firsat={f}
                       onTasi={onTasi}
                       onDuzenle={() => onDuzenle(f.id)}
+                      onEylem={(e) => onEylem(f.id, e)}
                       onSurukleBasla={setSuruklenen}
                       onSurukleBitti={bitir}
                       onYukari={i > 0 ? () => onSirala(f.id, -1) : undefined}
