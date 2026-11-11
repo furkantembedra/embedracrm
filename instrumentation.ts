@@ -5,8 +5,10 @@ export async function register() {
   const g = globalThis as { __embedraZamanlayici?: ReturnType<typeof setInterval> };
   if (g.__embedraZamanlayici) clearInterval(g.__embedraZamanlayici);
   const { zamanlayiciCalistir } = await import("./components/pazarlama/gonderim");
+  const { otomasyonCalistir } = await import("./components/otomasyon/motor");
   const taban = process.env.SITE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
   g.__embedraZamanlayici = setInterval(() => {
     zamanlayiciCalistir(taban).catch((e) => console.error("[kampanya zamanlayıcı]", e));
+    otomasyonCalistir(taban).catch((e) => console.error("[otomasyon]", e));
   }, 60_000);
 }
