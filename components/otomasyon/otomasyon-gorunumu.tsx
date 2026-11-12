@@ -9,7 +9,7 @@ import Chip from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import { kuralAcKapat, kuraliSimdiCalistir, kuralSilAction, otomasyonVerisi, tumKurallariCalistir, type OtomasyonVerisi } from "./actions";
 import KuralFormu from "./kural-formu";
-import { TETIKLEYICILER } from "./ortak";
+import { EPOSTA_TUR_LIMITI, filtreOzeti, TETIKLEYICILER } from "./ortak";
 import type { Kural } from "./queries";
 
 const DURUM_TON = { yapildi: "ok", atlandi: "gray", hata: "err" } as const;
@@ -40,16 +40,20 @@ export default function OtomasyonGorunumu() {
     yenile();
   }, [yenile]);
 
-  const ozetMesaji = (o: { kural: number; yeni: number; eylem: number } | null) =>
+  const ozetMesaji = (o: { kural: number; yeni: number; eylem: number; durdurulan: number } | null) =>
     !o ? "Başka bir çalıştırma sürüyor, biraz sonra tekrar deneyin."
-      : o.yeni ? `${o.yeni} yeni kayıt işlendi, ${o.eylem} eylem yapıldı.` : "Yeni eşleşen kayıt yok.";
+      : (o.yeni ? `${o.yeni} yeni kayıt işlendi, ${o.eylem} eylem yapıldı.` : "Yeni eşleşen kayıt yok.")
+        + (o.durdurulan ? ` ${o.durdurulan} kural e-posta sınırı nedeniyle onay bekliyor.` : "");
 
-  const calistir = (id?: string) =>
+  const calistir = (id?: string) => {
+    const k = id ? veri?.kurallar.find((x) => x.id === id) : null;
+    if (k?.eposta && k.onizleme.yeni > EPOSTA_TUR_LIMITI && !window.confirm(`${k.onizleme.yeni} kayda e-posta gönderilecek. Devam edilsin mi?`)) return;
     baslat(async () => {
       const { ozet } = id ? await kuraliSimdiCalistir(id) : await tumKurallariCalistir();
       setMesaj(ozetMesaji(ozet));
       yenile();
     });
+  };
 
   const acKapat = (k: Kural, aktif: boolean) => {
     setVeri((v) => v && { ...v, kurallar: v.kurallar.map((x) => (x.id === k.id ? { ...x, aktif } : x)) });
@@ -114,7 +118,7 @@ export default function OtomasyonGorunumu() {
                         {k.ad}
                         <Chip ton={k.aktif ? "ok" : "gray"}>{k.aktif ? "Etkin" : "Kapalı"}</Chip>
                       </h2>
-                      <p className="text-sm text-muted"><b className="text-ink">Şu olursa:</b> {t.aciklama(k.gun)}</p>
+                      <p className="text-sm text-muted"><b className="text-ink">Şu olursa:</b> {t.aciklama(k.gun)}{filtreOzeti(k.tetikleyici, k.filtre ?? {}) && <> · <b className="text-ink">{filtreOzeti(k.tetikleyici, k.filtre ?? {})}</b></>}</p>
                       <p className="text-sm text-muted">
                         <b className="text-ink">Şunu yap:</b>{" "}
                         {[
@@ -139,6 +143,7 @@ export default function OtomasyonGorunumu() {
                       </button>
                     </div>
                   </div>
+                  {k.engel && <p role="alert" className="rounded-control bg-warn-bg px-3 py-2 text-[13px] font-semibold text-warn">Otomatik gönderim durdu: {k.engel}</p>}
                   <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-xs text-muted">
                     <span>Şu an eşleşen: <b className="text-ink">{k.onizleme.toplam}</b></span>
                     <span>İşlenmeyi bekleyen: <b className="text-ink">{k.onizleme.yeni}</b>{k.onizleme.ornekler.length > 0 && ` (${k.onizleme.ornekler.join(", ")}${k.onizleme.yeni > 3 ? "…" : ""})`}</span>

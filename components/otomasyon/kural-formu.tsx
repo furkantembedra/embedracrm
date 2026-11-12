@@ -4,7 +4,8 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormGonder } from "@/lib/use-form-gonder";
 import { kuralFormuKaydet, type KuralFormDurumu, type OtomasyonVerisi } from "./actions";
-import { KURAL_ADI_MAX, TETIKLEYICILER, TETIKLEYICI_SIRASI } from "./ortak";
+import { CIHAZ_MODELLERI } from "@/lib/urunler";
+import { EPOSTA_TUR_LIMITI, FILTRE_ADI, FILTRE_ALANLARI, KURAL_ADI_MAX, TETIKLEYICILER, TETIKLEYICI_SIRASI } from "./ortak";
 import type { Kural, TetikleyiciId } from "./queries";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
@@ -69,6 +70,37 @@ export default function KuralFormu({
           )}
         </div>
         <p className="text-xs text-muted">{tanim.aciklama(gun)}</p>
+        {FILTRE_ALANLARI[tetikleyici].length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-line pt-3">
+            <p className="text-[13px] font-bold">Yalnızca şunlar için <span className="font-medium text-muted">(boş bırakırsanız hepsi)</span></p>
+            <div className="grid gap-4 sm:grid-cols-3" key={tetikleyici}>
+              {FILTRE_ALANLARI[tetikleyici].includes("ulke") && (
+                <label className={ALAN}>
+                  {FILTRE_ADI.ulke}
+                  <input name="filtre_ulke" defaultValue={kural?.filtre?.ulke ?? ""} maxLength={60} placeholder="Örn. Almanya" className={GIRDI} />
+                </label>
+              )}
+              {FILTRE_ALANLARI[tetikleyici].includes("plan") && (
+                <label className={ALAN}>
+                  {FILTRE_ADI.plan}
+                  <select name="filtre_plan" defaultValue={kural?.filtre?.plan ?? ""} className={GIRDI}>
+                    <option value="">Hepsi</option>
+                    {["Basic", "Pro", "Pro+"].map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+              )}
+              {FILTRE_ALANLARI[tetikleyici].includes("model") && (
+                <label className={ALAN}>
+                  {FILTRE_ADI.model}
+                  <select name="filtre_model" defaultValue={kural?.filtre?.model ?? ""} className={GIRDI}>
+                    <option value="">Hepsi</option>
+                    {CIHAZ_MODELLERI.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="flex flex-col gap-4 rounded-card border border-line p-4">
@@ -110,6 +142,7 @@ export default function KuralFormu({
               <div className="flex flex-col gap-4 pl-6">
                 <p className="rounded-control bg-warn-bg px-3 py-2 text-xs font-semibold text-warn">
                   Yalnızca e-posta izni olan ve abonelikten çıkmamış yetkiliye gider; kayıt bir müşteriye bağlı değilse atlanır.
+                  Tek turda {EPOSTA_TUR_LIMITI} adetten fazla e-posta çıkarsa kural durur ve onayınızı bekler.
                   {!epostaSaglayici && " E-posta sağlayıcısı bağlı olmadığı için şu an DEMO modundasınız: gerçekte e-posta gönderilmez."}
                 </p>
                 <label className={ALAN}>

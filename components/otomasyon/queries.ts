@@ -8,7 +8,12 @@ export type TetikleyiciId =
   | "rma-gecikti"
   | "siparis-kargolanmadi"
   | "firsat-hareketsiz"
-  | "stok-kritik";
+  | "stok-kritik"
+  | "destek-yanitsiz"
+  | "cihaz-sessiz";
+
+/** İsteğe bağlı daraltma: boş alan "hepsi" demektir. Hangi alanların işe yaradığı tetikleyiciye göre değişir (ortak.ts › FILTRE_ALANLARI). */
+export type KuralFiltresi = { ulke?: string; plan?: string; model?: string };
 
 export type Kural = {
   id: string;
@@ -16,6 +21,9 @@ export type Kural = {
   aktif: boolean;
   tetikleyici: TetikleyiciId;
   gun: number; // tetikleyicinin gün eşiği (stok-kritik'te kullanılmaz)
+  filtre: KuralFiltresi;
+  /** Otomatik çalışma güvenlik sınırına takıldıysa nedeni. Kuralı elle "Çalıştır"mak onay sayılır ve bunu temizler. */
+  engel: string | null;
   hatirlatma: { sorumluId: string; onem: "normal" | "yuksek" } | null;
   /** Müşteriye e-posta: yalnızca kayıt bir müşteriye bağlıysa ve yetkilinin e-posta izni varsa gönderilir. {firma} {detay} yazılabilir. */
   eposta: { konu: string; metin: string } | null;
@@ -36,11 +44,11 @@ export type CalismaKaydi = {
 
 const DEMO: Kural[] = [
   {
-    id: "k-lisans-hatirlatma", ad: "Lisans bitmeden satışa görev aç", aktif: true, tetikleyici: "lisans-bitiyor", gun: 45,
+    id: "k-lisans-hatirlatma", ad: "Lisans bitmeden satışa görev aç", aktif: true, tetikleyici: "lisans-bitiyor", gun: 45, filtre: {}, engel: null,
     hatirlatma: { sorumluId: "u2", onem: "normal" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
   },
   {
-    id: "k-lisans-eposta", ad: "Lisans yenileme e-postası", aktif: false, tetikleyici: "lisans-bitiyor", gun: 30,
+    id: "k-lisans-eposta", ad: "Lisans yenileme e-postası", aktif: false, tetikleyici: "lisans-bitiyor", gun: 30, filtre: {}, engel: null,
     hatirlatma: null,
     eposta: {
       konu: "{firma} · lisansınızın süresi doluyor",
@@ -49,16 +57,24 @@ const DEMO: Kural[] = [
     olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
   },
   {
-    id: "k-teklif", ad: "Yanıtsız teklifi takip et", aktif: true, tetikleyici: "teklif-yanitsiz", gun: 5,
+    id: "k-teklif", ad: "Yanıtsız teklifi takip et", aktif: true, tetikleyici: "teklif-yanitsiz", gun: 5, filtre: {}, engel: null,
     hatirlatma: { sorumluId: "u2", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
   },
   {
-    id: "k-rma", ad: "Uzayan RMA'yı destek ekibine bildir", aktif: false, tetikleyici: "rma-gecikti", gun: 5,
+    id: "k-rma", ad: "Uzayan RMA'yı destek ekibine bildir", aktif: false, tetikleyici: "rma-gecikti", gun: 5, filtre: {}, engel: null,
     hatirlatma: { sorumluId: "u3", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
   },
   {
-    id: "k-stok", ad: "Kritik stokta operasyona haber ver", aktif: false, tetikleyici: "stok-kritik", gun: 0,
+    id: "k-stok", ad: "Kritik stokta operasyona haber ver", aktif: false, tetikleyici: "stok-kritik", gun: 0, filtre: {}, engel: null,
     hatirlatma: { sorumluId: "u4", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
+  },
+  {
+    id: "k-sessiz", ad: "Uzun süredir bağlanmayan cihazı destekle kontrol et", aktif: false, tetikleyici: "cihaz-sessiz", gun: 14, filtre: {}, engel: null,
+    hatirlatma: { sorumluId: "u3", onem: "normal" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
+  },
+  {
+    id: "k-destek", ad: "Ele alınmayan destek talebini uyar", aktif: false, tetikleyici: "destek-yanitsiz", gun: 1, filtre: {}, engel: null,
+    hatirlatma: { sorumluId: "u3", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
   },
 ];
 

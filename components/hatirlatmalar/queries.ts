@@ -2,7 +2,7 @@
 // Otomatik olanlar saklanmaz, her okumada güncel veriden hesaplanır; yalnızca "tamam / ertelendi" durumları tutulur.
 // Şimdilik demo depo (sunucu belleğinde). Supabase bağlanınca supabase.from("reminders" | "reminder_states")…
 
-export type KayitTuru = "firsat" | "teklif" | "siparis" | "musteri" | "bayi" | "rma" | "stok" | "cihaz";
+export type KayitTuru = "firsat" | "teklif" | "siparis" | "musteri" | "bayi" | "rma" | "stok" | "cihaz" | "destek";
 export type Hatirlatma = {
   id: string; // elle: uuid · otomatik: "oto:<kural>:<kayıt>…"
   baslik: string;

@@ -2,7 +2,7 @@
 import type { Hatirlatma, KayitTuru } from "./queries";
 
 export const KAYIT_ADI: Record<KayitTuru, string> = {
-  firsat: "Fırsat", teklif: "Teklif", siparis: "Sipariş", musteri: "Müşteri", bayi: "Bayi", rma: "RMA", stok: "Stok", cihaz: "Cihaz",
+  firsat: "Fırsat", teklif: "Teklif", siparis: "Sipariş", musteri: "Müşteri", bayi: "Bayi", rma: "RMA", stok: "Stok", cihaz: "Cihaz", destek: "Destek",
 };
 
 /** "Bugün 09:00", "Yarın 14:00", "3 gün gecikti", "12 Kas 10:30" */

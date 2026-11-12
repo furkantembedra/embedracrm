@@ -3,11 +3,11 @@
 import { headers } from "next/headers";
 import { getEkip, type Kullanici } from "@/components/operasyon/queries";
 import { saglayicilar } from "@/lib/ileti-gonder";
-import { eslesmeler, otomasyonCalistir, type CalismaOzeti } from "./motor";
-import { KURAL_ADI_MAX, TETIKLEYICILER } from "./ortak";
+import { eslesmeler, filtreUyar, otomasyonCalistir, type CalismaOzeti } from "./motor";
+import { FILTRE_ALANLARI, KURAL_ADI_MAX, TETIKLEYICILER } from "./ortak";
 import {
   getCalismaKayitlari, getKurallar, islendiMi, kuralGuncelle, kuralKaydet, kuralSil,
-  type CalismaKaydi, type Kural, type TetikleyiciId,
+  type CalismaKaydi, type Kural, type KuralFiltresi, type TetikleyiciId,
 } from "./queries";
 
 export type KuralOnizleme = { toplam: number; yeni: number; ornekler: string[] };
@@ -18,8 +18,8 @@ export type OtomasyonVerisi = {
   epostaSaglayici: string | null;
 };
 
-async function onizle(k: Pick<Kural, "id" | "tetikleyici" | "gun">): Promise<KuralOnizleme> {
-  const l = await eslesmeler(k.tetikleyici, k.gun);
+async function onizle(k: Pick<Kural, "id" | "tetikleyici" | "gun" | "filtre">): Promise<KuralOnizleme> {
+  const l = (await eslesmeler(k.tetikleyici, k.gun)).filter((e) => filtreUyar(e, k.tetikleyici, k.filtre ?? {}));
   const yeniler: string[] = [];
   for (const e of l) if (!(await islendiMi(k.id, e.anahtar))) yeniler.push(e.kayitAd);
   return { toplam: l.length, yeni: yeniler.length, ornekler: yeniler.slice(0, 3) };
@@ -50,6 +50,12 @@ export async function kuralFormuKaydet(_o: KuralFormDurumu, form: FormData): Pro
   const gun = tanim?.esik ? Number(metin("gun")) : 0;
   if (tanim?.esik && (!Number.isInteger(gun) || gun < 1 || gun > 365)) hatalar.gun = "1 ile 365 arasında bir gün sayısı girin.";
 
+  const filtre: KuralFiltresi = {};
+  for (const alan of tanim ? FILTRE_ALANLARI[tetikleyici] : []) {
+    const v = metin(`filtre_${alan}`).slice(0, 60);
+    if (v) filtre[alan] = v;
+  }
+
   const hatirlatmaAcik = form.get("hatirlatmaAcik") === "on";
   const sorumluId = metin("sorumluId");
   if (hatirlatmaAcik && !ekip.some((u) => u.id === sorumluId && u.aktif)) hatalar.sorumluId = "Sorumlu seçin.";
@@ -71,6 +77,8 @@ export async function kuralFormuKaydet(_o: KuralFormDurumu, form: FormData): Pro
     aktif: mevcut?.aktif ?? true,
     tetikleyici,
     gun,
+    filtre,
+    engel: mevcut?.engel ?? null,
     hatirlatma: hatirlatmaAcik ? { sorumluId, onem: metin("onem") === "yuksek" ? "yuksek" : "normal" } : null,
     eposta: epostaAcik ? { konu: konu.slice(0, 150), metin: govde.slice(0, 2000) } : null,
     olusturma: mevcut?.olusturma ?? new Date().toISOString(),

@@ -48,7 +48,7 @@ export async function hatirlatmalariGetir(): Promise<HatirlatmaVerisi> {
 
 export type HatirlatmaFormDurumu = { hatalar?: Record<string, string>; hatirlatma?: Hatirlatma; zaman?: number };
 
-const KAYIT_TURLERI: KayitTuru[] = ["firsat", "teklif", "siparis", "musteri", "bayi", "rma", "stok", "cihaz"];
+const KAYIT_TURLERI: KayitTuru[] = ["firsat", "teklif", "siparis", "musteri", "bayi", "rma", "stok", "cihaz", "destek"];
 
 export async function hatirlatmaEkle(_o: HatirlatmaFormDurumu, form: FormData): Promise<HatirlatmaFormDurumu> {
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();

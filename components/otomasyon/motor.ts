@@ -5,6 +5,7 @@ import { getCihazlar } from "@/components/cihaz-lisans/queries";
 import { getTeklifler } from "@/components/teklifler/queries";
 import { getRmalar } from "@/components/rma/queries";
 import { getSiparisler } from "@/components/siparisler/queries";
+import { getTalepler } from "@/components/destek/queries";
 import { getFirsatlar, KAPALI_ASAMALAR } from "@/components/satis-hatti/queries";
 import { getBilesenler, getEkip } from "@/components/operasyon/queries";
 import { getMusteri, musteriBulAdla } from "@/components/musteriler/queries";
@@ -14,8 +15,8 @@ import { gunEkle } from "@/components/hatirlatmalar/kurallar";
 import { getEngelli } from "@/components/pazarlama/queries";
 import { abonelikJetonu } from "@/lib/abonelik";
 import { epostaGonder, saglayicilar } from "@/lib/ileti-gonder";
-import { gunYaz } from "./ortak";
-import { getKurallar, islendiIsaretle, islendiMi, kayitEkle, kilitAl, kilitBirak, kuralGuncelle, type CalismaKaydi, type EylemSonucu, type Kural, type TetikleyiciId } from "./queries";
+import { EPOSTA_TUR_LIMITI, FILTRE_ALANLARI, gunYaz } from "./ortak";
+import { getKurallar, islendiIsaretle, islendiMi, kayitEkle, kilitAl, kilitBirak, kuralGuncelle, type CalismaKaydi, type EylemSonucu, type Kural, type KuralFiltresi, type TetikleyiciId } from "./queries";
 
 export type Eslesme = {
   anahtar: string;
@@ -24,8 +25,15 @@ export type Eslesme = {
   firma: string;
   detay: string;
   musteriId: string | null;
-  kayit: { tur: "firsat" | "teklif" | "siparis" | "rma" | "stok" | "cihaz"; id: string };
+  kayit: { tur: "firsat" | "teklif" | "siparis" | "rma" | "stok" | "cihaz" | "destek"; id: string };
+  nitelik?: KuralFiltresi; // filtrelenebilir özellikler (kayıtta yoksa o filtre bu kayda uygulanmaz)
 };
+
+const ayni = (a: string | undefined, b: string) => (a ?? "").toLocaleLowerCase("tr-TR").trim() === b.toLocaleLowerCase("tr-TR").trim();
+/** Kuralın filtresi bu kayda uyuyor mu. Yalnızca o tetikleyicide geçerli alanlar kontrol edilir. */
+export function filtreUyar(e: Eslesme, t: TetikleyiciId, f: KuralFiltresi) {
+  return FILTRE_ALANLARI[t].every((alan) => !f[alan] || ayni(e.nitelik?.[alan], f[alan]!));
+}
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 const bugunYerel = (d = new Date()) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
@@ -40,6 +48,7 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
         .map((c) => ({
           anahtar: `${c.seriNo}:${c.lisansBitis}`, kayitAd: `${c.seriNo} · ${c.musteri}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
           detay: `${c.seriNo} cihazının ${c.plan} lisansı ${gunYaz(c.lisansBitis!)} tarihinde sona eriyor.`, kayit: { tur: "cihaz" as const, id: c.seriNo },
+          nitelik: { ulke: c.ulke, plan: c.plan, model: c.model },
         }));
     }
     case "teklif-yanitsiz": {
@@ -57,6 +66,7 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
         .map((r) => ({
           anahtar: r.id, kayitAd: `${r.id} · ${r.sahip.ad}`, href: `/rma?kayit=${r.id}`, firma: r.sahip.ad, musteriId: r.sahip.tur === "musteri" ? r.sahip.id : null,
           detay: `${r.id} numaralı servis kaydınız ${gunYaz(r.acilis)} tarihinden beri devam ediyor.`, kayit: { tur: "rma" as const, id: r.id },
+          nitelik: { model: r.model },
         }));
     }
     case "siparis-kargolanmadi": {
@@ -66,6 +76,7 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
         .map((s) => ({
           anahtar: s.id, kayitAd: `#${s.id} · ${s.musteri}`, href: `/siparisler/${s.id}`, firma: s.musteri, musteriId: s.musteriId,
           detay: `${s.id} numaralı siparişiniz hazırlanıyor, kargoya verildiğinde bilgilendirileceksiniz.`, kayit: { tur: "siparis" as const, id: s.id },
+          nitelik: { ulke: s.ulke },
         }));
     }
     case "firsat-hareketsiz": {
@@ -75,6 +86,26 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
         anahtar: `${f.id}:${f.sonHareket}`, kayitAd: f.firma, href: "/satis-hatti", firma: f.firma, musteriId: (await musteriBulAdla(f.firma))?.id ?? null,
         detay: `${f.firma} fırsatında ${gunYaz(f.sonHareket!)} tarihinden beri değişiklik yok (${f.sonrakiAdim}).`, kayit: { tur: "firsat" as const, id: f.id },
       })));
+    }
+    case "destek-yanitsiz": {
+      const esik = gunEkle(bugun, -gun);
+      return (await getTalepler())
+        .filter((x) => x.durum === "yeni" && x.acilis.slice(0, 10) <= esik)
+        .map((x) => ({
+          anahtar: x.id, kayitAd: `#${x.id} · ${x.musteri}`, href: `/destek/${x.id}`, firma: x.musteri, musteriId: x.musteriId,
+          detay: `“${x.baslik}” başlıklı destek talebiniz alındı (${gunYaz(x.acilis.slice(0, 10))}), ekibimiz en kısa sürede dönecek.`, kayit: { tur: "destek" as const, id: x.id },
+          nitelik: { plan: x.plan },
+        }));
+    }
+    case "cihaz-sessiz": {
+      const esik = gunEkle(bugun, -gun);
+      return (await getCihazlar())
+        .filter((c) => c.musteriId && c.durum !== "stokta" && c.sonGorulme && c.sonGorulme.slice(0, 10) <= esik)
+        .map((c) => ({
+          anahtar: `${c.seriNo}:${c.sonGorulme!.slice(0, 10)}`, kayitAd: `${c.seriNo} · ${c.musteri}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
+          detay: `${c.seriNo} cihazından ${gunYaz(c.sonGorulme!.slice(0, 10))} tarihinden beri bildirim gelmedi.`, kayit: { tur: "cihaz" as const, id: c.seriNo },
+          nitelik: { ulke: c.ulke, plan: c.plan, model: c.model },
+        }));
     }
     case "stok-kritik":
       return (await getBilesenler())
@@ -133,23 +164,44 @@ async function epostaEylemi(k: Kural, e: Eslesme, taban: string): Promise<EylemS
   return { eylem: "eposta", durum: "yapildi", ayrinti: saglayicilar().eposta ? `${y.ad} kişisine gönderildi.` : `${y.ad} için hazırlandı (DEMO: e-posta sağlayıcısı bağlı değil, gerçekte gönderilmedi).` };
 }
 
-export type CalismaOzeti = { kural: number; eslesme: number; yeni: number; eylem: number };
+export type CalismaOzeti = { kural: number; eslesme: number; yeni: number; eylem: number; durdurulan: number };
 
-/** Etkin kuralların (ya da tek bir kuralın) yeni eşleşmeleri için eylemleri çalıştırır. */
+/**
+ * Etkin kuralların (ya da tek bir kuralın) yeni eşleşmeleri için eylemleri çalıştırır.
+ * yalnizKuralId verilirse bu, kullanıcının elle başlattığı çalıştırmadır ve e-posta güvenlik sınırını onaylamış sayılır.
+ */
 export async function otomasyonCalistir(taban: string, yalnizKuralId?: string): Promise<CalismaOzeti | null> {
   if (!(await kilitAl())) return null; // başka bir çalıştırma sürüyor
-  const ozet: CalismaOzeti = { kural: 0, eslesme: 0, yeni: 0, eylem: 0 };
+  const ozet: CalismaOzeti = { kural: 0, eslesme: 0, yeni: 0, eylem: 0, durdurulan: 0 };
   try {
     const simdi = new Date();
     const bugun = bugunYerel(simdi);
     const kurallar = (await getKurallar()).filter((k) => (yalnizKuralId ? k.id === yalnizKuralId : k.aktif));
+    // Aynı tetikleyici + eşik kullanan kurallar listeyi bir kez okur
+    const onbellek = new Map<string, Promise<Eslesme[]>>();
+    const oku = (t: TetikleyiciId, gun: number) => {
+      const a = `${t}|${gun}`;
+      if (!onbellek.has(a)) onbellek.set(a, eslesmeler(t, gun, bugun));
+      return onbellek.get(a)!;
+    };
     for (const k of kurallar) {
       if (!k.hatirlatma && !k.eposta) continue;
       ozet.kural++;
-      const liste = await eslesmeler(k.tetikleyici, k.gun, bugun);
+      const liste = (await oku(k.tetikleyici, k.gun)).filter((e) => filtreUyar(e, k.tetikleyici, k.filtre ?? {}));
       ozet.eslesme += liste.length;
-      for (const e of liste) {
-        if (await islendiMi(k.id, e.anahtar)) continue;
+      const yeniler: Eslesme[] = [];
+      for (const e of liste) if (!(await islendiMi(k.id, e.anahtar))) yeniler.push(e);
+
+      // Güvenlik sınırı: otomatik turda tek kuralın e-posta sayısı sınırı aşarsa hiçbir şey gönderme, yöneticiden onay iste
+      if (k.eposta && !yalnizKuralId && yeniler.length > EPOSTA_TUR_LIMITI) {
+        const neden = `${yeniler.length} kayıt eşleşti (otomatik gönderim sınırı ${EPOSTA_TUR_LIMITI}). Listeyi kontrol edip "Çalıştır" ile onaylayın.`;
+        await kuralGuncelle(k.id, (x) => void (x.engel = neden));
+        ozet.durdurulan++;
+        continue;
+      }
+      if (yalnizKuralId) await kuralGuncelle(k.id, (x) => void (x.engel = null));
+
+      for (const e of yeniler) {
         ozet.yeni++;
         const sonuclar: EylemSonucu[] = [];
         if (k.hatirlatma) sonuclar.push(await hatirlatmaEylemi(k, e, simdi).catch((): EylemSonucu => ({ eylem: "hatirlatma", durum: "hata", ayrinti: "Beklenmeyen hata." })));
@@ -167,4 +219,3 @@ export async function otomasyonCalistir(taban: string, yalnizKuralId?: string): 
     await kilitBirak();
   }
 }
-
