@@ -31,6 +31,9 @@ export type IhtiyacGirdisi = {
 export type CihazSatiri = { model: CihazModeli; kesin: number; olasi: number; depo: number; yapimda: number; planli: number; ekUretim: number; uretilebilir: number; darbogaz: string | null };
 export type BilesenSatiri = { kod: string; ad: string; kaynak: BilesenKalemi["kaynak"]; gereken: number; stok: number; gelen: number; netEksik: number; oneri: number; kritik: number; hedef: number };
 
+/** Talebin nereden geldiği: bekleyen siparişler (kesin) ve teklif/müzakere fırsatları (olası) */
+export type TalepKaynagi = { tur: "siparis" | "firsat"; id: string; ad: string; model: CihazModeli; adet: number; olasilik?: number; durum: string };
+
 const gunEkle = (t: string, g: number) => {
   const d = new Date(t + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + g);
@@ -41,6 +44,7 @@ export function malzemeIhtiyaci(g: IhtiyacGirdisi) {
   const sinir = gunEkle(g.bugun, g.ufukGun);
   const sifir = () => Object.fromEntries(CIHAZ_MODELLERI.map((m) => [m, 0])) as Record<CihazModeli, number>;
 
+  const kaynaklar: TalepKaynagi[] = [];
   const kesin = sifir();
   for (const s of g.siparisler) {
     if (s.durum !== "odeme" && s.durum !== "hazirlaniyor") continue;
@@ -50,6 +54,7 @@ export function malzemeIhtiyaci(g: IhtiyacGirdisi) {
       const dusen = Math.min(atanmis, k.adet);
       atanmis -= dusen;
       kesin[k.model] += k.adet - dusen;
+      if (k.adet - dusen > 0) kaynaklar.push({ tur: "siparis", id: s.id, ad: s.musteri, model: k.model, adet: k.adet - dusen, durum: s.durum === "odeme" ? "Ödeme bekliyor" : "Hazırlanıyor" });
     }
   }
 
@@ -58,7 +63,10 @@ export function malzemeIhtiyaci(g: IhtiyacGirdisi) {
     const p = OLASILIK[f.asama];
     if (!p || f.sonrakiTarih > sinir) continue;
     const u = icerikCoz(f.icerik);
-    if (u.model) olasi[u.model] += u.adet * p;
+    if (u.model) {
+      olasi[u.model] += u.adet * p;
+      kaynaklar.push({ tur: "firsat", id: f.id, ad: f.firma, model: u.model, adet: u.adet, olasilik: p, durum: f.asama === "teklif" ? "Teklif" : "Müzakere" });
+    }
   }
 
   const yapimda = sifir();
@@ -98,5 +106,7 @@ export function malzemeIhtiyaci(g: IhtiyacGirdisi) {
     };
   });
 
-  return { cihazlar, bilesenler, sinir };
+  const geciken = g.tedarik.filter((t) => t.durum !== "teslim" && t.beklenen < g.bugun);
+
+  return { cihazlar, bilesenler, sinir, kaynaklar, geciken };
 }

@@ -5,9 +5,10 @@ import { cihazEkleDepo, cihaziGuncelle, getCihaz } from "@/components/cihaz-lisa
 import { musteriyiGuncelle } from "@/components/musteriler/queries";
 import { getSiparisler, iadeEkle, sonrakiIadeNo } from "@/components/siparisler/queries";
 import { garantiBilgisi, type GarantiBilgisi } from "./garanti";
-import { rmaOlustur, rmaYenile, simdiYerel } from "./islemler";
-import { kapsamda } from "./ortak";
-import { garantiAyKaydet, GELIS_KANALLARI, ONCELIKLER, type GelisKanali, type RmaOncelik, getRma, getRmalar, rmayiGuncelle, RMA_ADIMLARI, KARAR_ADI, type RmaKaydi, type RmaKarari } from "./queries";
+import { ekleriOku, rmaOlustur, rmaYenile, simdiYerel } from "./islemler";
+import type { Cihaz } from "@/components/cihaz-lisans/queries";
+import { kapsamda, onayBekliyor } from "./ortak";
+import { garantiUzatmaEkle, garantiUzatmaSil, UZATMA_AYLARI, garantiAyKaydet, GELIS_KANALLARI, ONCELIKLER, type GelisKanali, type RmaOncelik, getRma, getRmalar, rmayiGuncelle, RMA_ADIMLARI, KARAR_ADI, type RmaKaydi, type RmaKarari } from "./queries";
 
 const SERI = /^EO1-\d{4}-\d{4}$/;
 
@@ -22,11 +23,14 @@ export type RmaFormDurumu = { hatalar?: Record<string, string>; rma?: RmaKaydi; 
 export async function rmaAc(_o: RmaFormDurumu, form: FormData): Promise<RmaFormDurumu> {
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const ucretMetni = metin("ucret");
+  const dosya = await ekleriOku(form.getAll("dosyalar").filter((f): f is File => f instanceof File));
+  if (dosya.hata) return { hatalar: { dosyalar: dosya.hata } };
   const sonuc = await rmaOlustur({
+    ekler: dosya.ekler,
     seriNo: metin("seriNo").toUpperCase(),
     arizaTipi: metin("arizaTipi"),
     ariza: metin("ariza"),
-    fotograflar: metin("fotograflar").split(/[\n,]+/).map((x) => x.trim()).filter(Boolean),
+    fotograflar: [],
     destekTalebiId: metin("destekTalebiId") || null,
     kaynak: "crm",
     oncelik: metin("oncelik"),
@@ -76,6 +80,7 @@ export async function kararVer(id: string, v: { karar: RmaKarari; parcalar?: Rec
   if (!r) return { hata: "Kayıt bulunamadı." };
   if (r.adim !== "inceleme") return { hata: "Karar inceleme adımında verilir." };
   if (!(v.karar in KARAR_ADI)) return { hata: "Karar seçin." };
+  if ((v.karar === "tamir" || v.karar === "degisim") && onayBekliyor(r)) return { hata: "Garanti dışı servis ücretini müşteri onaylamadan tamir veya değişim kararı verilemez." };
   let ek = "";
 
   if (v.karar === "tamir") {
@@ -137,7 +142,9 @@ export async function garantiKapsami(id: string, garantide: boolean | null, ucre
   const r = await rmayiGuncelle(id, (x) => {
     x.garantiElle = garantide;
     const kapsam = garantide ?? x.garantide;
-    x.ucret = kapsam ? null : ucret;
+    const yeniUcret = kapsam ? null : ucret;
+    if (yeniUcret !== x.ucret) x.ucretOnay = false; // ücret değişince müşteri onayı yeniden alınır
+    x.ucret = yeniUcret;
     gecmisEkle(x, garantide === null ? "Garanti kapsamı otomatik hesaba döndü." : `Garanti kapsamı elle ${garantide ? "verildi" : "kaldırıldı"}${!kapsam && ucret ? ` · servis ücreti ₺${ucret.toLocaleString("tr-TR")}` : ""}.`);
   });
   if (!r) return { hata: "Kayıt bulunamadı." };
@@ -163,6 +170,16 @@ export async function rmaNotEkle(id: string, tur: "not" | "gorusme", metin: stri
   return { rma: r, liste: await getRmalar() };
 }
 
+export async function ucretOnayla(id: string, onay: boolean): Promise<RmaIslemSonucu> {
+  const r = await rmayiGuncelle(id, (x) => {
+    x.ucretOnay = onay;
+    gecmisEkle(x, onay ? `Müşteri servis ücretini onayladı${x.ucret ? ` (₺${x.ucret.toLocaleString("tr-TR")})` : ""}.` : "Servis ücreti onayı geri alındı.");
+  });
+  if (!r) return { hata: "Kayıt bulunamadı." };
+  rmaYenile();
+  return { rma: r, liste: await getRmalar() };
+}
+
 export async function ucretOdendi(id: string, odendi: boolean): Promise<RmaIslemSonucu> {
   const r = await rmayiGuncelle(id, (x) => {
     x.ucretOdendi = odendi;
@@ -182,4 +199,71 @@ export async function oncelikDegistir(id: string, oncelik: RmaOncelik): Promise<
   if (!r) return { hata: "Kayıt bulunamadı." };
   rmaYenile();
   return { rma: r, liste: await getRmalar() };
+}
+
+/** Açık veya kapalı RMA'ya sonradan fotoğraf / belge ekler */
+export async function rmaEkEkle(id: string, form: FormData): Promise<RmaIslemSonucu> {
+  const r = await getRma(id);
+  if (!r) return { hata: "Kayıt bulunamadı." };
+  const dosya = await ekleriOku(form.getAll("dosyalar").filter((f): f is File => f instanceof File), r.ekler);
+  if (dosya.hata) return { hata: dosya.hata };
+  if (!dosya.ekler?.length) return { hata: "Dosya seçin." };
+  const y = await rmayiGuncelle(id, (x) => {
+    x.ekler.push(...dosya.ekler!);
+    gecmisEkle(x, `${dosya.ekler!.length} dosya eklendi: ${dosya.ekler!.map((e) => e.ad).join(", ")}.`);
+  });
+  rmaYenile();
+  return { rma: y!, liste: await getRmalar() };
+}
+
+export async function rmaEkSil(id: string, ekId: string): Promise<RmaIslemSonucu> {
+  const y = await rmayiGuncelle(id, (x) => {
+    const e = x.ekler.find((k) => k.id === ekId);
+    if (!e) return;
+    x.ekler = x.ekler.filter((k) => k.id !== ekId);
+    gecmisEkle(x, `Dosya silindi: ${e.ad}.`);
+  });
+  if (!y) return { hata: "Kayıt bulunamadı." };
+  rmaYenile();
+  return { rma: y, liste: await getRmalar() };
+}
+
+/** RMA ekranında "Cihaz kaydını aç" penceresi için cihaz kaydını getirir */
+export async function cihazGetir(seriNo: string): Promise<Cihaz | null> {
+  return getCihaz(seriNo.trim().toUpperCase());
+}
+
+export type GarantiUzatSonucu = { bilgi?: GarantiBilgisi; liste?: RmaKaydi[]; hata?: string };
+
+/** Uzatma eklenince / kaldırılınca açık RMA'ların (elle değiştirilmemiş) garanti durumu yeniden hesaplanır */
+async function uzatmaSonrasi(seriNo: string, etiket: string): Promise<GarantiUzatSonucu> {
+  const bilgi = await garantiBilgisi(seriNo, simdiYerel().slice(0, 10));
+  if (!bilgi) return { hata: "Cihaz bulunamadı." };
+  for (const r of await getRmalar()) {
+    if (r.seriNo !== seriNo || r.garantiElle !== null || !(r.adim !== "gonderildi" && !(r.adim === "tamamlandi" && r.karar === "iade"))) continue;
+    if (r.garantide === bilgi.garantide) continue;
+    await rmayiGuncelle(r.id, (x) => {
+      x.garantide = bilgi.garantide;
+      if (bilgi.garantide) { x.ucret = null; x.ucretOnay = false; }
+      gecmisEkle(x, `${etiket} · cihaz artık ${bilgi.garantide ? "garanti kapsamında" : "garanti dışı"}.`);
+    });
+  }
+  rmaYenile();
+  return { bilgi, liste: await getRmalar() };
+}
+
+export async function garantiUzat(seriNo: string, ay: number, not: string): Promise<GarantiUzatSonucu> {
+  const s = seriNo.trim().toUpperCase();
+  if (!(UZATMA_AYLARI as readonly number[]).includes(ay)) return { hata: "Uzatma süresini seçin." };
+  const bilgi = await garantiBilgisi(s, simdiYerel().slice(0, 10));
+  if (!bilgi) return { hata: "Bu seri no CRM'de kayıtlı değil." };
+  if (!bilgi.satisTarihi) return { hata: "Satış tarihi bilinmeyen cihazın garantisi uzatılamaz." };
+  await garantiUzatmaEkle(s, { id: crypto.randomUUID(), ay, tarih: simdiYerel().slice(0, 10), not: not.trim().slice(0, 200) });
+  return uzatmaSonrasi(s, `Garanti ${ay} ay uzatıldı${not.trim() ? ` (${not.trim().slice(0, 80)})` : ""}`);
+}
+
+export async function garantiUzatmaKaldir(seriNo: string, id: string): Promise<GarantiUzatSonucu> {
+  const s = seriNo.trim().toUpperCase();
+  await garantiUzatmaSil(s, id);
+  return uzatmaSonrasi(s, "Garanti uzatması kaldırıldı");
 }

@@ -3,7 +3,7 @@
 import { getCihaz } from "@/components/cihaz-lisans/queries";
 import { getSiparisler } from "@/components/siparisler/queries";
 import { getBayiHareketleri, getAktifBayiler } from "@/components/bayiler/queries";
-import { getGarantiAy, getRmalar, type RmaKaydi } from "./queries";
+import { getGarantiAy, getGarantiUzatmalari, getRmalar, type GarantiUzatma, type RmaKaydi } from "./queries";
 
 export function ayEkleGun(tarih: string, ay: number) {
   const d = new Date(tarih + "T12:00:00Z");
@@ -17,7 +17,9 @@ export type GarantiBilgisi = {
   sahip: RmaKaydi["sahip"];
   satisTarihi: string | null;
   satisKaynagi: string;
-  garantiBitis: string | null;
+  garantiBitis: string | null; // uzatmalar dahil
+  standartBitis: string | null; // uzatma olmadan
+  uzatmalar: GarantiUzatma[];
   garantide: boolean;
   lisans: { plan: string; bitis: string | null; durum: string };
   bayi: string | null;
@@ -28,7 +30,7 @@ export type GarantiBilgisi = {
 export async function garantiBilgisi(seriNo: string, bugun: string): Promise<GarantiBilgisi | null> {
   const cihaz = await getCihaz(seriNo);
   if (!cihaz) return null;
-  const [siparisler, hareketler, bayiler, garantiAy, rmalar] = await Promise.all([getSiparisler(), getBayiHareketleri(), getAktifBayiler(), getGarantiAy(), getRmalar()]);
+  const [siparisler, hareketler, bayiler, garantiAy, rmalar, uzatmalar] = await Promise.all([getSiparisler(), getBayiHareketleri(), getAktifBayiler(), getGarantiAy(), getRmalar(), getGarantiUzatmalari(seriNo)]);
   const siparis = siparisler.find((s) => s.seriNolar.includes(seriNo)) ?? null;
   const bayiSatis = hareketler.find((h) => h.tur === "satis" && h.kalemler.some((k) => k.seriNo === seriNo));
   const ilkLisans = [...cihaz.gecmis].sort((a, b) => a.baslangic.localeCompare(b.baslangic))[0]?.baslangic ?? cihaz.lisansBaslangic;
@@ -40,14 +42,15 @@ export async function garantiBilgisi(seriNo: string, bugun: string): Promise<Gar
   else if (cihaz.stogaGiris) [satisTarihi, satisKaynagi] = [cihaz.stogaGiris, "Bayiye sevk tarihi"];
   else if (ilkLisans) [satisTarihi, satisKaynagi] = [ilkLisans, "İlk lisans başlangıcı"];
 
-  const garantiBitis = satisTarihi ? ayEkleGun(satisTarihi, garantiAy) : null;
+  const standartBitis = satisTarihi ? ayEkleGun(satisTarihi, garantiAy) : null;
+  const garantiBitis = satisTarihi ? ayEkleGun(satisTarihi, garantiAy + uzatmalar.reduce((t, u) => t + u.ay, 0)) : null;
   const bayi = cihaz.bayiId ? bayiler.find((b) => b.id === cihaz.bayiId) ?? null : null;
   const sahip: RmaKaydi["sahip"] = cihaz.musteriId
     ? { tur: "musteri", id: cihaz.musteriId, ad: cihaz.musteri }
     : bayi ? { tur: "bayi", id: bayi.id, ad: bayi.ad } : { tur: "musteri", id: null, ad: cihaz.musteri || "—" };
 
   return {
-    seriNo, model: cihaz.model, sahip, satisTarihi, satisKaynagi, garantiBitis,
+    seriNo, model: cihaz.model, sahip, satisTarihi, satisKaynagi, garantiBitis, standartBitis, uzatmalar,
     garantide: !!garantiBitis && garantiBitis >= bugun,
     lisans: { plan: cihaz.plan, bitis: cihaz.lisansBitis, durum: cihaz.durum },
     bayi: bayi?.ad ?? null,

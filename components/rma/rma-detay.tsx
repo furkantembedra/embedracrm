@@ -4,13 +4,13 @@
 // notlar ve görüşmeler, servis formu yazdırma.
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { MessageSquare, Printer, StickyNote, Truck } from "lucide-react";
+import { FileText, MessageSquare, Paperclip, Printer, StickyNote, Trash2, Truck } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { pdfYazdir } from "@/lib/disa-aktar";
-import { garantiKapsami, kararVer, oncelikDegistir, rmaIlerlet, rmaNotEkle, ucretOdendi, type RmaIslemSonucu } from "./actions";
+import { garantiKapsami, kararVer, oncelikDegistir, rmaIlerlet, rmaEkEkle, rmaEkSil, rmaNotEkle, ucretOdendi, ucretOnayla, type RmaIslemSonucu } from "./actions";
 import { ADIM_ADI, GELIS_KANALLARI, HEDEF_GUN, KARAR_ADI, ONCELIKLER, RMA_ADIMLARI, type RmaKaydi, type RmaKarari, type RmaOncelik } from "./queries";
-import { acikMi, gunSay, kapsamda, tarihYaz } from "./ortak";
+import { acikMi, gunSay, kapsamda, onayBekliyor, tarihYaz } from "./ortak";
 
 const BUTON = "min-h-10 cursor-pointer rounded-control px-4 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-50";
 const GIRDI = "min-h-10 min-w-0 rounded-control border border-line-strong bg-card px-3 text-sm font-medium outline-none focus:border-ink";
@@ -35,6 +35,8 @@ function servisFormu(r: RmaKaydi) {
 
 export default function RmaDetay({
   rma: r,
+  tekrar = 0,
+  onCihazAc,
   bugun,
   bilesenler,
   havuz,
@@ -42,6 +44,8 @@ export default function RmaDetay({
   onGuncellendi,
 }: {
   rma: RmaKaydi;
+  tekrar?: number;
+  onCihazAc?: (seriNo: string) => void;
   bugun: string;
   bilesenler: { kod: string; ad: string; adet: number }[];
   havuz: { seriNo: string; model: string }[];
@@ -88,6 +92,7 @@ export default function RmaDetay({
             <h2 className="text-[19px] font-extrabold">{r.id}</h2>
             {r.oncelik === "Acil" && <Chip ton="err">Acil</Chip>}
             <Chip ton={kapsam ? "lime" : "warn"}>{kapsam ? "Garantide" : "Garanti dışı"}</Chip>
+            {tekrar > 0 && <Chip ton="warn">{tekrar + 1}. arıza kaydı</Chip>}
             {r.kaynak === "bayi-portali" && <Chip ton="info">Bayi portalı</Chip>}
           </div>
           <span className="text-[13px] text-muted">{r.sahip.ad} · {tarihYaz(r.acilis)} tarihinde açıldı</span>
@@ -125,7 +130,7 @@ export default function RmaDetay({
 
       <dl className="grid gap-x-6 gap-y-3 rounded-xl bg-[#F4F5F0] p-3 text-[13px] sm:grid-cols-2">
         <div className="sm:col-span-2"><dt className="text-xs text-muted">Arıza</dt><dd><b>{r.arizaTipi}</b> · {r.ariza}</dd></div>
-        <div><dt className="text-xs text-muted">Cihaz</dt><dd className="font-bold"><Link href={`/cihaz-lisans/${r.seriNo}`} className="hover:underline">{r.seriNo}</Link> · {r.model}</dd></div>
+        <div><dt className="text-xs text-muted">Cihaz</dt><dd className="font-bold"><button type="button" onClick={() => onCihazAc?.(r.seriNo)} className="cursor-pointer font-bold hover:underline">{r.seriNo}</button> · {r.model}</dd></div>
         <div><dt className="text-xs text-muted">Geliş</dt><dd>{r.gelis ? `${r.gelis.kanal}${r.gelis.takipNo ? ` · ${r.gelis.takipNo}` : ""}` : "Cihaz henüz gelmedi"}</dd></div>
         {r.karar && <div><dt className="text-xs text-muted">Karar</dt><dd className="font-bold">{KARAR_ADI[r.karar]}{r.yeniSeri ? ` → ${r.yeniSeri}` : ""}</dd></div>}
         {Object.keys(r.kullanilanParcalar).length > 0 && (
@@ -137,6 +142,46 @@ export default function RmaDetay({
         {r.fotograflar.length > 0 && <div><dt className="text-xs text-muted">Fotoğraflar</dt><dd>{r.fotograflar.join(", ")}</dd></div>}
       </dl>
 
+      <section aria-label="Ekler" className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <b className="text-[13px]">Ekler{r.ekler.length > 0 && ` (${r.ekler.length})`}</b>
+          <form className="ml-auto" onSubmit={(e) => {
+            e.preventDefault();
+            const f = e.currentTarget;
+            const veri = new FormData(f);
+            calistir(() => rmaEkEkle(r.id, veri), () => f.reset());
+          }}>
+            <label className={`${BUTON} inline-flex cursor-pointer items-center gap-1.5 border border-line-strong bg-card px-3 hover:bg-[#F4F5F0] has-disabled:opacity-50`}>
+              <Paperclip size={15} aria-hidden="true" /> {bekliyor ? "Yükleniyor…" : "Dosya ekle"}
+              <input name="dosyalar" type="file" multiple disabled={bekliyor} accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" className="sr-only"
+                onChange={(e) => e.currentTarget.form?.requestSubmit()} />
+            </label>
+          </form>
+        </div>
+        {r.ekler.length > 0 ? (
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {r.ekler.map((e) => (
+              <li key={e.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-line bg-bg">
+                <a href={e.veri} download={e.ad} target="_blank" rel="noreferrer" title={e.ad} className="flex flex-col">
+                  {e.tip.startsWith("image/") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={e.veri} alt={e.ad} className="h-20 w-full object-cover" />
+                  ) : (
+                    <span className="flex h-20 items-center justify-center text-muted"><FileText size={28} aria-hidden="true" /></span>
+                  )}
+                  <span className="truncate px-2 py-1.5 text-[11px] font-semibold">{e.ad}</span>
+                </a>
+                <button type="button" aria-label={`${e.ad} dosyasını sil`} disabled={bekliyor} onClick={() => calistir(() => rmaEkSil(r.id, e.id))}
+                  className="absolute right-1 top-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-white/90 text-err opacity-0 shadow-sm transition-opacity hover:bg-white focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50">
+                  <Trash2 size={14} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-xs text-muted">Henüz fotoğraf veya belge eklenmedi (arıza fotoğrafı, kargo irsaliyesi, ücret onay yazısı…).</p>}
+        {hata && <p role="alert" className="text-xs font-semibold text-err">{hata}</p>}
+      </section>
+
       <section aria-label="Garanti ve ücret" className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-[13px]">
           <b>Garanti ve ücret</b>
@@ -144,6 +189,7 @@ export default function RmaDetay({
           {!kapsam && r.ucret != null && (
             <span className="ml-auto flex items-center gap-2">
               <b className="tabular-nums">{tl(r.ucret)}</b>
+              <Chip ton={r.ucretOnay ? "ok" : "warn"}>{r.ucretOnay ? "Müşteri onayladı" : "Onay bekliyor"}</Chip>
               <Chip ton={r.ucretOdendi ? "ok" : "warn"}>{r.ucretOdendi ? "Tahsil edildi" : "Ödeme bekliyor"}</Chip>
             </span>
           )}
@@ -157,6 +203,11 @@ export default function RmaDetay({
                   <input type="number" min={0} step={100} value={ucret} onChange={(e) => setUcret(e.target.value)} className={`${GIRDI} w-28`} />
                 </label>
                 <button type="button" disabled={bekliyor} onClick={() => calistir(() => garantiKapsami(r.id, r.garantiElle, ucret ? Number(ucret) : null))} className={`${BUTON} border border-line-strong bg-card`}>Ücreti kaydet</button>
+                {!!r.ucret && (
+                  <button type="button" disabled={bekliyor} onClick={() => calistir(() => ucretOnayla(r.id, !r.ucretOnay))} className={`${BUTON} ${r.ucretOnay ? "text-info" : "border border-line-strong bg-card"}`}>
+                    {r.ucretOnay ? "Onayı geri al" : "Müşteri ücreti onayladı"}
+                  </button>
+                )}
                 {!!r.ucret && (
                   <button type="button" disabled={bekliyor} onClick={() => calistir(() => ucretOdendi(r.id, !r.ucretOdendi))} className={`${BUTON} ${r.ucretOdendi ? "text-info" : "bg-ink text-white hover:bg-ink-soft"}`}>
                     {r.ucretOdendi ? "Tahsilatı geri al" : "Ücret tahsil edildi"}
@@ -203,10 +254,11 @@ export default function RmaDetay({
               <span className="text-xs font-normal text-muted">Lisans yeni cihaza aktarılır, eski cihaz servise alınır.</span>
             </label>
           )}
+          {onayBekliyor(r) && (karar === "tamir" || karar === "degisim") && <p role="status" className="rounded-control bg-warn-bg px-3 py-2 text-xs font-semibold text-warn">Garanti dışı servis ücreti ({tl(r.ucret ?? 0)}) için müşteri onayı alınmadan bu karar verilemez; önce &quot;Garanti ve ücret&quot; bölümünden onayı işleyin.</p>}
           {karar === "iade" && <p className="text-xs text-muted">Cihaz bir siparişle eşleşirse Sipariş › İadeler&apos;e para iadesi kaydı açılır.</p>}
           {karar === "red" && <p className="text-xs text-muted">Arıza kapsam dışı (ör. kullanıcı hatası, fiziksel hasar). Cihaz işlem yapılmadan geri gönderilir.</p>}
           <input value={kararNotu} onChange={(e) => setKararNotu(e.target.value)} placeholder="Teknik açıklama (isteğe bağlı)" className={GIRDI} aria-label="Karar notu" />
-          <button type="button" disabled={bekliyor || (karar === "degisim" && !yeniSeri)} onClick={() => calistir(() => kararVer(r.id, { karar, parcalar, yeniSeri, not: kararNotu }), () => setKararNotu(""))} className={`${BUTON} self-end bg-ink text-white hover:bg-ink-soft`}>
+          <button type="button" disabled={bekliyor || (karar === "degisim" && !yeniSeri) || ((karar === "tamir" || karar === "degisim") && onayBekliyor(r))} onClick={() => calistir(() => kararVer(r.id, { karar, parcalar, yeniSeri, not: kararNotu }), () => setKararNotu(""))} className={`${BUTON} self-end bg-ink text-white hover:bg-ink-soft`}>
             Kararı kaydet
           </button>
         </section>

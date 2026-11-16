@@ -15,6 +15,9 @@ export const KARAR_ADI: Record<RmaKarari, string> = { tamir: "Tamir", degisim: "
 export const ARIZA_TIPLERI = ["Ekran / dokunmatik", "Bağlantı (OBD / K-Line)", "Güç / batarya", "Yazılım / firmware", "Kablo / aksesuar", "Fiziksel hasar", "Diğer"] as const;
 export type ArizaTipi = (typeof ARIZA_TIPLERI)[number];
 
+/** RMA'ya eklenen fotoğraf / belge. Şimdilik veri URL'si olarak bellekte; Supabase Storage bağlanınca `veri` yerine dosya yolu tutulur. */
+export type RmaEki = { id: string; ad: string; tip: string; boyut: number; veri: string; tarih: string };
+
 export type RmaKaydi = {
   id: string; // "RMA-0007"
   seriNo: string;
@@ -22,7 +25,8 @@ export type RmaKaydi = {
   sahip: { tur: "musteri" | "bayi"; id: string | null; ad: string };
   arizaTipi: ArizaTipi;
   ariza: string;
-  fotograflar: string[]; // şimdilik dosya adı ya da bağlantı
+  fotograflar: string[]; // eski kayıtlarda dosya adı ya da bağlantı
+  ekler: RmaEki[]; // yüklenen fotoğraf / belgeler
   garantide: boolean; // otomatik hesap (satış tarihi + garanti süresi)
   garantiElle: boolean | null; // yönetici kararıyla kapsama alındı / çıkarıldı
   ucret: number | null; // garanti dışıysa servis ücreti (TL, KDV hariç)
@@ -39,6 +43,7 @@ export type RmaKaydi = {
   gelis: { kanal: GelisKanali; takipNo: string } | null; // cihaz servise nasıl geldi (teslim alınırken)
   kargo: { firma: string; takipNo: string } | null; // müşteriye geri gönderim
   ucretOdendi: boolean; // garanti dışı servis ücreti tahsil edildi mi
+  ucretOnay: boolean; // garanti dışı servis ücretini müşteri onayladı mı (onaysız tamir / değişim kararı verilmez)
   oncelik: RmaOncelik;
 };
 
@@ -51,7 +56,7 @@ export type RmaOncelik = (typeof ONCELIKLER)[number];
 /** Hedef çözüm süresi (gün): açılıştan müşteriye gönderime */
 export const HEDEF_GUN = 7;
 
-const DEMO: Omit<RmaKaydi, "gelis" | "kargo" | "ucretOdendi" | "oncelik">[] = [
+const DEMO: Omit<RmaKaydi, "gelis" | "kargo" | "ucretOdendi" | "ucretOnay" | "oncelik" | "ekler">[] = [
   {
     id: "RMA-0006", seriNo: "EO1-2402-0612", model: "ONE", sahip: { tur: "musteri", id: "volant", ad: "Volant Lenkung Service" },
     arizaTipi: "Ekran / dokunmatik", ariza: "Ekranın sağ alt köşesi dokunmaya yanıt vermiyor.", fotograflar: ["ekran-sag-alt.jpg"],
@@ -79,15 +84,22 @@ const EK: Record<string, Partial<RmaKaydi>> = {
   "RMA-0004": { gelis: { kanal: "Kargo", takipNo: "UPS 1Z77A1" }, kargo: { firma: "UPS Express", takipNo: "1Z88F4E20444719921" } },
 };
 
-type Depo = { kayitlar: RmaKaydi[]; garantiAy: number };
+/** Cihaza tanınan ek garanti (uzatılmış garanti paketi, jest vb.): standart süreye eklenir */
+export type GarantiUzatma = { id: string; ay: number; tarih: string; not: string };
+export const UZATMA_AYLARI = [6, 12, 24, 36] as const;
+
+type Depo = { kayitlar: RmaKaydi[]; garantiAy: number; uzatmalar?: Record<string, GarantiUzatma[]> };
 const g = globalThis as { __embedraRma?: Depo };
 const DEPO = (g.__embedraRma ??= { kayitlar: structuredClone(DEMO) as RmaKaydi[], garantiAy: 24 });
+DEPO.uzatmalar ??= {};
 // Sonradan eklenen alanlar (bellekte eski kayıtlar varsa da tamamlanır)
 for (const r of DEPO.kayitlar) {
   const e = EK[r.id] ?? {};
   r.gelis ??= e.gelis ?? null;
   r.kargo ??= e.kargo ?? null;
   r.ucretOdendi ??= false;
+  r.ucretOnay ??= false;
+  r.ekler ??= [];
   r.oncelik ??= e.oncelik ?? "Normal";
 }
 
@@ -120,4 +132,14 @@ export async function rmayiGuncelle(id: string, f: (r: RmaKaydi) => void) {
 
 export async function getCihazRmalari(seriNo: string) {
   return DEPO.kayitlar.filter((r) => r.seriNo === seriNo || r.yeniSeri === seriNo);
+}
+
+export async function getGarantiUzatmalari(seriNo: string): Promise<GarantiUzatma[]> {
+  return DEPO.uzatmalar?.[seriNo] ?? [];
+}
+export async function garantiUzatmaEkle(seriNo: string, u: GarantiUzatma) {
+  (DEPO.uzatmalar ??= {})[seriNo] = [...(DEPO.uzatmalar[seriNo] ?? []), u];
+}
+export async function garantiUzatmaSil(seriNo: string, id: string) {
+  if (DEPO.uzatmalar?.[seriNo]) DEPO.uzatmalar[seriNo] = DEPO.uzatmalar[seriNo].filter((u) => u.id !== id);
 }

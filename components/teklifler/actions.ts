@@ -9,9 +9,10 @@ import { firsatAsamasiDepo, firsatiGuncelle, getFirsat, KAPALI_ASAMALAR } from "
 import { firsatAsamasiGuncelle } from "@/components/satis-hatti/actions";
 import { getFiyatListesi } from "@/components/operasyon/queries";
 import { musteriBulAdla, musteriyiGuncelle } from "@/components/musteriler/queries";
-import type { Kalem } from "@/components/siparisler/queries";
+import { firsattanSiparisAc, siparisiGuncelle, type Kalem } from "@/components/siparisler/queries";
 import { getTeklif, getTeklifler, sonrakiTeklifNo, teklifEkle, teklifiGuncelle, type Teklif, type TeklifKalemi } from "./queries";
-import { teklifIcerigi, teklifToplami } from "./ortak";
+import { odemeYontemiBul, siparisDisiKalemler, kalemAdi, teklifIcerigi, teklifToplami } from "./ortak";
+import { tl } from "@/lib/format";
 
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 const bugun = () => new Date().toISOString().slice(0, 10);
@@ -124,7 +125,8 @@ export type TeklifIslemSonucu = { teklif?: Teklif; hata?: string; musteri?: { id
 export async function teklifDurumuDegistir(id: string, durum: "gonderildi" | "kabul" | "red"): Promise<TeklifIslemSonucu> {
   const t = await getTeklif(id);
   if (!t) return { hata: "Teklif bulunamadı." };
-  const izinli: Record<typeof durum, Teklif["durum"][]> = { gonderildi: ["taslak"], kabul: ["gonderildi"], red: ["gonderildi"] };
+  // Taslak da doğrudan kabul edilebilir (telefonda/yüz yüze onay): önce gönderildi sayılır, sonra siparişe dönüşür
+  const izinli: Record<typeof durum, Teklif["durum"][]> = { gonderildi: ["taslak"], kabul: ["taslak", "gonderildi"], red: ["gonderildi"] };
   if (!izinli[durum].includes(t.durum)) return { hata: "Bu teklifin durumu değiştirilemez." };
   if (durum === "kabul" && t.gecerlilik < bugun()) return { hata: "Teklifin süresi dolmuş; revize edip yeniden gönderin." };
 
@@ -149,6 +151,12 @@ export async function teklifDurumuDegistir(id: string, durum: "gonderildi" | "ka
   }
 
   // Kabul: fırsat teklifteki içerik ve tutarla kazanılır, sipariş teklif kalemleriyle açılır
+  const kalemler: Kalem[] = t.kalemler.flatMap((k): Kalem[] =>
+    k.tur === "cihaz" ? [{ tur: "cihaz", model: k.model, adet: k.adet }] : k.tur === "lisans" ? [{ tur: "lisans", paket: k.paket, adet: k.adet, sureAy: 12 }] : [],
+  );
+  if (!kalemler.length) return { hata: "Sipariş açmak için teklifte en az bir cihaz veya lisans kalemi olmalı." };
+  if (t.durum === "taslak") await gonderildiIsle(t);
+
   const { net } = teklifToplami(t);
   const firsat = await firsatiGuncelle(t.firsatId, (x) => {
     x.tutar = net;
@@ -157,16 +165,41 @@ export async function teklifDurumuDegistir(id: string, durum: "gonderildi" | "ka
     x.sonrakiTarih = bugun();
   });
   if (!firsat) return { hata: "Fırsat bulunamadı." };
-  const kalemler: Kalem[] = t.kalemler.flatMap((k): Kalem[] =>
-    k.tur === "cihaz" ? [{ tur: "cihaz", model: k.model, adet: k.adet }] : k.tur === "lisans" ? [{ tur: "lisans", paket: k.paket, adet: k.adet, sureAy: 12 }] : [],
-  );
-  const sonuc = firsat.asama === "kazanildi" ? {} : await firsatAsamasiGuncelle({ ...firsat }, "kazanildi", undefined, kalemler);
+  let sonuc: { musteri?: { id: string; ad: string; yeni: boolean; siparisNo?: string } } = {};
+  if (firsat.asama !== "kazanildi") sonuc = await firsatAsamasiGuncelle({ ...firsat }, "kazanildi", undefined, kalemler);
+  let siparisNo = sonuc.musteri?.siparisNo ?? null;
+
+  // Fırsat daha önce kazanılmışsa (ör. manuel) sipariş yine de teklifle açılır; aynı teklif iki kez sipariş açmaz
+  if (!siparisNo) {
+    const m = await musteriBulAdla(t.firma);
+    const s = await firsattanSiparisAc(
+      { firma: t.firma, musteriId: m?.id ?? "", ulke: m?.ulke ?? (t.konum.split(",").pop()?.trim() || "Türkiye"), konum: t.konum, icerik: teklifIcerigi(t.kalemler), tutar: net },
+      kalemler,
+    );
+    siparisNo = s?.id ?? null;
+    if (m && !sonuc.musteri) sonuc = { musteri: { id: m.id, ad: m.ad, yeni: false, siparisNo: siparisNo ?? undefined } };
+  }
+
+  // Siparişe teklifin ticari şartlarını işle (iskonto, ödeme yöntemi, siparişe giremeyen özel kalemler)
+  if (siparisNo) {
+    const ozel = siparisDisiKalemler(t.kalemler);
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const zaman = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    await siparisiGuncelle(siparisNo, (s) => {
+      s.teklifNo = t.id;
+      s.odeme = odemeYontemiBul(t.odemeSartlari);
+      s.notlar.push({ metin: `Teklif ${t.no} kabul edildi · ${t.odemeSartlari} · ${t.teslimSartlari}${t.iskonto ? ` · %${t.iskonto} iskonto uygulandı` : ""}`, zaman, sistem: true });
+      if (ozel.length) s.notlar.push({ metin: `Teklifteki özel kalemler faturaya ayrıca işlenecek: ${ozel.map((k) => `${kalemAdi(k)} (${tl(k.adet * k.birimFiyat)})`).join(", ")}`, zaman, sistem: true });
+    });
+  }
   await teklifiGuncelle(id, (x) => {
     x.durum = "kabul";
     x.sonuc = bugun();
-    x.siparisNo = sonuc.musteri?.siparisNo ?? null;
+    x.siparisNo = siparisNo;
   });
   await musteriyeIsle(t, `Teklif kabul edildi · ${t.no}`);
+  revalidatePath("/siparisler");
   yenile(id);
   return { teklif: (await getTeklif(id))!, musteri: sonuc.musteri };
 }

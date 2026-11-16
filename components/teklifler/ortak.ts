@@ -24,6 +24,16 @@ export function teklifToplami(t: Pick<Teklif, "kalemler" | "iskonto" | "kdv">) {
   return { ara, iskonto, net, kdv, toplam: net + kdv };
 }
 
+/** Ödeme şartları metninden sipariş ödeme yöntemi: "… · Kartla peşin" → Kart */
+export function odemeYontemiBul(sartlar: string): "Kart" | "Havale/EFT" | "Proforma" {
+  if (/proforma/i.test(sartlar)) return "Proforma";
+  if (/kart/i.test(sartlar)) return "Kart";
+  return "Havale/EFT";
+}
+
+/** Siparişe aktarılamayan (stok kodu olmayan) özel kalemler: sipariş notuna yazılır */
+export const siparisDisiKalemler = (kalemler: TeklifKalemi[]) => kalemler.filter((k) => k.tur === "ozel");
+
 /** Gönderilmiş ama geçerlilik tarihi geçmiş teklif */
 export function suresiDoldu(t: Pick<Teklif, "durum" | "gecerlilik">, bugun: string) {
   return t.durum === "gonderildi" && t.gecerlilik < bugun;

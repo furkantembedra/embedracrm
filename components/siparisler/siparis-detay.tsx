@@ -116,6 +116,7 @@ export default function SiparisDetay({
 
       <section className="flex flex-col gap-2 text-[13px]">
         <h3 className="mb-0.5 text-sm font-extrabold">Sevkiyat &amp; fatura</h3>
+        {s.teklifNo && <Satir ad="Teklif"><Link href={`/teklifler/${s.teklifNo}`} className="font-mono text-xs font-semibold text-info hover:underline">{s.teklifNo}</Link></Satir>}
         <Satir ad="Kargo">{s.kargo ? <b>{s.kargo.firma}</b> : <span className="text-muted">{s.kalemler.every((k) => k.tur === "lisans") ? "Dijital teslimat" : "Henüz verilmedi"}</span>}</Satir>
         {s.kargo && <Satir ad="Takip no"><span className="font-mono text-xs font-semibold">{s.kargo.takipNo}</span></Satir>}
         <Satir ad="Fatura">

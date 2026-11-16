@@ -5,7 +5,7 @@
 import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Copy, Printer, Send, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, PackagePlus, Printer, Send, X } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
@@ -13,7 +13,7 @@ import { useBugun } from "@/lib/use-bugun";
 import type { FiyatListesi } from "@/lib/urunler";
 import TeklifFormu from "./teklif-formu";
 import { teklifDurumuDegistir } from "./actions";
-import { kalemAdi, kalemKdvli, suresiDoldu, teklifToplami } from "./ortak";
+import { kalemAdi, kalemKdvli, odemeYontemiBul, siparisDisiKalemler, suresiDoldu, teklifToplami } from "./ortak";
 import { DURUM_ADI, type Teklif } from "./queries";
 import { DURUM_TONU, tarihYaz } from "./teklif-listesi";
 
@@ -29,6 +29,9 @@ export default function TeklifDetay({ teklif, surumler, fiyatListesi }: { teklif
   const [bekliyor, baslat] = useTransition();
   const [hata, setHata] = useState<string | null>(null);
   const [mesaj, setMesaj] = useState<string | null>(null);
+  const [siparisNo, setSiparisNo] = useState<string | null>(null);
+  const [onay, setOnay] = useState(false);
+  const onayKapat = useCallback(() => setOnay(false), []);
   const [revize, setRevize] = useState(false);
   const kapat = useCallback(() => setRevize(false), []);
   const revizeEdildi = useCallback((y: Teklif) => router.push(`/teklifler/${y.id}`), [router]);
@@ -37,8 +40,12 @@ export default function TeklifDetay({ teklif, surumler, fiyatListesi }: { teklif
     setHata(null);
     baslat(async () => {
       const s = await teklifDurumuDegistir(t.id, durum);
+      setOnay(false);
       if (s.hata) setHata(s.hata);
-      else if (durum === "kabul") setMesaj(s.musteri?.siparisNo ? `Fırsat kazanıldı, ödeme bekleyen sipariş açıldı: #${s.musteri.siparisNo}` : "Fırsat kazanıldı.");
+      else if (durum === "kabul") {
+        setSiparisNo(s.teklif?.siparisNo ?? null);
+        setMesaj(s.teklif?.siparisNo ? `Teklif kabul edildi, fırsat kazanıldı ve ödeme bekleyen sipariş açıldı: ${s.teklif.siparisNo}` : "Teklif kabul edildi, fırsat kazanıldı.");
+      }
       router.refresh();
     });
   }
@@ -59,17 +66,22 @@ export default function TeklifDetay({ teklif, surumler, fiyatListesi }: { teklif
             </button>
           )}
           {t.durum === "taslak" && (
-            <button type="button" disabled={bekliyor} onClick={() => islem("gonderildi")} className={`${BUTON} bg-ink text-white hover:bg-ink-soft`}>
-              <Send size={16} aria-hidden="true" /> Gönderildi işaretle
-            </button>
+            <>
+              <button type="button" disabled={bekliyor} onClick={() => islem("gonderildi")} className={`${BUTON} border border-line-strong bg-card hover:bg-[#F4F5F0]`}>
+                <Send size={16} aria-hidden="true" /> Gönderildi işaretle
+              </button>
+              <button type="button" disabled={bekliyor} onClick={() => setOnay(true)} className={`${BUTON} bg-lime text-ink hover:brightness-95`}>
+                <PackagePlus size={16} aria-hidden="true" /> Kabul et, siparişe dönüştür
+              </button>
+            </>
           )}
           {t.durum === "gonderildi" && (
             <>
               <button type="button" disabled={bekliyor} onClick={() => islem("red")} className={`${BUTON} border border-err text-err hover:bg-err-bg`}>
                 <X size={16} aria-hidden="true" /> Reddedildi
               </button>
-              <button type="button" disabled={bekliyor || doldu} title={doldu ? "Süresi dolan teklif önce revize edilmeli" : undefined} onClick={() => islem("kabul")} className={`${BUTON} bg-lime text-ink hover:brightness-95`}>
-                <Check size={16} aria-hidden="true" /> Kabul edildi
+              <button type="button" disabled={bekliyor || doldu} title={doldu ? "Süresi dolan teklif önce revize edilmeli" : undefined} onClick={() => setOnay(true)} className={`${BUTON} bg-lime text-ink hover:brightness-95`}>
+                <PackagePlus size={16} aria-hidden="true" /> Kabul et, siparişe dönüştür
               </button>
             </>
           )}
@@ -79,6 +91,7 @@ export default function TeklifDetay({ teklif, surumler, fiyatListesi }: { teklif
       {(hata || mesaj) && (
         <p role={hata ? "alert" : "status"} className={`rounded-control px-4 py-3 text-sm font-semibold print:hidden ${hata ? "bg-err-bg text-err" : "bg-lime-bg text-[#3A4D00]"}`}>
           {hata ?? mesaj}
+          {!hata && siparisNo && <> <Link href={`/siparisler/${siparisNo}`} className="font-bold underline">Siparişi aç →</Link></>}
         </p>
       )}
 
@@ -171,6 +184,34 @@ export default function TeklifDetay({ teklif, surumler, fiyatListesi }: { teklif
           {t.siparisNo && <Link href={`/siparisler/${t.siparisNo}`} className="text-[13px] font-bold text-info hover:underline">Sipariş #{t.siparisNo} →</Link>}
         </aside>
       </div>
+
+      <Modal acik={onay} onKapat={onayKapat} baslik="Teklifi siparişe dönüştür" aciklama={`${t.no} · ${t.firma}`}>
+        <div className="flex flex-col gap-4 text-sm">
+          <ul className="flex flex-col gap-1.5 rounded-control bg-card p-4">
+            {t.kalemler.map((k, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span>{k.adet}× {kalemAdi(k)}</span>
+                <span className="tabular-nums text-muted">{tl(k.adet * k.birimFiyat)}</span>
+              </li>
+            ))}
+            <li className="mt-1 flex justify-between gap-3 border-t border-line pt-2 font-extrabold">
+              <span>Genel toplam (KDV dahil)</span><span className="tabular-nums">{tl(toplam.toplam)}</span>
+            </li>
+          </ul>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-[13px] text-[#474A42]">
+            <li>Fırsat <b>kazanıldı</b> olarak işaretlenir, müşteri kaydı yoksa oluşturulur.</li>
+            <li>Ödeme yöntemi <b>{odemeYontemiBul(t.odemeSartlari)}</b> olan, <b>ödeme bekleyen</b> sipariş açılır.</li>
+            {t.durum === "taslak" && <li>Teklif önce <b>gönderildi</b> sayılır.</li>}
+            {siparisDisiKalemler(t.kalemler).length > 0 && <li>Özel kalemler sipariş kalemi olmaz; faturaya ayrıca işlenmek üzere sipariş notuna yazılır.</li>}
+          </ul>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onayKapat} className={`${BUTON} border border-line-strong bg-card hover:bg-[#F4F5F0]`}>Vazgeç</button>
+            <button type="button" disabled={bekliyor} onClick={() => islem("kabul")} className={`${BUTON} bg-ink text-white hover:bg-ink-soft`}>
+              <Check size={16} aria-hidden="true" /> Onayla ve sipariş aç
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal acik={revize} onKapat={kapat} baslik="Teklifi revize et" aciklama={`${t.no} → v${t.versiyon + 1}`}>
         <TeklifFormu onceki={t} fiyatListesi={fiyatListesi} onKaydedildi={revizeEdildi} onVazgec={kapat} />

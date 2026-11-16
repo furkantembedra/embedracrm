@@ -3,12 +3,27 @@
 // Operasyon › Malzeme ihtiyacı: açık siparişler (+ olası fırsatlar) ve planlı üretim için hangi bileşenden
 // ne kadar eksik olduğunu gösterir; seçilen satırlar için tedarik siparişi / iç üretim emri açar.
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Download } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { sayi } from "@/lib/format";
 import { URUN_BILGI, type CihazModeli } from "@/lib/urunler";
 import { malzemeIhtiyaci, type IhtiyacGirdisi } from "./ihtiyac";
 
 const UFUKLAR = [7, 30, 90];
+
+/** Satın alma listesini Excel'de açılacak CSV olarak indirir (UTF-8 BOM, noktalı virgül) */
+function csvIndir(satirlar: { kod: string; ad: string; kaynak: string; gereken: number; stok: number; gelen: number; netEksik: number; oneri: number }[]) {
+  const baslik = ["Kod", "Bileşen", "Kaynak", "Gereken", "Stokta", "Gelecek", "Net eksik", "Önerilen sipariş"];
+  const satir = satirlar.map((b) => [b.kod, b.ad, b.kaynak === "ic" ? "İç üretim" : "Dış tedarik", b.gereken, b.stok, b.gelen, b.netEksik, b.oneri]);
+  const metin = [baslik, ...satir].map((r) => r.map((h) => `"${String(h).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const url = URL.createObjectURL(new Blob(["\uFEFF" + metin], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "malzeme-ihtiyaci.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function MalzemeIhtiyaci({
   girdi,
@@ -43,6 +58,12 @@ export default function MalzemeIhtiyaci({
           Olası talebi dahil et <span className="font-normal text-muted">(teklif %40, müzakere %60)</span>
         </label>
       </div>
+
+      {sonuc.geciken.length > 0 && (
+        <p role="status" className="rounded-control bg-warn-bg px-4 py-2.5 text-[13px] font-semibold text-warn">
+          {sonuc.geciken.length} tedarik siparişinin beklenen teslim tarihi geçti: {sonuc.geciken.map((t) => `${t.kalemAdi} (${t.tedarikci})`).join(", ")}. Hesap bu kalemleri hâlâ &quot;gelecek&quot; sayıyor.
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1 rounded-card border border-line bg-card p-4">
@@ -88,9 +109,35 @@ export default function MalzemeIhtiyaci({
         </div>
       </section>
 
+      <section aria-label="Talebin kaynağı" className="flex flex-col gap-3 rounded-card border border-line bg-card p-5">
+        <h2 className="text-[17px] font-extrabold">Talebi oluşturan siparişler{olasi ? " ve fırsatlar" : ""}</h2>
+        {(() => {
+          const liste = sonuc.kaynaklar.filter((k) => k.tur === "siparis" || olasi);
+          if (!liste.length) return <p className="text-[13px] text-muted">Seri numarası atanmamış açık sipariş yok; talep stoktan karşılanıyor.</p>;
+          return (
+            <ul className="grid gap-x-6 sm:grid-cols-2">
+              {liste.map((k) => (
+                <li key={`${k.tur}-${k.id}-${k.model}`} className="flex items-center justify-between gap-3 border-b border-bg py-2 text-[13px]">
+                  <span className="min-w-0">
+                    <Link href={k.tur === "siparis" ? `/siparisler/${k.id}` : "/satis-hatti"} className="font-bold text-info hover:underline">{k.tur === "siparis" ? k.id : "Fırsat"}</Link>
+                    <span className="ml-1.5 text-[#474A42]">{k.ad}</span>
+                    <span className="block text-xs text-muted">{k.durum}{k.olasilik ? ` · %${Math.round(k.olasilik * 100)} olasılık` : ""}</span>
+                  </span>
+                  <b className="shrink-0 tabular-nums">{k.adet}× {URUN_BILGI[k.model as CihazModeli].ad}</b>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
+      </section>
+
       <section aria-label="Bileşen ihtiyacı" className="flex flex-col gap-3 rounded-card border border-line bg-card p-5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="mr-auto text-[17px] font-extrabold">Bileşen ihtiyacı · {sonuc.sinir.split("-").reverse().join(".")} tarihine kadar</h2>
+          <button type="button" onClick={() => csvIndir(sonuc.bilesenler)}
+            className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-control border border-line-strong px-3 text-[13px] font-bold hover:bg-[#F4F5F0]">
+            <Download size={15} aria-hidden="true" /> CSV indir
+          </button>
           <button type="button" disabled={!onerilen.length} onClick={() => setSecili(Object.fromEntries(onerilen.map((b) => [b.kod, b.oneri])))}
             className="min-h-10 cursor-pointer rounded-control border border-line-strong px-3 text-[13px] font-bold hover:bg-[#F4F5F0] disabled:cursor-not-allowed disabled:opacity-50">
             Önerilenleri seç
@@ -101,10 +148,10 @@ export default function MalzemeIhtiyaci({
           </button>
         </div>
         <div className="relative overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs font-bold text-muted">
-                <th className="py-2 pr-2"><span className="sr-only">Seç</span></th><th className="py-2 pr-3">Bileşen</th><th className="py-2 pr-3">Kaynak</th>
+                <th className="py-2 pr-2"><span className="sr-only">Seç</span></th><th className="py-2 pr-3">Bileşen</th><th className="py-2 pr-3">Kaynak</th><th className="py-2 pr-3">Durum</th>
                 <th className="py-2 pr-3 text-right">Gereken</th><th className="py-2 pr-3 text-right">Stokta</th><th className="py-2 pr-3 text-right">Gelecek</th>
                 <th className="py-2 pr-3 text-right">Net eksik</th><th className="py-2 text-right">Sipariş adedi</th>
               </tr>
@@ -125,6 +172,7 @@ export default function MalzemeIhtiyaci({
                     </td>
                     <td className="py-2 pr-3"><b>{b.ad}</b><span className="block text-xs text-muted">{b.kod} · kritik {b.kritik} / hedef {b.hedef}</span></td>
                     <td className="py-2 pr-3"><Chip ton={b.kaynak === "ic" ? "info" : "gray"}>{b.kaynak === "ic" ? "İç üretim" : "Dış tedarik"}</Chip></td>
+                    <td className="py-2 pr-3"><Chip ton={b.netEksik ? "err" : b.oneri ? "warn" : "ok"}>{b.netEksik ? "Eksik" : b.oneri ? "Kritik altı" : "Yeterli"}</Chip></td>
                     <td className="py-2 pr-3 text-right tabular-nums">{sayi(b.gereken)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{sayi(b.stok)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{b.gelen ? `+${sayi(b.gelen)}` : "—"}</td>

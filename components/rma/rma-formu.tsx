@@ -4,9 +4,9 @@
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useFormGonder } from "@/lib/use-form-gonder";
 import Chip from "@/components/ui/chip";
-import { rmaAc, seriSorgula, type RmaFormDurumu } from "./actions";
+import { garantiUzat, garantiUzatmaKaldir, rmaAc, seriSorgula, type GarantiUzatSonucu, type RmaFormDurumu } from "./actions";
 import type { GarantiBilgisi } from "./garanti";
-import { ARIZA_TIPLERI, ONCELIKLER, type RmaKaydi } from "./queries";
+import { ARIZA_TIPLERI, ONCELIKLER, UZATMA_AYLARI, type RmaKaydi } from "./queries";
 import { tarihYaz } from "./ortak";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
@@ -22,10 +22,57 @@ export function GarantiKarti({ b }: { b: GarantiBilgisi }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
         <dt className="text-muted">Sahibi</dt><dd className="font-semibold">{b.sahip.ad}{b.bayi && b.sahip.tur === "musteri" ? ` · bayi: ${b.bayi}` : ""}</dd>
         <dt className="text-muted">Satış</dt><dd>{b.satisTarihi ? `${tarihYaz(b.satisTarihi)} (${b.satisKaynagi})` : "Bilinmiyor"}</dd>
-        <dt className="text-muted">Garanti bitişi</dt><dd>{b.garantiBitis ? tarihYaz(b.garantiBitis) : "—"}</dd>
+        <dt className="text-muted">Garanti bitişi</dt>
+        <dd>{b.garantiBitis ? tarihYaz(b.garantiBitis) : "—"}{b.uzatmalar.length > 0 && <span className="text-xs text-muted"> · standart {b.standartBitis ? tarihYaz(b.standartBitis) : "—"} + {b.uzatmalar.reduce((t, u) => t + u.ay, 0)} ay uzatma</span>}</dd>
         <dt className="text-muted">Lisans</dt><dd>{b.lisans.plan}{b.lisans.bitis ? ` · ${tarihYaz(b.lisans.bitis)}'e kadar` : " · yok"}</dd>
         <dt className="text-muted">Geçmiş RMA</dt><dd>{b.rmalar.length ? b.rmalar.map((r) => r.id).join(", ") : "Yok"}</dd>
       </dl>
+    </div>
+  );
+}
+
+/** Cihaza ek garanti tanır / kaldırır. İçinde <form> yoktur (garanti sorgu formunun içinde de kullanılır). */
+export function GarantiUzatma({ b, onSonuc }: { b: GarantiBilgisi; onSonuc: (s: GarantiUzatSonucu) => void }) {
+  const [acik, setAcik] = useState(false);
+  const [ay, setAy] = useState<number>(12);
+  const [not, setNot] = useState("");
+  const [hata, setHata] = useState<string | null>(null);
+  const [bekliyor, baslat] = useTransition();
+  const calistir = (is: () => Promise<GarantiUzatSonucu>, sonra?: () => void) =>
+    baslat(async () => {
+      const s = await is();
+      if (s.hata) return setHata(s.hata);
+      setHata(null);
+      sonra?.();
+      onSonuc(s);
+    });
+  const girdi = "min-h-10 min-w-0 rounded-control border border-line-strong bg-card px-3 text-[13px] font-medium outline-none focus:border-ink";
+  return (
+    <div className="flex flex-col gap-2 text-[13px]">
+      {b.uzatmalar.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {b.uzatmalar.map((u) => (
+            <li key={u.id} className="flex items-center gap-2 text-xs">
+              <Chip ton="lime">+{u.ay} ay</Chip>
+              <span className="min-w-0 flex-1 truncate text-muted">{tarihYaz(u.tarih)}{u.not ? ` · ${u.not}` : ""}</span>
+              <button type="button" disabled={bekliyor} aria-label={`+${u.ay} ay uzatmayı kaldır`} onClick={() => calistir(() => garantiUzatmaKaldir(b.seriNo, u.id))} className="cursor-pointer font-bold text-err hover:underline disabled:opacity-50">Kaldır</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {acik ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Uzatma süresi" value={ay} onChange={(e) => setAy(Number(e.target.value))} className={girdi}>
+            {UZATMA_AYLARI.map((a) => <option key={a} value={a}>+{a} ay</option>)}
+          </select>
+          <input aria-label="Uzatma notu" value={not} maxLength={200} onChange={(e) => setNot(e.target.value)} placeholder="Neden? (paket satışı, jest…)" className={`${girdi} flex-[1_1_160px]`} />
+          <button type="button" disabled={bekliyor} onClick={() => calistir(() => garantiUzat(b.seriNo, ay, not), () => { setAcik(false); setNot(""); })} className="min-h-10 cursor-pointer rounded-control bg-ink px-4 text-[13px] font-bold text-white hover:bg-ink-soft disabled:opacity-50">Uzat</button>
+          <button type="button" onClick={() => { setAcik(false); setHata(null); }} className="min-h-10 cursor-pointer px-2 text-[13px] font-bold text-muted hover:underline">Vazgeç</button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setAcik(true)} className="w-fit cursor-pointer font-bold text-info hover:underline">Garantiyi uzat →</button>
+      )}
+      {hata && <p role="alert" className="text-xs font-semibold text-err">{hata}</p>}
     </div>
   );
 }
@@ -122,9 +169,11 @@ export default function RmaFormu({
           <textarea name="ariza" rows={3} maxLength={1000} placeholder="Müşterinin tarif ettiği sorun, ne zaman başladığı…" className="rounded-control border border-line-strong bg-card px-3 py-2.5 text-sm font-medium outline-none focus:border-ink aria-[invalid=true]:border-err" aria-invalid={!!h.ariza} />
           {h.ariza && <span className="text-xs font-semibold text-err">{h.ariza}</span>}
         </label>
-        <label className={ALAN}>
-          Fotoğraflar <span className="font-normal text-muted">(dosya adı / bağlantı, virgülle)</span>
-          <input name="fotograflar" placeholder="ekran-catlak.jpg" className={GIRDI} />
+        <label className={`${ALAN} sm:col-span-2`}>
+          Fotoğraf / belge <span className="font-normal text-muted">(JPG, PNG, WEBP, GIF veya PDF · dosya başına en çok 1,5 MB)</span>
+          <input name="dosyalar" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" aria-invalid={!!h.dosyalar}
+            className="min-h-11 rounded-control border border-dashed border-line-strong bg-card px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-ink file:px-3 file:py-1.5 file:text-[13px] file:font-bold file:text-white" />
+          {h.dosyalar && <span className="text-xs font-semibold text-err">{h.dosyalar}</span>}
         </label>
         {bilgi && !bilgi.garantide && (
           <label className={ALAN}>

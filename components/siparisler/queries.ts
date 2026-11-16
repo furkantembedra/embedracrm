@@ -24,6 +24,7 @@ export type Siparis = {
   ulke: string;
   adres: string;
   bayiId?: string | null; // bayi stoğu siparişi
+  teklifNo?: string | null; // siparişin açıldığı kabul edilmiş teklif ("TKL-2026-0001")
   kalemler: Kalem[];
   tutar: number; // KDV hariç
   paraBirimi: ParaBirimi;

@@ -12,11 +12,13 @@ import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { csvIndir } from "@/lib/disa-aktar";
 import { useBugun } from "@/lib/use-bugun";
-import { garantiSuresiKaydet, seriSorgula, type RmaIslemSonucu } from "./actions";
+import CihazDetay from "@/components/cihaz-lisans/cihaz-detay";
+import type { Cihaz } from "@/components/cihaz-lisans/queries";
+import { cihazGetir, garantiSuresiKaydet, seriSorgula, type RmaIslemSonucu } from "./actions";
 import type { GarantiBilgisi } from "./garanti";
 import { ADIM_ADI, ARIZA_TIPLERI, HEDEF_GUN, KARAR_ADI, type RmaKaydi, type RmaKarari } from "./queries";
-import { acikMi, adimEtiketi, adimTonu, gunSay, kapsamda, tarihYaz } from "./ortak";
-import RmaFormu, { GarantiKarti } from "./rma-formu";
+import { acikMi, adimEtiketi, adimTonu, gunSay, kapsamda, tarihYaz, tekrarSayisi } from "./ortak";
+import RmaFormu, { GarantiKarti, GarantiUzatma } from "./rma-formu";
 import RmaDetay from "./rma-detay";
 
 type Kart = "talep" | "inceleme" | "karar" | "gonderim" | "tamamlandi" | "geciken" | "ucret";
@@ -53,7 +55,7 @@ function Dagilim({ baslik, veri }: { baslik: string; veri: { ad: string; n: numb
   );
 }
 
-function BilgiPaneli({ r }: { r: RmaKaydi }) {
+function BilgiPaneli({ r, onCihazAc, onListe }: { r: RmaKaydi; onCihazAc: (seriNo: string) => void; onListe: (s: RmaIslemSonucu) => void }) {
   const [bilgi, setBilgi] = useState<{ seri: string; b: GarantiBilgisi | null } | null>(null);
   useEffect(() => {
     let iptal = false;
@@ -64,10 +66,10 @@ function BilgiPaneli({ r }: { r: RmaKaydi }) {
   return (
     <aside aria-label="Cihaz ve garanti" className="flex w-full flex-col gap-4 rounded-card border border-line bg-card p-5">
       <h2 className="text-[15px] font-extrabold">Cihaz ve garanti</h2>
-      {b === undefined ? <div aria-busy="true" className="h-40 animate-pulse rounded-xl bg-bg motion-reduce:animate-none" /> : b ? <GarantiKarti b={b} /> : <p className="text-sm text-muted">Cihaz kaydı bulunamadı.</p>}
+      {b === undefined ? <div aria-busy="true" className="h-40 animate-pulse rounded-xl bg-bg motion-reduce:animate-none" /> : b ? <><GarantiKarti b={b} /><GarantiUzatma b={b} onSonuc={(s) => { if (s.bilgi) setBilgi({ seri: r.seriNo, b: s.bilgi }); onListe({ liste: s.liste }); }} /></> : <p className="text-sm text-muted">Cihaz kaydı bulunamadı.</p>}
       <div className="flex flex-col gap-1.5 text-[13px]">
-        <Link href={`/cihaz-lisans/${r.seriNo}`} className="font-bold text-info hover:underline">Cihaz kaydını aç →</Link>
-        {r.yeniSeri && <Link href={`/cihaz-lisans/${r.yeniSeri}`} className="font-bold text-info hover:underline">Verilen cihaz {r.yeniSeri} →</Link>}
+        <button type="button" onClick={() => onCihazAc(r.seriNo)} className="w-fit cursor-pointer font-bold text-info hover:underline">Cihaz kaydını aç →</button>
+        {r.yeniSeri && <button type="button" onClick={() => onCihazAc(r.yeniSeri!)} className="w-fit cursor-pointer font-bold text-info hover:underline">Verilen cihaz {r.yeniSeri} →</button>}
         {r.sahip.tur === "musteri" && r.sahip.id && <Link href={`/musteriler/${r.sahip.id}`} className="font-bold text-info hover:underline">Müşteri: {r.sahip.ad} →</Link>}
         {r.sahip.tur === "bayi" && <Link href="/bayiler" className="font-bold text-info hover:underline">Bayi: {r.sahip.ad} →</Link>}
         {b?.siparisId && <Link href={`/siparisler/${b.siparisId}`} className="font-bold text-info hover:underline">Satış siparişi #{b.siparisId} →</Link>}
@@ -107,6 +109,12 @@ export default function RmaGorunumu(p: {
   const istenen = useSearchParams().get("kayit");
   const [secili, setSecili] = useState<string | null>(istenen ?? p.rmalar.find(acikMi)?.id ?? null);
   const [yeni, setYeni] = useState<string | null>(null);
+  const [cihaz, setCihaz] = useState<Cihaz | "yukleniyor" | "yok" | null>(null);
+  const cihazAc = useCallback((seriNo: string) => {
+    setCihaz("yukleniyor");
+    cihazGetir(seriNo).then((c) => setCihaz(c ?? "yok"));
+  }, []);
+  const cihazKapat = useCallback(() => setCihaz(null), []);
   const [sorgu, setSorgu] = useState("");
   const [sonuc, setSonuc] = useState<GarantiBilgisi | { hata: string } | null>(null);
   const [garantiAy, setGarantiAy] = useState(p.garantiAy);
@@ -228,6 +236,7 @@ export default function RmaGorunumu(p: {
         ) : (
           <div className="flex w-full flex-col gap-2">
             <GarantiKarti b={sonuc} />
+            <GarantiUzatma b={sonuc} onSonuc={(s) => { if (s.bilgi) setSonuc(s.bilgi); guncellendi({ liste: s.liste }); }} />
             <div className="flex gap-3">
               <button type="button" onClick={() => setYeni(sonuc.seriNo)} className="text-[13px] font-bold text-info hover:underline">Bu cihaz için RMA aç →</button>
               <button type="button" onClick={() => setSonuc(null)} className="text-[13px] font-bold text-muted hover:underline">Kapat</button>
@@ -281,6 +290,7 @@ export default function RmaGorunumu(p: {
                     <span className="flex flex-wrap gap-1">
                       <Chip ton={adimTonu(r)}>{adimEtiketi(r)}</Chip>
                       {!kapsamda(r) && <Chip ton="warn">{ucretBekliyor(r) ? "Ücret bekliyor" : "Garanti dışı"}</Chip>}
+                      {tekrarSayisi(r, rmalar) > 0 && <Chip ton="warn">Tekrar arıza</Chip>}
                     </span>
                   </button>
                 </li>
@@ -292,7 +302,7 @@ export default function RmaGorunumu(p: {
 
         <div className="flex min-w-0 flex-[2_1_480px]">
           {seciliKayit ? (
-            <RmaDetay key={seciliKayit.id} rma={seciliKayit} bugun={bugun} bilesenler={p.bilesenler} havuz={p.havuz} kargoFirmalari={p.kargoFirmalari} onGuncellendi={guncellendi} />
+            <RmaDetay key={seciliKayit.id} rma={seciliKayit} onCihazAc={cihazAc} tekrar={tekrarSayisi(seciliKayit, rmalar)} bugun={bugun} bilesenler={p.bilesenler} havuz={p.havuz} kargoFirmalari={p.kargoFirmalari} onGuncellendi={guncellendi} />
           ) : (
             <div className="flex w-full flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line-strong bg-card p-10 text-center text-sm text-muted">Soldan bir kayıt seçin ya da yeni RMA açın.</div>
           )}
@@ -300,7 +310,7 @@ export default function RmaGorunumu(p: {
 
         {seciliKayit && (
           <div className="flex min-w-0 flex-[1_1_260px]">
-            <BilgiPaneli r={seciliKayit} />
+            <BilgiPaneli r={seciliKayit} onCihazAc={cihazAc} onListe={guncellendi} />
           </div>
         )}
       </div>
@@ -328,6 +338,10 @@ export default function RmaGorunumu(p: {
           <Dagilim baslik="Karar dağılımı" veri={analiz.karar} />
         </div>
       </section>
+
+      <Modal acik={cihaz !== null} onKapat={cihazKapat} baslik="Cihaz kaydı" aciklama={typeof cihaz === "object" && cihaz ? cihaz.seriNo : undefined}>
+        {cihaz === "yok" ? <p className="py-6 text-sm text-muted">Bu seri no için cihaz kaydı bulunamadı.</p> : typeof cihaz === "object" && cihaz ? <CihazDetay key={cihaz.seriNo} cihaz={cihaz} yalin /> : <div aria-busy="true" className="h-48 animate-pulse rounded-xl bg-bg motion-reduce:animate-none" />}
+      </Modal>
 
       <Modal acik={yeni !== null} onKapat={kapatYeni} baslik="Yeni RMA">
         {yeni !== null && <RmaFormu key={yeni} baslangicSeri={yeni} talepler={p.talepler} onKaydedildi={eklendi} onVazgec={kapatYeni} />}
