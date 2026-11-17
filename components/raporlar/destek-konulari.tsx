@@ -14,6 +14,7 @@ export default function DestekKonulari({ konular, donem }: { konular: KonuPayi[]
         <h2 id="dk-baslik" className="text-[17px] font-extrabold">Destek talepleri · konuya göre</h2>
         <span className="text-xs font-semibold text-muted">{donem} · kaydedilen talepler</span>
       </div>
+      {konular.length === 0 && <p className="py-4 text-center text-[13px] text-muted">Bu dönemde destek talebi açılmadı.</p>}
 
       <div className="flex h-4 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={aciklama} onMouseLeave={() => setOdak(null)}>
         {konular.map((k) => (
@@ -42,9 +43,14 @@ export default function DestekKonulari({ konular, donem }: { konular: KonuPayi[]
         ))}
       </ul>
 
-      <p className="rounded-[14px] bg-[#F4F5F0] px-3.5 py-3 text-xs leading-normal text-[#474A42]">
-        <b className="text-ink">İçgörü:</b> Bağlantı taleplerinin yarısı pin kablosu kurulumundan geliyor; kurulum videosu talep sayısını azaltabilir.
-      </p>
+      {konular.length > 0 && (() => {
+        const enCok = [...konular].sort((x, y) => y.yuzde - x.yuzde)[0];
+        return (
+          <p className="rounded-[14px] bg-[#F4F5F0] px-3.5 py-3 text-xs leading-normal text-[#474A42]">
+            <b className="text-ink">En çok talep:</b> {enCok.ad} (%{enCok.yuzde}). Talep ayrıntıları için Destek talepleri özeti raporunu indirin.
+          </p>
+        );
+      })()}
     </section>
   );
 }

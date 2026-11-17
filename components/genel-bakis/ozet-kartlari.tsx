@@ -1,6 +1,5 @@
 // Genel Bakış: üst sıradaki 4 özet kart
-// Şimdilik DEMO_VERI ile çalışır. Supabase bağlanınca sayfada
-// <OzetKartlari veri={await getOzet()} /> şeklinde gerçek veriyi verin.
+// Veri: components/genel-bakis/queries.ts › getGenelBakis() (CRM kayıtlarından hesaplanır)
 import Link from "next/link";
 
 export type OzetVerisi = {
@@ -9,26 +8,12 @@ export type OzetVerisi = {
     donanim: number;
     lisans: number;
     ay: string; // kartın başlığında görünür: "Ekim"
-    degisimYuzde: number; // önceki aya göre
+    degisimYuzde: number | null; // önceki aya göre (önceki ay gelir yoksa null)
     son12Ay: number[]; // sparkline için
   };
   lisans: { basic: number; pro: number; proPlus: number; buAyYeni: number };
   destek: { acik: number; yuksekOncelik: number; beklemede: number; buHaftaCozulen: number };
   yenileme: { adet: number; potansiyelGelir: number };
-};
-
-const DEMO_VERI: OzetVerisi = {
-  gelir: {
-    toplam: 1_284_500,
-    donanim: 762_000,
-    lisans: 522_500,
-    ay: "Ekim",
-    degisimYuzde: 12.4,
-    son12Ay: [774, 902, 841, 903, 974, 963, 1056, 1091, 1057, 1008, 1178, 1284],
-  },
-  lisans: { basic: 473, pro: 586, proPlus: 187, buAyYeni: 38 },
-  destek: { acik: 27, yuksekOncelik: 4, beklemede: 6, buHaftaCozulen: 19 },
-  yenileme: { adet: 64, potansiyelGelir: 412_800 },
 };
 
 const tl = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 });
@@ -41,7 +26,7 @@ const UST = "flex items-start justify-between gap-3";
 const BASLIK = "min-w-0 pt-1 text-xs font-semibold leading-snug";
 const BUYUK = "text-[clamp(24px,2.2vw,32px)] font-extrabold leading-none tracking-tight tabular-nums whitespace-nowrap";
 
-export default function OzetKartlari({ veri = DEMO_VERI }: { veri?: OzetVerisi }) {
+export default function OzetKartlari({ veri }: { veri: OzetVerisi }) {
   const { gelir, lisans, destek, yenileme } = veri;
   const toplamLisans = lisans.basic + lisans.pro + lisans.proPlus;
   const oran = (n: number) => (toplamLisans ? (n / toplamLisans) * 100 : 0);
@@ -52,7 +37,7 @@ export default function OzetKartlari({ veri = DEMO_VERI }: { veri?: OzetVerisi }
       <div className={`${KART} bg-ink text-white`}>
         <div className={UST}>
           <span className={`${BASLIK} text-[#C3C6BC]`}>Aylık gelir · {gelir.ay}</span>
-          <Degisim yuzde={gelir.degisimYuzde} />
+          {gelir.degisimYuzde !== null && <Degisim yuzde={gelir.degisimYuzde} />}
         </div>
         <p className={BUYUK}>{tl.format(gelir.toplam)}</p>
         <Sparkline degerler={gelir.son12Ay} />

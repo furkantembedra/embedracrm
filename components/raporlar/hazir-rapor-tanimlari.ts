@@ -59,7 +59,7 @@ export const HAZIR_RAPORLAR: HazirRapor[] = [
     aciklama: "Web, WhatsApp, Instagram, fuar ve öneri dönüşüm oranları",
     tablo: ({ ozet, donem }) => [
       ["Kaynak", "Lead", "Müşteri", "Dönüşüm %"],
-      ...ozet.donemler[donem].kaynaklar.map((k) => [k.ad, k.lead, k.musteri, Math.round((k.musteri / k.lead) * 100)]),
+      ...ozet.donemler[donem].kaynaklar.map((k) => [k.ad, k.lead, k.musteri, k.lead ? Math.round((k.musteri / k.lead) * 100) : 0]),
     ],
   },
   {
@@ -128,6 +128,11 @@ export const HAZIR_RAPORLAR: HazirRapor[] = [
 ];
 
 /** Her raporun alt başlığı: dönem bazlı olanlar dönemi, diğerleri "Güncel kayıtlar" */
-export function raporAltBasligi(r: HazirRapor, donem: Donem) {
-  return r.kategori === "satis" ? DONEM_BILGI[donem].uzun : "Güncel kayıtlar";
+export function raporAltBasligi(r: HazirRapor, donem: Donem, ozet?: RaporOzeti) {
+  return r.kategori === "satis" ? (ozet ? donemEtiketi(ozet, donem) : DONEM_BILGI[donem].uzun) : "Güncel kayıtlar";
+}
+
+/** Dönem etiketi rapor verisinden (ör. "Eki – Ara 2026"), yoksa genel ad */
+export function donemEtiketi(ozet: RaporOzeti, donem: Donem) {
+  return ozet.donemler[donem]?.etiket ?? DONEM_BILGI[donem].uzun;
 }

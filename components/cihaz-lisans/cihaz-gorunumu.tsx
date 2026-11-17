@@ -201,6 +201,7 @@ export default function CihazGorunumu({
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[1_1_640px]">
           <CihazTablosu
+            bayiAdlari={Object.fromEntries(bayiler.map((b) => [b.id, b.ad]))}
             cihazlar={gorunen}
             sekme={sekme}
             sayilar={sayilar}

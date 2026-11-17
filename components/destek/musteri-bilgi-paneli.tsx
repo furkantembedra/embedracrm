@@ -42,8 +42,10 @@ export default function MusteriBilgiPaneli({
   return (
     <aside aria-label="Müşteri ve cihaz bilgisi" className="flex w-full min-w-0 flex-col gap-[18px] rounded-card border border-line bg-card p-5">
       <section className="flex flex-col gap-2.5">
-        <h3 className="text-sm font-extrabold">Müşteri</h3>
-        {t.musteriId && onMusteriAc ? (
+        <h3 className="text-sm font-extrabold">{t.bayiId ? "Bayi" : "Müşteri"}</h3>
+        {t.bayiId ? (
+          <Link href={`/bayiler?bayi=${t.bayiId}`} className="self-start text-[15px] font-bold text-info hover:text-[#1A2A9E]">{t.musteri} · bayi kartı →</Link>
+        ) : t.musteriId && onMusteriAc ? (
           <button
             type="button"
             onClick={() => onMusteriAc(t.musteriId!)}

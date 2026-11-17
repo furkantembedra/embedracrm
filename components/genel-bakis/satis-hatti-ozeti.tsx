@@ -6,14 +6,6 @@ type Ton = "acik" | "orta" | "koyu" | "ink" | "lime";
 
 export type HatAsamasi = { ad: string; adet: number; tutar: number; ton: Ton; kazanildi?: boolean };
 
-const DEMO: HatAsamasi[] = [
-  { ad: "Yeni lead", adet: 42, tutar: 3_100_000, ton: "acik" },
-  { ad: "Demo planlandı", adet: 18, tutar: 1_900_000, ton: "orta" },
-  { ad: "Teklif gönderildi", adet: 11, tutar: 1_400_000, ton: "koyu" },
-  { ad: "Müzakere", adet: 6, tutar: 900_000, ton: "ink" },
-  { ad: "Kazanıldı (bu ay)", adet: 9, tutar: 1_100_000, ton: "lime", kazanildi: true },
-];
-
 const RENK: Record<Ton, string> = {
   acik: "bg-[#E2E4DC] text-ink",
   orta: "bg-[#C9CCC2] text-ink",
@@ -22,7 +14,7 @@ const RENK: Record<Ton, string> = {
   lime: "bg-lime text-ink",
 };
 
-export default function SatisHattiOzeti({ veri = DEMO }: { veri?: HatAsamasi[] }) {
+export default function SatisHattiOzeti({ veri }: { veri: HatAsamasi[] }) {
   const enCok = Math.max(1, ...veri.map((a) => a.adet));
   const acik = veri.filter((a) => !a.kazanildi);
   const acikTutar = acik.reduce((t, a) => t + a.tutar, 0);

@@ -4,6 +4,7 @@
 // bayinin müşterilerindeki lisanslar, hareket geçmişi ve üç işlem (cihaz sevk et, satış bildir, lisans sat).
 import HatirlatmaButonu from "@/components/hatirlatmalar/hatirlatma-butonu";
 import PortalKontrolleri from "@/components/portal/portal-kontrolleri";
+import BayiPortalPaneli from "./bayi-portal-paneli";
 import { useMemo, useState } from "react";
 import { PackagePlus, ReceiptText, ShoppingCart } from "lucide-react";
 import Chip from "@/components/ui/chip";
@@ -23,7 +24,7 @@ const SEGMENT = (aktif: boolean) =>
   `min-h-9 cursor-pointer rounded-[9px] px-3 text-[13px] font-bold transition-colors ${
     aktif ? "bg-card text-ink shadow-[0_1px_2px_rgba(14,15,12,0.08)]" : "text-[#474A42] hover:text-ink"
   }`;
-const HAREKET_TONU = { sevkiyat: "info", satis: "ok", lisans: "lime" } as const;
+const HAREKET_TONU = { sevkiyat: "info", satis: "ok", lisans: "lime", iade: "warn", degisim: "gray" } as const;
 
 type Islem = "sevk" | "satis" | "lisans" | null;
 type LisansFiltresi = "tumu" | "aktif" | "bitiyor" | "doldu" | "yok";
@@ -123,6 +124,8 @@ export default function BayiDetay({
         <HatirlatmaButonu kayit={{ tur: "bayi", id: bayi.id, ad: bayi.ad, href: "/bayiler" }} />
         <PortalKontrolleri bayiId={bayi.id} />
       </div>
+
+      <BayiPortalPaneli bayiId={bayi.id} />
 
       {/* Dönem seçici */}
       <div className="flex flex-wrap items-center gap-2">

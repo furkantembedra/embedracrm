@@ -156,6 +156,24 @@ for (const c of DEPO) {
   if (!c.model) c.model = DEMO.find((d) => d.seriNo === c.seriNo)?.model ?? "ONE";
 }
 
+// Bayi (Direcție Pro, Romanya) üzerinden satılmış müşteri cihazları: portal Özet / Lisanslar demosu için.
+// Bellekte eski depo varsa da eklenir (sunucu yeniden başlatılmadan).
+const BAYI_DEMO: Cihaz[] = [
+  { seriNo: "EO1-2511-0705", musteri: "Auto Volan Cluj", bitis: "2026-11-21", plan: "Pro" as const },
+  { seriNo: "EO1-2511-0708", musteri: "Servo Direct Iași", bitis: "2026-12-03", plan: "Basic" as const },
+  { seriNo: "EO1-2511-0711", musteri: "Timiș Steering Lab", bitis: "2026-11-10", plan: "Pro+" as const },
+  { seriNo: "EO1-2601-0730", musteri: "Brașov Auto Electric", bitis: "2027-01-22", plan: "Pro" as const },
+  { seriNo: "EO1-2603-0742", musteri: "Constanța Moto Service", bitis: "2027-03-18", plan: "Basic" as const },
+].map(({ seriNo, musteri, bitis, plan }) => {
+  const baslangic = `${Number(bitis.slice(0, 4)) - 1}${bitis.slice(4)}`;
+  return {
+    seriNo, model: "ONE", musteriId: `ro-${seriNo.slice(-4)}`, musteri, ulke: "Romanya", plan,
+    lisansBaslangic: baslangic, lisansBitis: bitis, firmware: "v2.4.1", durum: bitis < "2026-12-16" ? "bitiyor" : "aktif",
+    gecmis: [{ plan, baslangic, bitis }], bayiId: "directie",
+  } satisfies Cihaz;
+});
+for (const c of BAYI_DEMO) if (!DEPO.some((d) => d.seriNo === c.seriNo)) DEPO.push(structuredClone(c));
+
 export async function getCihazlar(): Promise<Cihaz[]> {
   return DEPO;
 }
@@ -165,6 +183,14 @@ export async function getCihaz(seriNo: string): Promise<Cihaz | null> {
 }
 
 // Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
+/** Kaydı tamamen siler (yalnızca iptal edilen siparişe atanmış, hiç kullanılmamış cihazlar için) */
+export async function cihazSilDepo(seriNo: string): Promise<boolean> {
+  const i = DEPO.findIndex((c) => c.seriNo === seriNo);
+  if (i < 0) return false;
+  DEPO.splice(i, 1);
+  return true;
+}
+
 export async function cihazEkleDepo(c: Cihaz): Promise<boolean> {
   if (DEPO.some((x) => x.seriNo === c.seriNo)) return false;
   DEPO.unshift(c);

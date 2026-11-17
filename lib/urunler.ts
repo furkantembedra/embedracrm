@@ -29,11 +29,13 @@ export type FiyatListesi = {
   cihaz: Record<CihazModeli, number>;
   lisans: Record<LisansPaketi, { fiyat: number | null; cihaz: number | null }>;
   kdv: number; // 0.2 = %20, yalnızca cihaz ve aksesuara eklenir
+  eurKur: number; // 1 EUR = ? TL · yurt dışı bayilerin fiyatları buna göre EUR'ya çevrilir
 };
 export const VARSAYILAN_FIYAT: FiyatListesi = {
   cihaz: { ONE: URUN_BILGI.ONE.fiyat, "ONE Lite": URUN_BILGI["ONE Lite"].fiyat },
   lisans: Object.fromEntries(Object.entries(LISANS_PAKETLERI).map(([k, v]) => [k, { ...v }])) as FiyatListesi["lisans"],
   kdv: KDV_ORANI,
+  eurKur: 48,
 };
 
 /** [{model:"ONE"},{model:"ONE"},{model:"ONE Lite"}] → "2× ONE · 1× ONE Lite" */

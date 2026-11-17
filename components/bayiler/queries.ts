@@ -1,5 +1,6 @@
 // Bayi & Distribütör: veri okuma. Şimdilik demo veri döner;
 // Supabase bağlanınca fonksiyonların içini supabase.from("partner_applications")... ile değiştirin.
+import { connection } from "next/server";
 import type { CihazModeli } from "@/lib/urunler";
 import type { LisansPlani } from "@/components/cihaz-lisans/queries";
 
@@ -86,6 +87,11 @@ export type AktifBayi = {
   stok: number;
   moqHedef: number; // çeyreklik minimum sipariş, cihaz
   moqGerceklesen: number;
+  // Bayi portalı ayarları (CRM › Bayi detayı › Portal paneli)
+  temsilciId?: string | null; // Embedra ekibinden sorumlu (Operasyon › Ekip); portal talepleri bu kişiye düşer
+  adres?: string; // kayıtlı teslimat adresi (portal siparişlerinde varsayılan)
+  sozlesmeBaslangic?: string | null; // "2026-09-14"
+  sozlesmeSureAy?: number | null; // 24
 };
 
 const BASVURULAR = ([
@@ -98,7 +104,7 @@ const BASVURULAR = ([
 ] as Omit<Basvuru, "sozlesme">[]) as Basvuru[];
 
 const AKTIF_BAYILER: AktifBayi[] = [
-  { id: "directie", ad: "Direcție Pro SRL", bolge: "Romanya", ulkeKodu: "RO", satilan: 18, stok: 4, moqHedef: 20, moqGerceklesen: 18 },
+  { id: "directie", ad: "Direcție Pro SRL", bolge: "Romanya", ulkeKodu: "RO", satilan: 18, stok: 4, moqHedef: 20, moqGerceklesen: 18, temsilciId: "u2", adres: "Bd. Unirii 22, București, RO", sozlesmeBaslangic: "2026-09-14", sozlesmeSureAy: 24 },
   { id: "autotech", ad: "AutoTech Distribution", bolge: "Bulgaristan", ulkeKodu: "BG", satilan: 11, stok: 9, moqHedef: 18, moqGerceklesen: 11 },
   { id: "volant-netz", ad: "Volant Partner Netz", bolge: "Almanya (Güney)", ulkeKodu: "DE", satilan: 26, stok: 12, moqHedef: 24, moqGerceklesen: 26 },
   { id: "kafkas", ad: "Kafkas Oto Teknik", bolge: "Azerbaycan + Gürcistan", ulkeKodu: "AZ", satilan: 6, stok: 1, moqHedef: 16, moqGerceklesen: 6 },
@@ -127,8 +133,10 @@ for (const b of BASVURULAR) b.sozlesme = { ...bosSozlesme(b.bolge), ...ORNEK_SOZ
 // Demo depo: sunucu belleğinde, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
 /* ---------- Bayi hareketleri: bayiye sevkiyat, bayinin bildirdiği satış, bayinin sattığı lisans ---------- */
 
-export type HareketTuru = "sevkiyat" | "satis" | "lisans";
-export const HAREKET_ADI: Record<HareketTuru, string> = { sevkiyat: "Bayiye sevkiyat", satis: "Müşteriye satış", lisans: "Lisans satışı" };
+// iade: bayi stoğundaki cihaz Embedra'ya geri döndü (stoktan düşer) · degisim: RMA'da cihaz değiştirildi, yeni seri eskisinin yerini alır
+// (eski seri geçmiş hareketlerde yenisiyle değiştirilir; bu kayıt yalnızca izdir, sayaçlara girmez)
+export type HareketTuru = "sevkiyat" | "satis" | "lisans" | "iade" | "degisim";
+export const HAREKET_ADI: Record<HareketTuru, string> = { sevkiyat: "Bayiye sevkiyat", satis: "Müşteriye satış", lisans: "Lisans satışı", iade: "Embedra'ya iade", degisim: "RMA değişimi" };
 
 export type BayiHareketi = {
   id: string;
@@ -139,6 +147,7 @@ export type BayiHareketi = {
   musteri?: { id: string | null; ad: string }; // satış / lisans: son kullanıcı
   plan?: LisansPlani; // lisans
   sureAy?: number; // lisans
+  eskiSeri?: string; // degisim: yerine yenisi verilen seri
   not?: string;
 };
 
@@ -204,6 +213,14 @@ if (!DEPO.hareketler || !DEPO.hareketler.some((h) => h.id === "demo-v2")) {
   }
 }
 const HAREKETLER = DEPO.hareketler;
+// Portal ayarları sonradan eklendi: bellekteki eski bayi kayıtlarını demo değerleriyle tamamla
+for (const b of DEPO.aktif) {
+  const d = AKTIF_BAYILER.find((x) => x.id === b.id);
+  b.temsilciId ??= d?.temsilciId ?? "u2";
+  b.adres ??= d?.adres ?? "";
+  b.sozlesmeBaslangic ??= d?.sozlesmeBaslangic ?? DEPO.basvurular.find((x) => x.id === b.id)?.tarih ?? null;
+  b.sozlesmeSureAy ??= d?.sozlesmeSureAy ?? 24;
+}
 
 // Sözleşme ayrıntısı eklenmeden önce bellekte kalan kayıtlar (sunucuyu yeniden başlatmadan geçiş)
 for (const b of DEPO.basvurular) {
@@ -222,14 +239,45 @@ export async function hareketEkle(h: BayiHareketi) {
   HAREKETLER.unshift(h);
 }
 
+/** RMA değişimi: bayinin hareketlerinde eski seri yenisiyle değiştirilir (stok, satış tarihi ve garanti yeni cihaza geçer)
+ *  ve izi "degisim" hareketi olarak yazılır. Eski seri bayide hiç geçmiyorsa false döner. */
+export async function bayiSeriDegistir(bayiId: string, eski: string, yeni: string, model: CihazModeli, tarih: string, not: string) {
+  let bulundu = false;
+  for (const h of HAREKETLER) {
+    if (h.bayiId !== bayiId) continue;
+    for (const k of h.kalemler) if (k.seriNo === eski) { k.seriNo = yeni; bulundu = true; }
+  }
+  if (bulundu) HAREKETLER.unshift({ id: crypto.randomUUID(), bayiId, tur: "degisim", tarih, kalemler: [{ model, seriNo: yeni }], eskiSeri: eski, not });
+  return bulundu;
+}
+
+/** Bayi kartını günceller (stok / satış / MOQ sayaçları hareketlerden hesaplandığı için buradan değiştirilmez) */
 export async function aktifBayiyiGuncelle(id: string, degisiklik: (b: AktifBayi) => void): Promise<AktifBayi | null> {
   const b = DEPO.aktif.find((x) => x.id === id);
   if (b) degisiklik(b);
   return b ?? null;
 }
 
+/** Bayinin sayaçları hareketlerden hesaplanır (CRM formları, bayi portalı ve sipariş sevkiyatı aynı kaynağı kullanır):
+ *  stok = toplam sevk − toplam satış − iade · satilan = bu çeyrek satış · moqGerceklesen = bu çeyrek bayiye sevk */
+function sayaclar(bayiId: string, bugun: string) {
+  const ceyrek = (t: string) => `${t.slice(0, 4)}-${Math.floor((Number(t.slice(5, 7)) - 1) / 3)}`;
+  const buCeyrek = ceyrek(bugun);
+  let sevk = 0, satis = 0, ceyrekSevk = 0, ceyrekSatis = 0;
+  for (const h of HAREKETLER) {
+    if (h.bayiId !== bayiId) continue;
+    const n = h.kalemler.length;
+    if (h.tur === "sevkiyat") { sevk += n; if (ceyrek(h.tarih) === buCeyrek) ceyrekSevk += n; }
+    if (h.tur === "satis") { satis += n; if (ceyrek(h.tarih) === buCeyrek) ceyrekSatis += n; }
+    if (h.tur === "iade") { sevk -= n; if (ceyrek(h.tarih) === buCeyrek) ceyrekSevk -= n; } // iade edilen sevkiyat MOQ'dan da düşer
+  }
+  return { stok: Math.max(0, sevk - satis), satilan: ceyrekSatis, moqGerceklesen: Math.max(0, ceyrekSevk) };
+}
+
 export async function getAktifBayiler(): Promise<AktifBayi[]> {
-  return DEPO.aktif;
+  await connection(); // sayaçlar bugünün çeyreğine göre: istek anında hesaplanır (cacheComponents)
+  const bugun = new Date().toISOString().slice(0, 10);
+  return DEPO.aktif.map((b) => ({ ...b, ...sayaclar(b.id, bugun) }));
 }
 
 // Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.

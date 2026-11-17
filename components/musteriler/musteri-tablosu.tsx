@@ -14,12 +14,14 @@ const TD = "border-t border-bg px-2 py-3";
 
 export default function MusteriTablosu({
   musteriler,
+  bayiKanali = {},
   seciliId,
   arama,
   onArama,
   onSec,
 }: {
   musteriler: Musteri[];
+  bayiKanali?: Record<string, string>; // müşteri id → bayi adı (bayi üzerinden satış)
   seciliId: string | null;
   arama: string;
   onArama: (v: string) => void;
@@ -84,7 +86,14 @@ export default function MusteriTablosu({
                         >
                           {m.ad}
                         </button>
-                        <span className="text-xs text-muted">{m.sehir} · {m.ulke}</span>
+                        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                          {m.sehir} · {m.ulke}
+                          {bayiKanali[m.id] && (
+                            <span title={`Bayi üzerinden satış: ${bayiKanali[m.id]}`} className="inline-flex h-5 items-center rounded-full bg-lime-bg px-2 text-[11px] font-bold text-[#3A4D00]">
+                              Bayi · {bayiKanali[m.id]}
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </div>
                   </td>

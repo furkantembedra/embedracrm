@@ -4,21 +4,6 @@ import { kisaTl } from "@/lib/format";
 
 export type GelirAyi = { ay: string; donanim: number; lisans: number }; // TL
 
-const DEMO: GelirAyi[] = [
-  { ay: "Kas", donanim: 498_000, lisans: 276_000 },
-  { ay: "Ara", donanim: 610_000, lisans: 292_000 },
-  { ay: "Oca", donanim: 540_000, lisans: 301_000 },
-  { ay: "Şub", donanim: 585_000, lisans: 318_000 },
-  { ay: "Mar", donanim: 640_000, lisans: 334_000 },
-  { ay: "Nis", donanim: 612_000, lisans: 351_000 },
-  { ay: "May", donanim: 688_000, lisans: 368_000 },
-  { ay: "Haz", donanim: 702_000, lisans: 389_000 },
-  { ay: "Tem", donanim: 655_000, lisans: 402_000 },
-  { ay: "Ağu", donanim: 590_000, lisans: 418_000 },
-  { ay: "Eyl", donanim: 731_000, lisans: 447_000 },
-  { ay: "Eki", donanim: 762_000, lisans: 522_500 },
-];
-
 // Eksenin üst değerini 4 eşit ve okunaklı adıma yuvarlar (ör. 1,4M → 350K adım)
 function eksenUstu(max: number) {
   const kaba = max / 4 || 1;
@@ -27,7 +12,7 @@ function eksenUstu(max: number) {
   return adim * 4;
 }
 
-export default function GelirGrafigi({ veri = DEMO }: { veri?: GelirAyi[] }) {
+export default function GelirGrafigi({ veri }: { veri: GelirAyi[] }) {
   if (veri.length === 0) return null;
   const ust = eksenUstu(Math.max(...veri.map((d) => d.donanim + d.lisans)));
   const eksen = [4, 3, 2, 1, 0].map((i) => (ust / 4) * i);

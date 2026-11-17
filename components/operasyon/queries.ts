@@ -67,7 +67,9 @@ export type HavuzSeri = { seriNo: string; model: CihazModeli; partiId: string };
 
 import type { ROLLER } from "./ortak";
 export type Rol = (typeof ROLLER)[number];
-export type Kullanici = { id: string; ad: string; eposta: string; rol: Rol; aktif: boolean };
+export type Kullanici = { id: string; ad: string; eposta: string; rol: Rol; aktif: boolean; telefon?: string };
+/** RMA'da bayilerin cihaz göndereceği servis adresi (bayi portalında gösterilir) */
+export type ServisAdresi = { ad: string; adres: string; telefon: string };
 
 const BILESENLER: BilesenKalemi[] = [
   { kod: "PCB-MAIN", ad: "Ana kart (PCB)", adet: 45, kritik: 25, hedef: 150, kaynak: "dis" },
@@ -129,6 +131,7 @@ type Depo = {
   fiyat: FiyatListesi;
   kargoFirmalari: string[];
   ekip: Kullanici[];
+  servis: ServisAdresi;
 };
 const g = globalThis as { __embedraOperasyon?: Depo };
 const DEPO = (g.__embedraOperasyon ??= {
@@ -141,7 +144,11 @@ const DEPO = (g.__embedraOperasyon ??= {
   fiyat: structuredClone(VARSAYILAN_FIYAT),
   kargoFirmalari: ["Yurtiçi Kargo", "Aras Kargo", "MNG Kargo", "UPS Express", "DHL Express", "DHL Freight"],
   ekip: structuredClone(EKIP),
+  servis: { ad: "Embedra Teknik Servis", adres: "Dudullu OSB, 1. Cadde No:12, 34776 Ümraniye / İstanbul, Türkiye", telefon: "+90 216 555 0150" },
 } as Depo);
+DEPO.fiyat.eurKur ??= VARSAYILAN_FIYAT.eurKur;
+DEPO.servis ??= { ad: "Embedra Teknik Servis", adres: "Dudullu OSB, 1. Cadde No:12, 34776 Ümraniye / İstanbul, Türkiye", telefon: "+90 216 555 0150" };
+for (const k of DEPO.ekip) if (k.id === "u2") k.telefon ??= "+90 216 555 0142";
 // Bellekte eski yapıyla kurulmuş depo varsa (dev sunucusu yeniden başlamadan) yeni alanları tamamla
 DEPO.recete ??= structuredClone(RECETE);
 DEPO.icUretim ??= structuredClone(IC_URETIM);
@@ -156,6 +163,8 @@ export async function getHavuz() { return DEPO.havuz; }
 export async function getFiyatListesi(): Promise<FiyatListesi> { return DEPO.fiyat; }
 export async function getKargoFirmalari() { return DEPO.kargoFirmalari; }
 export async function getEkip() { return DEPO.ekip; }
+export async function getServisAdresi() { return DEPO.servis; }
+export async function servisAdresiKaydetDepo(s: ServisAdresi) { DEPO.servis = s; }
 
 // Aşağıdakiler yalnızca action dosyalarından çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
 export async function bilesenGuncelle(kod: string, fark: number) {
@@ -187,6 +196,11 @@ export async function tedarikiGuncelle(id: string, f: (t: TedarikSiparisi) => vo
 }
 export async function havuzaEkle(s: HavuzSeri[]) { DEPO.havuz.push(...s); }
 /** Siparişe atanan seri numaraları havuzdan çıkar (sipariş tarafı çağırır) */
+/** İptal edilen siparişin seri numaraları depodaki seri no havuzuna geri döner */
+export async function havuzaGeriKoy(seriler: { seriNo: string; model: HavuzSeri["model"] }[]) {
+  const var_ = new Set(DEPO.havuz.map((h) => h.seriNo));
+  for (const s of seriler) if (!var_.has(s.seriNo)) DEPO.havuz.unshift({ seriNo: s.seriNo, model: s.model, partiId: "iptal" });
+}
 export async function havuzdanCikar(seriler: string[]) {
   const set = new Set(seriler);
   DEPO.havuz = DEPO.havuz.filter((h) => !set.has(h.seriNo));

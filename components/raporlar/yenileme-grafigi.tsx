@@ -7,15 +7,24 @@ import type { AylikYenileme } from "./queries";
 
 const G = 600; // viewBox genişliği
 const Y = 200; // viewBox yüksekliği
-const ALT = 75; // y ekseni alt sınırı (%)
-const UST = 95; // y ekseni üst sınırı (%)
 
 const yuzde = (n: number) => `%${n.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}`;
 
 export default function YenilemeGrafigi({ veri, hedef }: { veri: AylikYenileme[]; hedef: number }) {
   const [odak, setOdak] = useState<number | null>(null);
   const [tablo, setTablo] = useState(false);
-  if (veri.length === 0) return null;
+  if (veri.length === 0) {
+    return (
+      <section className="flex w-full min-w-0 flex-col gap-1 rounded-card border border-line bg-card p-5">
+        <h2 className="text-[17px] font-extrabold">Lisans yenileme oranı</h2>
+        <p className="text-[13px] text-muted">Son 12 ayda süresi biten lisans yok; oran hesaplanamadı.</p>
+      </section>
+    );
+  }
+  // Y ekseni verinin aralığına göre: en az %75–95, 5'lik adımlara yuvarlanır
+  const oranlar = [...veri.map((d) => d.oran), hedef];
+  const ALT = Math.max(0, Math.min(75, Math.floor(Math.min(...oranlar) / 5) * 5));
+  const UST = Math.min(100, Math.max(95, Math.ceil(Math.max(...oranlar) / 5) * 5));
 
   const x = (i: number) => (veri.length === 1 ? G / 2 : (i / (veri.length - 1)) * G);
   const y = (oran: number) => Y - ((Math.min(UST, Math.max(ALT, oran)) - ALT) / (UST - ALT)) * Y;
@@ -52,7 +61,7 @@ export default function YenilemeGrafigi({ veri, hedef }: { veri: AylikYenileme[]
               {veri.map((d) => (
                 <tr key={d.ay} className="border-t border-bg">
                   <td className="px-3 py-2 font-semibold">{d.ay}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{yuzde(d.oran)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{yuzde(d.oran)} <span className="text-xs text-muted">({d.yenilenen}/{d.biten})</span></td>
                   <td className={`px-3 py-2 text-right font-bold tabular-nums ${d.oran >= hedef ? "text-ok" : "text-warn"}`}>
                     {d.oran >= hedef ? "+" : ""}{(d.oran - hedef).toLocaleString("tr-TR", { maximumFractionDigits: 1 })} puan
                   </td>

@@ -161,7 +161,6 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
     sonrakiAdim,
     sonrakiTarih,
     telefon: telefon || undefined,
-    bayiId: metin("bayiId") || null,
   };
 
   // TODO: Supabase bağlanınca: yeni ise insert, id varsa update (aşama ve kayıp nedeni değişmez).

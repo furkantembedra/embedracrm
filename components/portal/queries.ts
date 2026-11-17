@@ -5,6 +5,8 @@ import { getAktifBayiler, getBasvurular } from "@/components/bayiler/queries";
 
 export type PortalHesabi = { bayiId: string; eposta: string; sifreOzeti: string; erisim: boolean; sonGiris: string | null };
 export type YenilemeTalebi = { seriNo: string; bayiId: string; tarih: string };
+/** Bayinin "Bir yanlışlık mı var?" talebi (Cihazlarım › cihaz detayı). CRM'de bayi detayındaki Portal panelinde çözülür. */
+export type DuzeltmeTalebi = { id: string; bayiId: string; seriNo: string; metin: string; tarih: string; durum: "acik" | "cozuldu"; cozum?: string };
 
 /** Demo şifresi: tüm demo bayi hesapları için. Gerçek kullanımda hesap açılırken tek kullanımlık davet bağlantısı gönderilir. */
 export const DEMO_SIFRE = "Bayi2026!";
@@ -21,7 +23,7 @@ export function sifreDogru(sifre: string, ozet: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-type Depo = { hesaplar: PortalHesabi[]; yenileme: YenilemeTalebi[] };
+type Depo = { hesaplar: PortalHesabi[]; yenileme: YenilemeTalebi[]; duzeltme: DuzeltmeTalebi[] };
 const g = globalThis as { __embedraPortal?: Depo };
 
 async function depo(): Promise<Depo> {
@@ -37,8 +39,10 @@ async function depo(): Promise<Depo> {
         sonGiris: null,
       })),
       yenileme: [],
+      duzeltme: [],
     };
   }
+  g.__embedraPortal.duzeltme ??= [];
   return g.__embedraPortal;
 }
 
@@ -65,4 +69,20 @@ export async function getYenilemeTalepleri(bayiId: string) {
 }
 export async function yenilemeTalebiEkle(y: YenilemeTalebi) {
   (await depo()).yenileme.push(y);
+}
+/** Lisans cihaza işlenince ya da CRM kapatınca talep kalkar (portalda "Talep var" etiketi de kalkar) */
+export async function yenilemeTalebiSil(seriNo: string) {
+  const d = await depo();
+  d.yenileme = d.yenileme.filter((y) => y.seriNo !== seriNo);
+}
+export async function getDuzeltmeTalepleri(bayiId: string) {
+  return (await depo()).duzeltme.filter((x) => x.bayiId === bayiId);
+}
+export async function duzeltmeTalebiEkle(t: DuzeltmeTalebi) {
+  (await depo()).duzeltme.unshift(t);
+}
+export async function duzeltmeTalebiCoz(id: string, cozum: string) {
+  const t = (await depo()).duzeltme.find((x) => x.id === id);
+  if (t) { t.durum = "cozuldu"; t.cozum = cozum; }
+  return t ?? null;
 }

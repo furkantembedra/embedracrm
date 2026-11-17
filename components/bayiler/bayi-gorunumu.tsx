@@ -232,6 +232,13 @@ export default function BayiGorunumu({
   return (
     <>
       <PageHeader title="Bayi & distribütör ağı" description="Başvurudan lansmana: bölge hakları, MOQ ve performans tek yerde">
+        <Link
+          href="/bayiler/dokumanlar"
+          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0]"
+        >
+          <Megaphone size={18} aria-hidden="true" />
+          Doküman & duyurular
+        </Link>
         <button
           type="button"
           onClick={() => setEkleAcik(true)}

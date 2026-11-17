@@ -89,7 +89,7 @@ export default function TalepDetay({
         </ol>
       </div>
 
-      <NotFormu key={t.id} talepId={t.id} durum={t.durum} onKaydedildi={(not, durum) => onNot(t.id, not, durum)} />
+      <NotFormu key={t.id} talepId={t.id} durum={t.durum} bayili={!!t.bayiId} onKaydedildi={(not, durum) => onNot(t.id, not, durum)} />
     </section>
   );
 }

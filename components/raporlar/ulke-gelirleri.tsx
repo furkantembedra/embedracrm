@@ -11,6 +11,7 @@ export default function UlkeGelirleri({ ulkeler, donem }: { ulkeler: UlkeGeliri[
         <h2 id="ug-baslik" className="text-[17px] font-extrabold">Ülkelere göre gelir</h2>
         <span className="text-xs font-semibold text-muted">{donem} · ilk {ulkeler.length} ülke {kisaTl(toplam)}</span>
       </div>
+      {ulkeler.length === 0 && <p className="py-4 text-center text-[13px] text-muted">Bu dönemde ödemesi alınmış sipariş yok.</p>}
       <ul className="flex flex-col gap-3">
         {ulkeler.map((u) => (
           <li key={u.kod} title={`${u.ad}: ${tl(u.tutar)}`} className="grid grid-cols-[34px_minmax(0,1fr)_76px] items-center gap-2.5">

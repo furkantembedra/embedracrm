@@ -13,7 +13,7 @@ import type { IletisimDegisikligi } from "./musteri-iletisim";
 import MusteriFormu from "./musteri-formu";
 import type { Musteri, Olay } from "./queries";
 
-export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Musteri[] }) {
+export default function MusteriGorunumu({ musteriler: ilk, bayiKanali = {} }: { musteriler: Musteri[]; bayiKanali?: Record<string, string> }) {
   const [musteriler, setMusteriler] = useState(ilk);
   const [segment, setSegment] = useState<SegmentSecimi>("tumu");
   const [arama, setArama] = useState("");
@@ -73,7 +73,7 @@ export default function MusteriGorunumu({ musteriler: ilk }: { musteriler: Muste
       <SegmentKartlari secili={segment} sayilar={sayilar} onSec={setSegment} />
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[2_1_600px]">
-          <MusteriTablosu musteriler={gorunen} seciliId={seciliId} arama={arama} onArama={setArama} onSec={setSeciliId} />
+          <MusteriTablosu musteriler={gorunen} bayiKanali={bayiKanali} seciliId={seciliId} arama={arama} onArama={setArama} onSec={setSeciliId} />
         </div>
         <div className="flex min-w-0 flex-[1_1_340px]">
           <MusteriDetay musteri={secili} onNotEklendi={notEklendi} onAdaTikla={setPencereId} onIletisimDegisti={iletisimDegisti} />

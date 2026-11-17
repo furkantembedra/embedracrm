@@ -54,7 +54,9 @@ export default function CihazTablosu({
   plan = "tumu",
   planSayilari,
   onPlan,
+  bayiAdlari = {},
 }: {
+  bayiAdlari?: Record<string, string>; // bayi id → ad: bayi üzerinden satılan cihazda "Bayi" etiketi
   cihazlar: Cihaz[];
   sekme: DurumSekmesi;
   sayilar: Record<DurumSekmesi, number>;
@@ -199,7 +201,15 @@ export default function CihazTablosu({
                       ) : (
                         <b className="font-bold">{c.musteri}</b>
                       )}
-                      <span className="text-xs text-muted">{c.ulke}</span>
+                      <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                        {c.ulke}
+                        {durum !== "stokta" && c.bayiId && (
+                          <Link href={`/bayiler?bayi=${c.bayiId}`} title="Bayi üzerinden satıldı · bayi detayını aç"
+                            className="inline-flex h-5 items-center rounded-full bg-lime-bg px-2 text-[11px] font-bold text-[#3A4D00] hover:underline">
+                            Bayi · {bayiAdlari[c.bayiId] ?? c.bayiId}
+                          </Link>
+                        )}
+                      </span>
                     </div>
                   </td>
                   <td className={TD}>{durum === "stokta" || durum === "lisanssiz" ? <span className="text-muted">—</span> : <Chip ton={PLAN_TONU[c.plan]}>{c.plan}</Chip>}</td>

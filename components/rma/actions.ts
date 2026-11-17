@@ -3,6 +3,7 @@
 import { getBilesenler, bilesenGuncelle, getHavuz, havuzdanCikar } from "@/components/operasyon/queries";
 import { cihazEkleDepo, cihaziGuncelle, getCihaz } from "@/components/cihaz-lisans/queries";
 import { musteriyiGuncelle } from "@/components/musteriler/queries";
+import { bayiSeriDegistir } from "@/components/bayiler/queries";
 import { getSiparisler, iadeEkle, sonrakiIadeNo } from "@/components/siparisler/queries";
 import { garantiBilgisi, type GarantiBilgisi } from "./garanti";
 import { ekleriOku, rmaOlustur, rmaYenile, simdiYerel } from "./islemler";
@@ -113,7 +114,9 @@ export async function kararVer(id: string, v: { karar: RmaKarari; parcalar?: Rec
         m.olaylar.unshift({ metin: `${r.id}: ${r.seriNo} yerine ${yeni} verildi (lisans aktarıldı)`, zaman: "Bugün · RMA", tur: "destek" });
       });
     }
-    ek = ` Yeni cihaz: ${yeni} (lisans aktarıldı, eski cihaz servise alındı).`;
+    // Bayi cihazı: yeni seri bayinin stoğunda / satışında eskisinin yerine geçer (portal stoğu, satış tarihi ve garanti yeni seriyle devam eder)
+    const bayiye = eski.bayiId ? await bayiSeriDegistir(eski.bayiId, r.seriNo, yeni, eski.model, simdiYerel().slice(0, 10), `${r.id}: ${r.seriNo} → ${yeni}`) : false;
+    ek = ` Yeni cihaz: ${yeni} (lisans aktarıldı, eski cihaz servise alındı${bayiye ? ", bayi kayıtları güncellendi" : ""}).`;
     await rmayiGuncelle(id, (x) => void (x.yeniSeri = yeni));
   }
 

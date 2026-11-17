@@ -13,10 +13,12 @@ const IKINCIL_BTN =
 export default function NotFormu({
   talepId,
   durum,
+  bayili = false,
   onKaydedildi,
 }: {
   talepId: string;
   durum: TalepDurumu;
+  bayili?: boolean; // bayi portalından açılan talep: "Bayiye yanıt" bayiye görünür, diğer notlar iç not
   onKaydedildi: (not: TalepNotu, durum?: TalepDurumu) => void;
 }) {
   const [sonuc, gonder, bekliyor] = useActionState<NotFormDurumu, FormData>(notKaydet, {});
@@ -47,6 +49,7 @@ export default function NotFormu({
           className="resize-y rounded-[14px] border border-line-strong bg-card p-3 text-sm outline-none focus:border-ink aria-[invalid=true]:border-err"
         />
       </label>
+      {bayili && <span className="text-xs text-muted">Bayi portalından açıldı: yalnızca “Bayiye yanıtla” ile yazılanlar ve durum değişiklikleri bayiye görünür.</span>}
       {dosyaHata && <span role="alert" className="text-xs font-semibold text-err">{dosyaHata}</span>}
       {sonuc.hata && <span id={`not-hata-${talepId}`} className="text-xs font-semibold text-err">{sonuc.hata}</span>}
 
@@ -76,8 +79,11 @@ export default function NotFormu({
             <button type="submit" name="islem" value="beklemede" disabled={bekliyor} className={IKINCIL_BTN}>Beklemeye al</button>
           )}
           <button type="submit" name="islem" value="not" disabled={bekliyor} className={IKINCIL_BTN}>
-            {bekliyor ? "Kaydediliyor…" : "Notu kaydet"}
+            {bekliyor ? "Kaydediliyor…" : bayili ? "İç not" : "Notu kaydet"}
           </button>
+          {bayili && (
+            <button type="submit" name="islem" value="bayiye" disabled={bekliyor} className={IKINCIL_BTN}>Bayiye yanıtla</button>
+          )}
           {!kapali && (
             <button
               type="submit"

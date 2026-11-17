@@ -45,7 +45,7 @@ export default function HazirRaporlar({ kaynaklar }: { kaynaklar: RaporKaynaklar
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2.5">
         {liste.map((r) => {
           const satirSayisi = Math.max(0, r.tablo(kaynaklar).length - 1);
-          const alt = raporAltBasligi(r, kaynaklar.donem);
+          const alt = raporAltBasligi(r, kaynaklar.donem, kaynaklar.ozet);
           return (
             <li key={r.id} className="flex flex-col gap-2 rounded-2xl border border-line p-3.5">
               <div className="flex items-center gap-2">

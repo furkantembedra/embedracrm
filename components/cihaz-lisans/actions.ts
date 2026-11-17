@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { ayEkle, lisansUygula } from "./ortak";
 import { cihazEkleDepo, cihaziGuncelle, type Cihaz, type LisansKaydi, type LisansPlani } from "./queries";
+import { hareketEkle } from "@/components/bayiler/queries";
+import { yenilemeTalebiSil } from "@/components/portal/queries";
 
 /** Cihaz verisini gösteren sayfalar */
 function yenile(seriNo?: string) {
@@ -47,6 +49,15 @@ export async function lisansTanimla(_onceki: LisansFormDurumu, form: FormData): 
   // await supabase.from("licenses").insert({ device_serial: seriNo, plan, starts_at: baslangic, ends_at: lisans.bitis });
   const cihaz = await cihaziGuncelle(seriNo, (c) => lisansUygula(c, lisans));
   if (!cihaz) return { hatalar: { seriNo: "Cihaz bulunamadı." } };
+  // Bayinin müşterisindeki cihaz: portal siparişiyle gelen lisansla aynı izi bırakır (bayi yenileme oranı + açık talebin kapanması)
+  if (cihaz.bayiId && cihaz.musteriId) {
+    await hareketEkle({
+      id: crypto.randomUUID(), bayiId: cihaz.bayiId, tur: "lisans", tarih: baslangic,
+      kalemler: [{ model: cihaz.model, seriNo }], musteri: { id: cihaz.musteriId, ad: cihaz.musteri }, plan, sureAy: sure, not: "CRM › Cihaz & Lisans",
+    });
+    await yenilemeTalebiSil(seriNo);
+    for (const y of ["/bayiler", "/portal", "/portal/lisanslar", "/portal/cihazlar"]) revalidatePath(y);
+  }
   yenile(seriNo);
 
   return { lisans, zaman: Date.now() };

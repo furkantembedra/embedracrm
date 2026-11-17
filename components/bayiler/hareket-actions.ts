@@ -6,7 +6,7 @@ import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { cihazEkleDepo, cihaziGuncelle, getCihaz, type Cihaz, type LisansPlani } from "@/components/cihaz-lisans/queries";
 import { ayEkle, lisansUygula } from "@/components/cihaz-lisans/ortak";
 import { getMusteri, musteriEkle, musteriyiGuncelle, type Musteri } from "@/components/musteriler/queries";
-import { ULKELER, aktifBayiyiGuncelle, getAktifBayiler, getBayiHareketleri, hareketEkle, type BayiHareketi } from "./queries";
+import { ULKELER, getAktifBayiler, getBayiHareketleri, hareketEkle, type BayiHareketi } from "./queries";
 
 const SERI_NO = /^EO1-\d{4}-\d{4}$/;
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
@@ -65,10 +65,7 @@ export async function cihazSevkEt(_o: HareketDurumu, form: FormData): Promise<Ha
     not: metin("not") || undefined,
   };
   await hareketEkle(hareket);
-  await aktifBayiyiGuncelle(bayi.id, (b) => {
-    b.stok += adet;
-    b.moqGerceklesen += adet;
-  });
+  // Stok / satış / MOQ sayaçları hareketlerden hesaplanır (getAktifBayiler)
   // TODO: Supabase: insert into dealer_movements (+ devices with owner_dealer_id)
   yenile();
   return { hareket, cihazlar, zaman: Date.now() };
@@ -100,7 +97,7 @@ export async function satisBildir(_o: HareketDurumu, form: FormData): Promise<Ha
   const hareketler = await getBayiHareketleri();
   const kendi = hareketler.filter((h) => h.bayiId === bayi.id);
   const sevk = kendi.filter((h) => h.tur === "sevkiyat").flatMap((h) => h.kalemler).filter((k) => k.model === model).length;
-  const satilan = kendi.filter((h) => h.tur === "satis").flatMap((h) => h.kalemler).filter((k) => k.model === model).length;
+  const satilan = kendi.filter((h) => h.tur === "satis" || h.tur === "iade").flatMap((h) => h.kalemler).filter((k) => k.model === model).length;
   if (!hatalar.seriler && seriler.length > sevk - satilan) {
     hatalar.seriler = `Bayinin stoğunda ${Math.max(0, sevk - satilan)} adet ${model === "ONE" ? "ONE" : "ONE LITE"} var; önce sevkiyat girin.`;
   }
@@ -146,10 +143,7 @@ export async function satisBildir(_o: HareketDurumu, form: FormData): Promise<Ha
     not: metin("not") || undefined,
   };
   await hareketEkle(hareket);
-  await aktifBayiyiGuncelle(bayi.id, (b) => {
-    b.stok -= seriler.length;
-    b.satilan += seriler.length;
-  });
+  // Stok / satış / MOQ sayaçları hareketlerden hesaplanır (getAktifBayiler)
   yenile();
   return { hareket, cihazlar, musteri: yeni ? musteri : undefined, zaman: Date.now() };
 }

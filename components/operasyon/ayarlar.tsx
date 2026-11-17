@@ -5,9 +5,9 @@ import { useState, useTransition } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { CIHAZ_MODELLERI, LISANS_PAKETLERI, URUN_BILGI, type FiyatListesi, type LisansPaketi } from "@/lib/urunler";
-import { fiyatListesiKaydet, kargoFirmalariniKaydet, kullaniciKaydet } from "./actions";
+import { fiyatListesiKaydet, kargoFirmalariniKaydet, kullaniciKaydet, servisAdresiKaydet } from "./actions";
 import { ROLLER } from "./ortak";
-import type { Kullanici, Rol } from "./queries";
+import type { Kullanici, Rol, ServisAdresi } from "./queries";
 
 const KART = "flex w-full min-w-0 flex-col gap-4 rounded-card border border-line bg-card p-5";
 const GIRDI = "min-h-10 w-full rounded-control border border-line-strong bg-card px-3 text-[13px] font-medium outline-none focus:border-ink";
@@ -42,6 +42,7 @@ export function FiyatListesiAyari({
     Object.fromEntries(Object.entries(fiyat.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? "" : String(v.fiyat), cihaz: v.cihaz === null ? "" : String(v.cihaz) }])),
   );
   const [kdv, setKdv] = useState(String(Math.round(fiyat.kdv * 1000) / 10));
+  const [kur, setKur] = useState(String(fiyat.eurKur));
   const [aks, setAks] = useState(() => Object.fromEntries(aksesuarlar.map((a) => [a.kod, String(a.fiyat)])));
 
   const kaydet = () =>
@@ -53,6 +54,7 @@ export function FiyatListesiAyari({
           Object.entries(lisans).map(([k, v]) => [k, { fiyat: v.fiyat.trim() ? sayiAl(v.fiyat) : null, cihaz: v.cihaz.trim() ? sayiAl(v.cihaz) : null }]),
         ) as FiyatListesi["lisans"],
         kdv: sayiAl(kdv) / 100,
+        eurKur: sayiAl(kur),
       };
       const aksesuar = Object.fromEntries(Object.entries(aks).map(([k, v]) => [k, sayiAl(v)]));
       const s = await fiyatListesiKaydet(yeni, aksesuar);
@@ -82,6 +84,11 @@ export function FiyatListesiAyari({
           KDV oranı (%)
           <input inputMode="decimal" value={kdv} onChange={(e) => setKdv(e.target.value)} className={`${GIRDI} tabular-nums`} />
           <span className="font-normal text-muted">Cihaz ve aksesuara eklenir, lisansa eklenmez</span>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-bold">
+          EUR kuru (1 € = ? TL)
+          <input inputMode="decimal" value={kur} onChange={(e) => setKur(e.target.value)} className={`${GIRDI} tabular-nums`} />
+          <span className="font-normal text-muted">Yurt dışı bayilerin portal fiyatları ve siparişleri bu kurla EUR&apos;ya çevrilir</span>
         </label>
       </div>
 
@@ -275,6 +282,36 @@ export function EkipAyari({ ekip, onKaydedildi }: { ekip: Kullanici[]; onKaydedi
           ),
         )}
       </ul>
+    </section>
+  );
+}
+
+/* ---------- Bayi portalı: servis adresi ---------- */
+
+export function ServisAdresiAyari({ servis, onKaydedildi }: { servis: ServisAdresi; onKaydedildi: (s: ServisAdresi) => void }) {
+  const [bekliyor, baslat] = useTransition();
+  const [hata, setHata] = useState<string | null>(null);
+  const [tamam, setTamam] = useState<string | null>(null);
+  const [d, setD] = useState(servis);
+  const kaydet = () => baslat(async () => {
+    setTamam(null);
+    const s = await servisAdresiKaydet(d);
+    if (s.hata) setHata(s.hata);
+    else if (s.servis) { setHata(null); setTamam("Kaydedildi. Bayi portalındaki RMA gönderim talimatı güncellendi."); onKaydedildi(s.servis); }
+  });
+  return (
+    <section aria-labelledby="sa-baslik" className={KART}>
+      <div className="flex flex-col gap-0.5">
+        <h2 id="sa-baslik" className="text-[17px] font-extrabold">Servis adresi</h2>
+        <span className="text-xs font-semibold text-muted">Bayiler RMA cihazlarını bu adrese gönderir (bayi portalı › Arıza / RMA)</span>
+      </div>
+      <label className="flex flex-col gap-1 text-xs font-bold">Ad<input value={d.ad} onChange={(e) => setD({ ...d, ad: e.target.value })} className={GIRDI} /></label>
+      <label className="flex flex-col gap-1 text-xs font-bold">Açık adres<textarea value={d.adres} onChange={(e) => setD({ ...d, adres: e.target.value })} rows={2} className="rounded-control border border-line-strong bg-card px-3 py-2 text-sm font-medium outline-none focus:border-ink" /></label>
+      <label className="flex flex-col gap-1 text-xs font-bold">Telefon<input value={d.telefon} onChange={(e) => setD({ ...d, telefon: e.target.value })} className={GIRDI} /></label>
+      <div className="flex flex-wrap items-center gap-3">
+        <Durum hata={hata} tamam={tamam} />
+        <button type="button" onClick={kaydet} disabled={bekliyor} className={`${BIRINCIL} ml-auto`}>{bekliyor ? "Kaydediliyor…" : "Adresi kaydet"}</button>
+      </div>
     </section>
   );
 }

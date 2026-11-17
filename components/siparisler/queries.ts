@@ -2,8 +2,9 @@
 // Supabase bağlanınca fonksiyonların içini supabase.from("orders" | "stock" | "returns")... ile değiştirin.
 import type { CihazModeli } from "@/lib/urunler";
 
-/** odeme → hazirlaniyor → kargoda → teslim → tamamlandi. Yalnızca lisans içeren siparişte kargo adımları atlanır. */
-export type SiparisDurumu = "odeme" | "hazirlaniyor" | "kargoda" | "teslim" | "tamamlandi";
+/** odeme → hazirlaniyor → kargoda → teslim → tamamlandi. Yalnızca lisans içeren siparişte kargo adımları atlanır.
+ *  iptal: kargodan önce (ödeme bekliyor / hazırlanıyor) iptal edilen sipariş; gelir ve stok hesaplarına girmez. */
+export type SiparisDurumu = "odeme" | "hazirlaniyor" | "kargoda" | "teslim" | "tamamlandi" | "iptal";
 export type OdemeYontemi = "Kart" | "Havale/EFT" | "Proforma";
 export type ParaBirimi = "TRY" | "EUR";
 
@@ -35,7 +36,11 @@ export type Siparis = {
   teslimTarihi: string | null; // "2026-11-04"
   faturaNo: string | null;
   lisansBaslangic: string | null; // lisans teslim edilince
+  /** Bayi lisans siparişinde lisansların gideceği cihazlar (yenileme / satışta sipariş edilen lisans).
+   *  Teslimde bu cihazlara işlenir; atanmamış lisans adetleri bayinin lisans havuzuna eklenir. */
+  lisansAtamalari?: { seriNo: string; plan: string; sureAy: number }[];
   notlar: SiparisNotu[]; // eskiden yeniye
+  iptal?: { tarih: string; neden: string; kim: "embedra" | "bayi"; odemeIadesi: boolean }; // durum "iptal" ise
 };
 
 export type StokKalemi = { kod: string; ad: string; adet: number; kritik: number; hedef: number; fiyat: number | null };

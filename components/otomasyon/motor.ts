@@ -9,6 +9,7 @@ import { getTalepler } from "@/components/destek/queries";
 import { getFirsatlar, KAPALI_ASAMALAR } from "@/components/satis-hatti/queries";
 import { getBilesenler, getEkip } from "@/components/operasyon/queries";
 import { getMusteri, musteriBulAdla } from "@/components/musteriler/queries";
+import { getAktifBayiler } from "@/components/bayiler/queries";
 import { izinVar } from "@/components/musteriler/ortak";
 import { hatirlatmaEkleDepo } from "@/components/hatirlatmalar/queries";
 import { gunEkle } from "@/components/hatirlatmalar/kurallar";
@@ -25,6 +26,7 @@ export type Eslesme = {
   firma: string;
   detay: string;
   musteriId: string | null;
+  bayi?: string; // bayinin müşterisi: iletişim bayide, Embedra müşteriye doğrudan e-posta göndermez
   kayit: { tur: "firsat" | "teklif" | "siparis" | "rma" | "stok" | "cihaz" | "destek"; id: string };
   nitelik?: KuralFiltresi; // filtrelenebilir özellikler (kayıtta yoksa o filtre bu kayda uygulanmaz)
 };
@@ -38,15 +40,23 @@ export function filtreUyar(e: Eslesme, t: TetikleyiciId, f: KuralFiltresi) {
 const p2 = (n: number) => String(n).padStart(2, "0");
 const bugunYerel = (d = new Date()) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 
+/** Bayi kimliği → ad (bayinin müşterisindeki cihazlar için) */
+async function bayiAdlari() {
+  return new Map((await getAktifBayiler()).map((b) => [b.id, b.ad]));
+}
+const bayiEki = (ad: string | undefined) => (ad ? ` (bayi: ${ad})` : "");
+
 /** Bir tetikleyicinin şu an eşleşen kayıtları */
 export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYerel()): Promise<Eslesme[]> {
   switch (t) {
     case "lisans-bitiyor": {
       const son = gunEkle(bugun, gun);
+      const bayiler = await bayiAdlari();
       return (await getCihazlar())
         .filter((c) => c.musteriId && c.lisansBitis && c.lisansBitis >= bugun && c.lisansBitis <= son)
         .map((c) => ({
-          anahtar: `${c.seriNo}:${c.lisansBitis}`, kayitAd: `${c.seriNo} · ${c.musteri}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
+          anahtar: `${c.seriNo}:${c.lisansBitis}`, kayitAd: `${c.seriNo} · ${c.musteri}${bayiEki(c.bayiId ? bayiler.get(c.bayiId) : undefined)}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
+          bayi: c.bayiId ? bayiler.get(c.bayiId) ?? c.bayiId : undefined,
           detay: `${c.seriNo} cihazının ${c.plan} lisansı ${gunYaz(c.lisansBitis!)} tarihinde sona eriyor.`, kayit: { tur: "cihaz" as const, id: c.seriNo },
           nitelik: { ulke: c.ulke, plan: c.plan, model: c.model },
         }));
@@ -61,10 +71,13 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
     }
     case "rma-gecikti": {
       const esik = gunEkle(bugun, -gun);
+      const [bayiler, cihazlar] = await Promise.all([bayiAdlari(), getCihazlar()]);
+      const cihazBayisi = new Map(cihazlar.filter((c) => c.bayiId).map((c) => [c.seriNo, c.bayiId!]));
       return (await getRmalar())
         .filter((r) => r.adim !== "tamamlandi" && r.adim !== "gonderildi" && r.acilis <= esik)
         .map((r) => ({
           anahtar: r.id, kayitAd: `${r.id} · ${r.sahip.ad}`, href: `/rma?kayit=${r.id}`, firma: r.sahip.ad, musteriId: r.sahip.tur === "musteri" ? r.sahip.id : null,
+          bayi: r.sahip.tur === "musteri" && cihazBayisi.has(r.seriNo) ? bayiler.get(cihazBayisi.get(r.seriNo)!) ?? cihazBayisi.get(r.seriNo) : undefined,
           detay: `${r.id} numaralı servis kaydınız ${gunYaz(r.acilis)} tarihinden beri devam ediyor.`, kayit: { tur: "rma" as const, id: r.id },
           nitelik: { model: r.model },
         }));
@@ -99,10 +112,12 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
     }
     case "cihaz-sessiz": {
       const esik = gunEkle(bugun, -gun);
+      const bayiler = await bayiAdlari();
       return (await getCihazlar())
         .filter((c) => c.musteriId && c.durum !== "stokta" && c.sonGorulme && c.sonGorulme.slice(0, 10) <= esik)
         .map((c) => ({
-          anahtar: `${c.seriNo}:${c.sonGorulme!.slice(0, 10)}`, kayitAd: `${c.seriNo} · ${c.musteri}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
+          anahtar: `${c.seriNo}:${c.sonGorulme!.slice(0, 10)}`, kayitAd: `${c.seriNo} · ${c.musteri}${bayiEki(c.bayiId ? bayiler.get(c.bayiId) : undefined)}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
+          bayi: c.bayiId ? bayiler.get(c.bayiId) ?? c.bayiId : undefined,
           detay: `${c.seriNo} cihazından ${gunYaz(c.sonGorulme!.slice(0, 10))} tarihinden beri bildirim gelmedi.`, kayit: { tur: "cihaz" as const, id: c.seriNo },
           nitelik: { ulke: c.ulke, plan: c.plan, model: c.model },
         }));
@@ -142,6 +157,7 @@ async function hatirlatmaEylemi(k: Kural, e: Eslesme, simdi: Date): Promise<Eyle
 async function epostaEylemi(k: Kural, e: Eslesme, taban: string): Promise<EylemSonucu> {
   const atla = (ayrinti: string): EylemSonucu => ({ eylem: "eposta", durum: "atlandi", ayrinti });
   if (!e.musteriId) return atla("Kayıt bir müşteriye bağlı değil.");
+  if (e.bayi) return atla(`Bayinin müşterisi (${e.bayi}): iletişim bayide, Embedra doğrudan e-posta göndermez.`);
   const m = await getMusteri(e.musteriId);
   if (!m) return atla("Müşteri kaydı bulunamadı.");
   const engel = new Set(await getEngelli());

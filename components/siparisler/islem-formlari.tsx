@@ -200,7 +200,9 @@ export function LisansFormu({ siparis, onTamam, onVazgec }: Ortak) {
       <p className="rounded-control bg-[#F4F5F0] px-3 py-2.5 text-[13px] text-[#474A42]">
         {l && l.tur === "lisans" ? `${l.adet > 1 ? `${l.adet}× ` : ""}${l.paket} · ${l.sureAy} ay` : "Lisans"}
         {siparis.bayiId
-          ? " · bayi siparişi: lisansı bayi aktive eder, burada yalnızca teslim kaydedilir."
+          ? siparis.lisansAtamalari?.length
+            ? ` · bayi siparişi: ${siparis.lisansAtamalari.map((a) => a.seriNo).join(", ")} cihazlarına işlenir (mevcut lisans bitişinden devam); kalan adetler bayinin lisans havuzuna eklenir.`
+            : " · bayi siparişi: lisanslar bayinin lisans havuzuna eklenir; bayi satışta ya da yenilemede cihaza atar."
           : siparis.seriNolar.length
             ? ` · ${siparis.seriNolar.join(", ")} cihazlarına işlenir.`
             : " · siparişe bağlı cihaz yok; yalnızca teslim kaydedilir."}

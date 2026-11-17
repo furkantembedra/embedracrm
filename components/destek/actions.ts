@@ -35,7 +35,7 @@ export async function talepKaydet(_onceki: TalepFormDurumu, form: FormData): Pro
   const musteri = musteriId ? await getMusteri(musteriId) : null;
   const hatalar: Record<string, string> = {};
   if (!musteri) hatalar.musteriId = "Müşteri seçin.";
-  if (!KANALLAR.includes(kanal)) hatalar.kanal = "Talebin nereden geldiğini seçin.";
+  if (!(KANALLAR as readonly string[]).includes(kanal)) hatalar.kanal = "Talebin nereden geldiğini seçin.";
   if (!KONULAR.includes(konu)) hatalar.konu = "Konu seçin.";
   if (!ONCELIKLER.includes(oncelik)) hatalar.oncelik = "Öncelik seçin.";
   if (!baslik) hatalar.baslik = "Kısa bir başlık yazın.";
@@ -83,16 +83,17 @@ export type NotFormDurumu = { hata?: string; not?: TalepNotu; durum?: TalepDurum
 export async function notKaydet(_onceki: NotFormDurumu, form: FormData): Promise<NotFormDurumu> {
   const metin = metinAl(form);
   const id = metin("talepId");
-  const islem = metin("islem") as "not" | "islemde" | "beklemede" | "cozuldu" | "yeniden";
+  const islem = metin("islem") as "not" | "islemde" | "beklemede" | "cozuldu" | "yeniden" | "bayiye";
   const yazi = metin("metin");
   const dosya = dosyaAdi(form);
 
   if (islem === "not" && !yazi && !dosya) return { hata: "Not yazın veya dosya ekleyin." };
+  if (islem === "bayiye" && !yazi) return { hata: "Bayiye gidecek yanıtı yazın." };
 
   const varsayilan = { islemde: "Talep işleme alındı.", beklemede: "Talep beklemeye alındı.", cozuldu: "Talep çözüldü olarak kapatıldı.", yeniden: "Talep yeniden açıldı." };
   const not: TalepNotu = {
-    tur: islem === "not" ? "not" : islem,
-    metin: yazi || (islem === "not" ? "Dosya eklendi." : varsayilan[islem]),
+    tur: islem,
+    metin: yazi || (islem === "not" || islem === "bayiye" ? "Dosya eklendi." : varsayilan[islem]),
     zaman: simdiIso(),
     ...(dosya ? { dosya } : {}),
   };
@@ -107,6 +108,7 @@ export async function notKaydet(_onceki: NotFormDurumu, form: FormData): Promise
   if (!talep) return { hata: "Talep bulunamadı." };
 
   yenile(id);
+  if (talep.bayiId) revalidatePath("/portal/destek");
   return { not, durum, id };
 }
 

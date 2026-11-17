@@ -29,7 +29,7 @@ export async function ekleriOku(dosyalar: File[], mevcut: RmaEki[] = []): Promis
 }
 
 export function rmaYenile() {
-  for (const y of ["/rma", "/cihaz-lisans", "/musteriler", "/operasyon", "/siparisler", "/portal/rma", "/portal"]) revalidatePath(y);
+  for (const y of ["/rma", "/cihaz-lisans", "/musteriler", "/operasyon", "/siparisler", "/bayiler", "/portal/rma", "/portal/cihazlar", "/portal"]) revalidatePath(y);
 }
 
 export async function rmaOlustur(v: {

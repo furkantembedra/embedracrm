@@ -13,10 +13,10 @@ import type { Firsat } from "@/components/satis-hatti/queries";
 import type { CihazModeli } from "@/lib/urunler";
 import MalzemeIhtiyaci from "./malzeme-ihtiyaci";
 import { ihtiyactanOlustur, icUretimGirisiSil, kaliteyeGonder, tedarikTeslimAl, tedarikYolda, uretimeAl, type UretimSonucu } from "./actions";
-import type { BilesenKalemi, HavuzSeri, IcUretimEmri, Kullanici, Recete, TedarikSiparisi, UretimPartisi } from "./queries";
+import type { BilesenKalemi, HavuzSeri, IcUretimEmri, Kullanici, Recete, ServisAdresi, TedarikSiparisi, UretimPartisi } from "./queries";
 import { BilesenStoku, IcUretimListesi, SeriHavuzu, TedarikListesi, UretimOzeti, UretimPartileri } from "./uretim";
 import { GunlukGirisFormu, IcUretimFormu, KaliteFormu, PartiFormu, TedarikFormu } from "./uretim-formlari";
-import { EkipAyari, FiyatListesiAyari, KargoFirmalariAyari } from "./ayarlar";
+import { EkipAyari, FiyatListesiAyari, KargoFirmalariAyari, ServisAdresiAyari } from "./ayarlar";
 
 type Sekme = "uretim" | "ihtiyac" | "ayarlar";
 type Pencere = null | { tur: "parti" } | { tur: "depo"; id: string } | { tur: "tamir"; id: string } | { tur: "tedarik" } | { tur: "icUretim" } | { tur: "giris"; id: string };
@@ -32,6 +32,7 @@ export default function OperasyonGorunumu(p: {
   aksesuarlar: { kod: string; ad: string; fiyat: number }[];
   kablolar: { kod: string; ad: string }[];
   kargoFirmalari: string[];
+  servis: ServisAdresi;
   ekip: Kullanici[];
   siparisler: Siparis[];
   firsatlar: Firsat[];
@@ -46,6 +47,7 @@ export default function OperasyonGorunumu(p: {
   const [aksesuarlar, setAksesuarlar] = useState(p.aksesuarlar);
   const [kargo, setKargo] = useState(p.kargoFirmalari);
   const [ekip, setEkip] = useState(p.ekip);
+  const [servis, setServis] = useState(p.servis);
   const [pencere, setPencere] = useState<Pencere>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [bekliyor, baslat] = useTransition();
@@ -156,6 +158,7 @@ export default function OperasyonGorunumu(p: {
           <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
             <EkipAyari ekip={ekip} onKaydedildi={setEkip} />
             <KargoFirmalariAyari firmalar={kargo} onKaydedildi={setKargo} />
+            <ServisAdresiAyari servis={servis} onKaydedildi={setServis} />
           </div>
         </div>
       )}

@@ -9,8 +9,13 @@ export const DURUM_ADI: Record<SiparisDurumu, string> = {
   kargoda: "Kargoda",
   teslim: "Teslim edildi",
   tamamlandi: "Tamamlandı",
+  iptal: "İptal edildi",
 };
-export const DURUM_TONU: Record<SiparisDurumu, ChipTon> = { odeme: "warn", hazirlaniyor: "info", kargoda: "ink", teslim: "lime", tamamlandi: "ok" };
+export const DURUM_TONU: Record<SiparisDurumu, ChipTon> = { odeme: "warn", hazirlaniyor: "info", kargoda: "ink", teslim: "lime", tamamlandi: "ok", iptal: "err" };
+/** Kapanmamış sipariş (tamamlanan ve iptal edilenler hariç) */
+export const acikSiparis = (s: Siparis) => s.durum !== "tamamlandi" && s.durum !== "iptal";
+/** İptal edilebilir: henüz kargoya verilmemiş */
+export const iptalEdilebilir = (s: Siparis) => s.durum === "odeme" || s.durum === "hazirlaniyor";
 
 export type Sekme = "tumu" | SiparisDurumu;
 export const SEKMELER: { id: Sekme; ad: string }[] = [
@@ -20,10 +25,11 @@ export const SEKMELER: { id: Sekme; ad: string }[] = [
   { id: "kargoda", ad: "Kargoda" },
   { id: "teslim", ad: "Teslim edildi" },
   { id: "tamamlandi", ad: "Tamamlandı" },
+  { id: "iptal", ad: "İptal" },
 ];
 export const sekmede = (s: Siparis, sekme: Sekme) => sekme === "tumu" || s.durum === sekme;
 /** Ödemesi alınmış ama faturası kesilmemiş sipariş (özet kartı ve liste filtresi aynı kuralı kullanır) */
-export const faturaBekliyor = (s: Siparis) => s.durum !== "odeme" && !s.faturaNo;
+export const faturaBekliyor = (s: Siparis) => s.durum !== "odeme" && s.durum !== "iptal" && !s.faturaNo;
 
 /** Kargo gerektirmeyen (yalnızca lisans) sipariş */
 export const dijital = (s: Siparis) => s.kalemler.every((k) => k.tur === "lisans");
@@ -58,7 +64,7 @@ export const icerikOzeti = (s: Siparis, stok: StokKalemi[] = []) => s.kalemler.m
 
 /** Adım izleyicideki 5 adımdan kaçı tamamlandı */
 export function tamamlananAdim(s: Siparis) {
-  if (s.durum === "odeme") return 0;
+  if (s.durum === "odeme" || s.durum === "iptal") return 0;
   if (s.durum === "hazirlaniyor") return 1;
   if (s.durum === "kargoda") return 3;
   if (s.durum === "teslim") return 4;

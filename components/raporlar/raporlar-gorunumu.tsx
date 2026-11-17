@@ -9,7 +9,7 @@ import { useBugun } from "@/lib/use-bugun";
 import type { Cihaz } from "@/components/cihaz-lisans/queries";
 import type { Talep } from "@/components/destek/queries";
 import type { AktifBayi } from "@/components/bayiler/queries";
-import { DONEM_BILGI, type Donem, type RaporOzeti } from "./queries";
+import type { Donem, RaporOzeti } from "./queries";
 import { HAZIR_RAPORLAR, raporAltBasligi, type RaporKaynaklari } from "./hazir-rapor-tanimlari";
 import DonemSecici from "./donem-secici";
 import OzetKartlari from "./ozet-kartlari";
@@ -36,7 +36,7 @@ export default function RaporlarGorunumu({
   const bugun = useBugun();
   const [donem, setDonem] = useState<Donem>("ceyrek");
   const r = ozet.donemler[donem];
-  const etiket = DONEM_BILGI[donem].uzun;
+  const etiket = r.etiket;
   const kaynaklar: RaporKaynaklari = { ozet, donem, cihazlar, talepler, bayiler, bugun };
 
   // Üstteki Excel / PDF: seçili dönemin satış özeti
@@ -55,7 +55,7 @@ export default function RaporlarGorunumu({
         </button>
         <button
           type="button"
-          onClick={() => pdfYazdir(satisOzeti.baslik, raporAltBasligi(satisOzeti, donem), satisOzeti.tablo(kaynaklar))}
+          onClick={() => pdfYazdir(satisOzeti.baslik, raporAltBasligi(satisOzeti, donem, ozet), satisOzeti.tablo(kaynaklar))}
           className={IKINCIL_BTN}
         >
           <FileText size={18} aria-hidden="true" />PDF

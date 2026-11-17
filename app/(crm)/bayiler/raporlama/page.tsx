@@ -1,5 +1,5 @@
 import RaporlarGorunumu from "@/components/raporlar/raporlar-gorunumu";
-import { getRaporOzeti } from "@/components/raporlar/queries";
+import { getRaporOzeti } from "@/components/raporlar/rapor-verisi";
 import { getCihazlar } from "@/components/cihaz-lisans/queries";
 import { getTalepler } from "@/components/destek/queries";
 import { getAktifBayiler } from "@/components/bayiler/queries";

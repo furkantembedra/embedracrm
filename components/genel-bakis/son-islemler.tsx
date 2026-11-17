@@ -1,16 +1,8 @@
 // Son yapılan kayıt işlemleri (zaman çizelgesi)
 import Card from "@/components/ui/card";
 
-export type IslemTuru = "siparis" | "bayi" | "cihaz" | "lead" | "satis";
+export type IslemTuru = "siparis" | "bayi" | "cihaz" | "lead" | "satis" | "destek";
 export type Islem = { kim: string; ne: string; zaman: string; kaynak: string; tur: IslemTuru };
-
-const DEMO: Islem[] = [
-  { kim: "Volant Lenkung Service", ne: "2 adet ONE + Pro+ lisans siparişi verdi.", zaman: "12 dk önce", kaynak: "Sipariş kaydı", tur: "siparis" },
-  { kim: "Polska EPS Serwis", ne: "bayi başvurusu değerlendirmeye alındı.", zaman: "48 dk önce", kaynak: "Bayi kaydı", tur: "bayi" },
-  { kim: "EO1-2402-0611", ne: "servisten döndü, kayıt güncellendi.", zaman: "1 sa önce", kaynak: "Cihaz kaydı", tur: "cihaz" },
-  { kim: "Mert Usta Oto", ne: "lead olarak eklendi (kaynak: Instagram).", zaman: "2 sa önce", kaynak: "Lead kaydı", tur: "lead" },
-  { kim: "Iberia Dirección SL", ne: "için demo tarihi girildi.", zaman: "3 sa önce", kaynak: "Satış hattı", tur: "satis" },
-];
 
 const NOKTA: Record<IslemTuru, string> = {
   siparis: "bg-lime-dark",
@@ -18,9 +10,10 @@ const NOKTA: Record<IslemTuru, string> = {
   cihaz: "bg-ink",
   lead: "bg-[#E58A2B]",
   satis: "bg-blue",
+  destek: "bg-[#7A5AF8]",
 };
 
-export default function SonIslemler({ veri = DEMO }: { veri?: Islem[] }) {
+export default function SonIslemler({ veri }: { veri: Islem[] }) {
   return (
     <Card title="Son işlemler">
       {veri.length === 0 ? (

@@ -131,13 +131,11 @@ export default function SatisHattiGorunumu({
   musteriler,
   kampanyalar = [],
   fiyatListesi,
-  bayiler = [],
 }: {
   firsatlar: Firsat[];
   musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
   kampanyalar?: { id: string; ad: string; durum: string }[];
   fiyatListesi?: FiyatListesi;
-  bayiler?: { id: string; ad: string }[];
 }) {
   const router = useRouter();
   const [firsatlar, setFirsatlar] = useState(ilk);
@@ -300,7 +298,7 @@ export default function SatisHattiGorunumu({
       )}
 
       <Modal acik={duzenlenen !== null} onKapat={duzenleKapat} baslik="Fırsatı düzenle" aciklama={duzenlenen ? `${duzenlenen.firma} · ${ASAMA_BILGI[duzenlenen.asama].ad}` : undefined}>
-        {duzenlenen && <FirsatFormu key={duzenlenen.id} firsat={duzenlenen} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} bayiler={bayiler} onKaydedildi={duzenlendi} onVazgec={duzenleKapat} />}
+        {duzenlenen && <FirsatFormu key={duzenlenen.id} firsat={duzenlenen} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={duzenlendi} onVazgec={duzenleKapat} />}
       </Modal>
 
       <Modal
@@ -310,7 +308,7 @@ export default function SatisHattiGorunumu({
         aciklama={ekleAsama ? `${ASAMA_BILGI[ekleAsama].ad} aşamasına eklenecek` : undefined}
       >
         {ekleAsama && (
-          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} bayiler={bayiler} onKaydedildi={eklendi} onVazgec={kapat} />
+          <FirsatFormu key={ekleAsama} baslangicAsamasi={ekleAsama} kampanyalar={kampanyalar} fiyatListesi={fiyatListesi} onKaydedildi={eklendi} onVazgec={kapat} />
         )}
       </Modal>
 

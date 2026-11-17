@@ -8,23 +8,11 @@ export type LeadKaynaklariVerisi = {
   kaynaklar: { ad: string; yuzde: number }[];
 };
 
-const DEMO: LeadKaynaklariVerisi = {
-  donem: "Ekim",
-  toplam: 214,
-  kaynaklar: [
-    { ad: "Web sitesi", yuzde: 38 },
-    { ad: "WhatsApp", yuzde: 24 },
-    { ad: "Instagram", yuzde: 17 },
-    { ad: "Bayi yönlendirmesi", yuzde: 13 },
-    { ad: "Fuar & etkinlik", yuzde: 8 },
-  ],
-};
+const RENKLER = ["bg-ink", "bg-[#3A3C36]", "bg-blue", "bg-lime-dark", "bg-[#C9CCC2]", "bg-[#E58A2B]"];
 
-const RENKLER = ["bg-ink", "bg-[#3A3C36]", "bg-blue", "bg-lime-dark", "bg-[#C9CCC2]"];
-
-export default function LeadKaynaklari({ veri = DEMO }: { veri?: LeadKaynaklariVerisi }) {
+export default function LeadKaynaklari({ veri }: { veri: LeadKaynaklariVerisi }) {
   return (
-    <Card title="Lead kaynakları" description={`${veri.donem} · ${sayi(veri.toplam)} yeni lead`}>
+    <Card title="Lead kaynakları" description={`${veri.donem} · ${sayi(veri.toplam)} kayıt`}>
       <ul className="flex flex-col gap-3.5">
         {veri.kaynaklar.map((k, i) => (
           <li key={k.ad} className="flex flex-col gap-1.5">

@@ -41,7 +41,6 @@ export type Firsat = {
   kampanyaId?: string | null; // lead hangi pazarlama kampanyasından geldi
   telefon?: string; // "+905321234567" (WhatsApp lead'lerinde otomatik dolar)
   mesajlar?: WhatsappMesaji[]; // eskiden yeniye
-  bayiId?: string | null; // lead bir bayiye yönlendirildiyse (bayi portalında görünür)
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
 };
 
@@ -71,8 +70,7 @@ const DEPO = (g.__embedraFirsatlar ??= DEMO.map((f) => ({ ...f, kampanyaId: DEMO
 const DEMO_EK: Record<string, Partial<Firsat>> = {
   f3: { telefon: "+905321112233", mesajlar: [{ id: "demo-wa-1", metin: "Merhaba, 2 adet ONE ve Pro+ lisans için fiyat alabilir miyim?", zaman: "2026-11-03T10:12:00.000Z", yon: "gelen", tur: "text" }] },
   f11: { telefon: "+905441234567" },
-  f2: { bayiId: "autotech", sonHareket: "2026-10-30" },
-  f10: { bayiId: "volant-netz" },
+  f2: { sonHareket: "2026-10-30" },
   f8: { sonHareket: "2026-11-02" },
   f4: { sonHareket: "2026-11-04" },
 };

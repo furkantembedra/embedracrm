@@ -4,11 +4,12 @@ import { KANALLAR, ONCELIKLER } from "@/lib/constants";
 
 export type TalepDurumu = "yeni" | "islemde" | "beklemede" | "cozuldu";
 export type Oncelik = (typeof ONCELIKLER)[number];
-export type Kanal = (typeof KANALLAR)[number];
+export type Kanal = (typeof KANALLAR)[number] | "Bayi portalı"; // bayi portalı yalnızca portaldan açılan talepte
 export const KONULAR = ["Bağlantı", "Flash / yazılım", "Lisans", "Donanım arızası", "Araç kapsamı isteği", "Diğer"] as const;
 export type Konu = (typeof KONULAR)[number];
 
-export type NotTuru = "acilis" | "not" | "gorusme" | "yapilacak" | "beklemede" | "cozuldu" | "islemde" | "yeniden";
+// bayi: bayinin portaldan yazdığı mesaj · bayiye: Embedra'nın bayiye görünen yanıtı (diğer notlar iç nottur, bayi görmez)
+export type NotTuru = "acilis" | "not" | "gorusme" | "yapilacak" | "beklemede" | "cozuldu" | "islemde" | "yeniden" | "bayi" | "bayiye";
 export type TalepNotu = { tur: NotTuru; metin: string; zaman: string; dosya?: string }; // zaman: "2026-11-04T09:35"
 
 export type Talep = {
@@ -31,6 +32,7 @@ export type Talep = {
   firmware: string;
   arac: string;
   notlar: TalepNotu[]; // eskiden yeniye
+  bayiId?: string | null; // bayi portalından açılan talep: bayi durumu ve "bayiye yanıt" notlarını portalda görür
 };
 
 export const DURUM_ADI: Record<TalepDurumu, string> = { yeni: "Yeni", islemde: "İşlemde", beklemede: "Beklemede", cozuldu: "Çözüldü" };
@@ -44,6 +46,8 @@ export const NOT_BILGI: Record<NotTuru, { ad: string; renk: string }> = {
   cozuldu: { ad: "Çözüldü", renk: "#1F8A4C" },
   islemde: { ad: "İşleme alındı", renk: "#0E0F0C" },
   yeniden: { ad: "Yeniden açıldı", renk: "#0E0F0C" },
+  bayi: { ad: "Bayiden mesaj", renk: "#7A5AF8" },
+  bayiye: { ad: "Bayiye yanıt", renk: "#7A5AF8" },
 };
 
 const DEMO: Talep[] = [

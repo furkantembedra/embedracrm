@@ -8,7 +8,7 @@ function notlar(s: Siparis): string[] {
   const d = dijital(s);
   const lisans = s.kalemler.find((k) => k.tur === "lisans");
   return [
-    s.durum === "odeme" ? `${s.odeme} ödemesi kontrol edilip işaretlenir` : `${s.odeme} ile alındı`,
+    s.durum === "odeme" ? `${s.odeme} ödemesi kontrol edilip işaretlenir` : s.durum === "iptal" ? (s.iptal?.odemeIadesi ? `${s.odeme} ile alınmıştı · iade edilecek` : "Ödeme alınmadan iptal edildi") : `${s.odeme} ile alındı`,
     d
       ? "Kargo gerekmez, lisans anahtarı hazırlanır"
       : s.seriNolar.length >= cihazAdedi(s)
@@ -19,7 +19,7 @@ function notlar(s: Siparis): string[] {
     !lisans || lisans.tur !== "lisans"
       ? "Bu siparişte lisans yok"
       : s.bayiId
-        ? "Lisansı bayi aktive eder"
+        ? s.lisansAtamalari?.length ? `${s.lisansAtamalari.length} bayi cihazına işlenir` : "Bayinin lisans havuzuna eklenir"
         : s.lisansBaslangic
           ? `${lisans.paket} · ${tarihYaz(s.lisansBaslangic)} başlangıçlı`
           : "Lisans anahtarı müşteriye iletilir",
@@ -34,7 +34,7 @@ export default function SiparisAdimlari({ siparis: s }: { siparis: Siparis }) {
     <ol aria-label="Sipariş adımları" className="flex flex-col">
       {SIPARIS_ADIMLARI.map((ad, i) => {
         const bitti = i < biten;
-        const aktif = i === biten;
+        const aktif = i === biten && s.durum !== "iptal"; // iptal edilen siparişte sıradaki adım yok
         const son = i === SIPARIS_ADIMLARI.length - 1;
         const pas = atlanir(i) && !bitti;
         return (

@@ -8,7 +8,10 @@ import { getFiyatListesi, getKargoFirmalari, havuzdanCikar } from "@/components/
 import { cihazEkleDepo, cihaziGuncelle, getCihaz, type Cihaz, type LisansPlani } from "@/components/cihaz-lisans/queries";
 import { ayEkle, lisansUygula } from "@/components/cihaz-lisans/ortak";
 import { getMusteri, musteriEkle, musteriyiGuncelle, type Musteri, type Olay } from "@/components/musteriler/queries";
-import { hareketEkle } from "@/components/bayiler/queries";
+import { getBayiHareketleri, hareketEkle } from "@/components/bayiler/queries";
+import { siparisiIptalEt } from "./iptal";
+import { stoktakiSeriler } from "@/components/bayiler/ortak";
+import { bayiCihazinaLisansIsle, havuzaEkle } from "@/components/bayiler/lisans-havuzu";
 import { urunTutari, type LisansSecenegi } from "@/components/satis-hatti/urun-secimi";
 import {
   CIHAZ_STOK_KODU, IADE_ADIMLARI, IADE_NEDENLERI, KUTU_ICERIGI, ODEME_YONTEMLERI,
@@ -26,7 +29,7 @@ function simdi() {
 const bugun = () => simdi().slice(0, 10);
 
 function yenile(id?: string) {
-  for (const yol of ["/siparisler", "/cihaz-lisans", "/musteriler", "/bayiler", "/genel-bakis"]) revalidatePath(yol);
+  for (const yol of ["/siparisler", "/cihaz-lisans", "/musteriler", "/bayiler", "/genel-bakis", "/portal/siparis"]) revalidatePath(yol);
   if (id) revalidatePath(`/siparisler/${id}`);
 }
 
@@ -147,6 +150,17 @@ export async function siparisKaydet(_onceki: SiparisFormDurumu, form: FormData):
   return { siparis: structuredClone(siparis), zaman: Date.now() };
 }
 
+/* ---------- İptal ---------- */
+
+/** Kargodan önce iptal (CRM). Bayi siparişinde bayinin temsilcisine haber verilmez: işlemi Embedra yapıyor. */
+export async function siparisIptal(id: string, neden: string): Promise<IslemSonucu> {
+  const r = await siparisiIptalEt(id, neden, "embedra", simdi());
+  if (r.hata || !r.siparis) return { hata: r.hata ?? "Sipariş bulunamadı." };
+  yenile(id);
+  for (const y of ["/operasyon", "/portal", "/portal/lisanslar"]) revalidatePath(y);
+  return { siparis: r.siparis, stok: structuredClone(await getStok()) };
+}
+
 /* ---------- Adımlar ---------- */
 
 export async function odemeAlindi(id: string): Promise<IslemSonucu> {
@@ -258,7 +272,7 @@ export async function lisansTeslim(id: string, baslangic: string): Promise<Islem
   const plan = (["Basic", "Pro", "Pro+"].includes(l.paket) ? l.paket : "Pro+") as LisansPlani;
   const bitis = ayEkle(baslangic, l.sureAy);
 
-  // Lisans, siparişin cihazlarına işlenir (bayi siparişinde lisansı bayi aktive eder)
+  // Lisans, siparişin cihazlarına işlenir (bayi siparişi aşağıda: atanan cihazlar ya da bayinin lisans havuzu)
   if (!s.bayiId) {
     for (const seriNo of s.seriNolar) {
       if (!(await getCihaz(seriNo))) {
@@ -276,9 +290,34 @@ export async function lisansTeslim(id: string, baslangic: string): Promise<Islem
       });
     }
   }
+  // Bayi siparişi: atanmış cihazlara (yenileme / satışta sipariş edilen lisans) işlenir, kalan adetler bayinin lisans havuzuna eklenir
+  let bayiMesaji = "";
+  if (s.bayiId) {
+    const kalan = new Map<string, { paket: LisansPlani; sureAy: number; adet: number }>();
+    for (const k of s.kalemler) {
+      if (k.tur !== "lisans" || !["Basic", "Pro", "Pro+"].includes(k.paket)) continue;
+      const anahtar = `${k.paket}|${k.sureAy}`;
+      kalan.set(anahtar, { paket: k.paket as LisansPlani, sureAy: k.sureAy, adet: (kalan.get(anahtar)?.adet ?? 0) + k.adet });
+    }
+    const islenen: string[] = [];
+    for (const a of s.lisansAtamalari ?? []) {
+      const k = kalan.get(`${a.plan}|${a.sureAy}`);
+      if (!k || k.adet <= 0) continue;
+      const c = await bayiCihazinaLisansIsle(s.bayiId, a.seriNo, k.paket, k.sureAy, baslangic, `Sipariş #${s.id}`);
+      if (c) { k.adet--; islenen.push(a.seriNo); }
+    }
+    const havuza = [...kalan.values()].filter((k) => k.adet > 0);
+    for (const k of havuza) await havuzaEkle(s.bayiId, { ...k, kaynak: s.id, tarih: baslangic });
+    bayiMesaji = [
+      islenen.length ? `${islenen.length} cihaza işlendi (${islenen.join(", ")})` : "",
+      havuza.length ? `bayinin lisans havuzuna eklendi: ${havuza.map((k) => `${k.adet}× ${k.paket}`).join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+  }
+
   await musteriOlayi(s, `Lisans teslim edildi · ${l.paket}, ${baslangic.split("-").reverse().join(".")} başlangıçlı`);
   const kapsam = s.seriNolar.length ? ` (${s.seriNolar.join(", ")})` : "";
-  return guncelle(id, `${l.paket} lisans anahtarı müşteriye iletildi${kapsam}. Sipariş tamamlandı.`, (x) => {
+  const mesaj = s.bayiId ? `Bayi lisansları teslim edildi: ${bayiMesaji || "işlenecek lisans yok"}. Sipariş tamamlandı.` : `${l.paket} lisans anahtarı müşteriye iletildi${kapsam}. Sipariş tamamlandı.`;
+  return guncelle(id, mesaj, (x) => {
     x.lisansBaslangic = baslangic;
     x.durum = "tamamlandi";
     if (!x.teslimTarihi) x.teslimTarihi = baslangic;
@@ -380,6 +419,29 @@ export async function iadeIlerlet(id: string): Promise<IadeSonucu> {
     if (x.adim < IADE_ADIMLARI[x.tur].length - 1) x.adim += 1;
   });
   if (!i) return { hata: "Kayıt bulunamadı." };
+  if (i.tur === "iade" && i.adim === 1) await bayiIadesiniIsle(i);
   yenile();
   return { iade: structuredClone(i) };
+}
+
+/** Bayi siparişinin iadesinde "Ürün alındı" denince cihazlar bayiden çıkar: bayinin stoğundakiler "iade" hareketiyle
+ *  stoktan (ve bu çeyreğin MOQ'sundan) düşer; müşteriye satılmış olanlar yalnızca bayinin cihaz listesinden çıkar. */
+async function bayiIadesiniIsle(i: Iade) {
+  const s = await getSiparis(i.siparisId);
+  if (!s?.bayiId) return;
+  const seriler = (i.urunler ?? []).filter((u) => SERI_NO.test(u));
+  if (!seriler.length) return;
+  const stokta = new Set(stoktakiSeriler(s.bayiId, await getBayiHareketleri()).map((x) => x.seriNo));
+  const kalemler: { model: CihazModeli; seriNo: string }[] = [];
+  for (const no of seriler) {
+    const c = await getCihaz(no);
+    if (!c || c.bayiId !== s.bayiId) continue;
+    if (stokta.has(no)) kalemler.push({ model: c.model, seriNo: no });
+    await cihaziGuncelle(no, (x) => ({ ...x, bayiId: null, musteriId: null, musteri: `Embedra · iade #${i.id}`, durum: "lisanssiz", lisansBaslangic: null, lisansBitis: null }));
+  }
+  if (kalemler.length) await hareketEkle({ id: crypto.randomUUID(), bayiId: s.bayiId, tur: "iade", tarih: bugun(), kalemler, not: `İade #${i.id} · sipariş #${s.id}` });
+  await siparisiGuncelle(s.id, (x) => {
+    x.notlar.push({ metin: `İade #${i.id}: ${seriler.length} cihaz teslim alındı, bayi kayıtlarından çıkarıldı${kalemler.length ? ` (${kalemler.length} tanesi stoktan düştü)` : ""}.`, zaman: simdi(), sistem: true });
+  });
+  for (const y of ["/portal", "/portal/cihazlar", "/portal/siparis"]) revalidatePath(y);
 }

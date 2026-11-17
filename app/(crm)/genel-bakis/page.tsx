@@ -8,7 +8,7 @@ import SonTalepler from "@/components/genel-bakis/son-talepler";
 import SonIslemler from "@/components/genel-bakis/son-islemler";
 import LeadKaynaklari from "@/components/genel-bakis/lead-kaynaklari";
 import BugunYapilacaklar from "@/components/hatirlatmalar/bugun-yapilacaklar";
-import { getCihazlar } from "@/components/cihaz-lisans/queries";
+import { getGenelBakis } from "@/components/genel-bakis/queries";
 
 // Satır düzeni: geniş ekranda yan yana, dar ekranda alt alta
 const SATIR = "flex flex-wrap items-stretch gap-4";
@@ -17,32 +17,32 @@ const DAR = "flex min-w-0 flex-[1_1_300px]";
 const YARIM = "flex min-w-0 flex-[1_1_420px]";
 
 export default async function GenelBakisPage() {
-  const cihazlar = await getCihazlar();
+  const v = await getGenelBakis();
   return (
     <>
       <PageHeader title="Genel Bakış" description="Satış, lisans ve destek durumunun özeti">
       </PageHeader>
 
-      <OzetKartlari />
+      <OzetKartlari veri={v.ozet} />
 
       <BugunYapilacaklar />
 
       <div className={SATIR}>
-        <div className={GENIS}><GelirGrafigi /></div>
-        <div className={DAR}><LisansDagilimi /></div>
+        <div className={GENIS}><GelirGrafigi veri={v.gelirAylari} /></div>
+        <div className={DAR}><LisansDagilimi veri={v.lisans} /></div>
       </div>
 
       <div className={SATIR}>
-        <div className={YARIM}><SatisHattiOzeti /></div>
-        <div className={YARIM}><SuresiDolanlar cihazlar={cihazlar} /></div>
+        <div className={YARIM}><SatisHattiOzeti veri={v.hat} /></div>
+        <div className={YARIM}><SuresiDolanlar cihazlar={v.cihazlar} /></div>
       </div>
 
       <div className={SATIR}>
-        <div className={GENIS}><SonTalepler /></div>
-        <div className={DAR}><SonIslemler /></div>
+        <div className={GENIS}><SonTalepler veri={v.sonTalepler} /></div>
+        <div className={DAR}><SonIslemler veri={v.sonIslemler} /></div>
       </div>
 
-      <LeadKaynaklari />
+      <LeadKaynaklari veri={v.leadKaynaklari} />
     </>
   );
 }

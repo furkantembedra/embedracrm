@@ -4,8 +4,6 @@ import { sayi } from "@/lib/format";
 
 export type LisansDagilimiVerisi = { basic: number; pro: number; proPlus: number };
 
-const DEMO: LisansDagilimiVerisi = { basic: 473, pro: 586, proPlus: 187 };
-
 const PLANLAR = [
   { anahtar: "basic", ad: "Basic", aciklama: "Temel direksiyon testleri", renk: "#C9CCC2" },
   { anahtar: "pro", ad: "Pro", aciklama: "Teşhis, flash, canlı veri", renk: "#0E0F0C" },
@@ -16,17 +14,17 @@ const R = 54;
 const CEVRE = 2 * Math.PI * R;
 const BOSLUK = 2; // dilimler arası boşluk
 
-export default function LisansDagilimi({ veri = DEMO }: { veri?: LisansDagilimiVerisi }) {
+export default function LisansDagilimi({ veri }: { veri: LisansDagilimiVerisi }) {
   const toplam = veri.basic + veri.pro + veri.proPlus;
   const proUstu = toplam ? Math.round(((veri.pro + veri.proPlus) / toplam) * 100) : 0;
 
-  let baslangic = 0;
-  const dilimler = PLANLAR.map((p) => {
-    const uzunluk = toplam ? (veri[p.anahtar] / toplam) * CEVRE : 0;
-    const dilim = { ...p, adet: veri[p.anahtar], baslangic, uzunluk: Math.max(uzunluk - BOSLUK, 0) };
-    baslangic += uzunluk;
-    return dilim;
-  });
+  const uzunluklar = PLANLAR.map((p) => (toplam ? (veri[p.anahtar] / toplam) * CEVRE : 0));
+  const dilimler = PLANLAR.map((p, i) => ({
+    ...p,
+    adet: veri[p.anahtar],
+    baslangic: uzunluklar.slice(0, i).reduce((t, u) => t + u, 0),
+    uzunluk: Math.max(uzunluklar[i] - BOSLUK, 0),
+  }));
 
   return (
     <Card title="Lisans planı dağılımı" description={`${sayi(toplam)} aktif lisans`}>

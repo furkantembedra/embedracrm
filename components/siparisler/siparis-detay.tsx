@@ -8,7 +8,7 @@ import { useBugun } from "@/lib/use-bugun";
 import { LISANS_PAKETLERI, URUN_BILGI } from "@/lib/urunler";
 import type { Siparis, StokKalemi } from "./queries";
 import SiparisAdimlari from "./siparis-adimlari";
-import { DURUM_ADI, DURUM_TONU, para, siradakiEylem, tarihEtiketi, type Eylem } from "./ortak";
+import { DURUM_ADI, DURUM_TONU, iptalEdilebilir, para, siradakiEylem, tarihEtiketi, type Eylem } from "./ortak";
 
 const IKINCIL = "min-h-11 cursor-pointer rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0] disabled:opacity-50";
 const BIRINCIL = "min-h-11 cursor-pointer rounded-control bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-ink-soft disabled:opacity-60";
@@ -30,6 +30,7 @@ export default function SiparisDetay({
   onEylem,
   onFatura,
   onNot,
+  onIptal,
   onMusteriAc,
   onIade,
 }: {
@@ -40,12 +41,15 @@ export default function SiparisDetay({
   onEylem: (e: Eylem) => void;
   onFatura: () => void;
   onNot: (metin: string) => Promise<boolean>;
+  onIptal: (neden: string) => Promise<boolean>;
   onMusteriAc: (id: string) => void;
   onIade: () => void;
 }) {
   const bugun = useBugun();
   const [notAcik, setNotAcik] = useState(false);
   const [notMetni, setNotMetni] = useState("");
+  const [iptalAcik, setIptalAcik] = useState(false);
+  const [iptalNedeni, setIptalNedeni] = useState("");
 
   if (!s) {
     return (
@@ -170,7 +174,50 @@ export default function SiparisDetay({
         )}
       </section>
 
+      {s.iptal && (
+        <p className="rounded-control bg-err-bg px-3 py-2 text-[13px] text-err">
+          <b>{s.iptal.kim === "bayi" ? "Bayi portaldan iptal etti" : "İptal edildi"}</b> · {tarihEtiketi(s.iptal.tarih, bugun)} · {s.iptal.neden}
+          {s.iptal.odemeIadesi && <><br /><b>Ödeme alınmıştı:</b> ödeme iadesini yapın.</>}
+        </p>
+      )}
+
+      {iptalAcik && (
+        <div className="flex flex-col gap-2 rounded-control border border-[#F3B5B5] p-3">
+          <label htmlFor={`iptal-${s.id}`} className="text-[13px] font-bold">İptal nedeni</label>
+          <input
+            id={`iptal-${s.id}`}
+            autoFocus
+            maxLength={300}
+            value={iptalNedeni}
+            onChange={(e) => setIptalNedeni(e.target.value)}
+            placeholder="Ör. Müşteri vazgeçti, stok yok"
+            className="min-h-11 w-full rounded-control border border-line-strong bg-card px-3 text-sm outline-none focus:border-ink"
+          />
+          <span className="text-xs text-muted">
+            {s.seriNolar.length ? "Atanmış seri numaraları depoya döner. " : ""}
+            {s.durum === "hazirlaniyor" ? "Ödeme alınmış: iptalden sonra ödeme iadesini yapın." : "Ödeme alınmadı, iade gerekmez."}
+          </span>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setIptalAcik(false)} className={IKINCIL}>Vazgeç</button>
+            <button
+              type="button"
+              disabled={iptalNedeni.trim().length < 3 || bekliyor}
+              onClick={async () => { if (await onIptal(iptalNedeni)) setIptalAcik(false); }}
+              className="min-h-11 cursor-pointer rounded-control bg-err px-4 text-sm font-bold text-white disabled:opacity-60"
+            >
+              Siparişi iptal et
+            </button>
+          </div>
+        </div>
+      )}
+
       {hata && <p role="alert" className="rounded-control bg-err-bg px-3 py-2 text-[13px] font-semibold text-err">{hata}</p>}
+
+      {iptalEdilebilir(s) && !iptalAcik && (
+        <button type="button" onClick={() => setIptalAcik(true)} className="self-start cursor-pointer text-[13px] font-bold text-err hover:underline">
+          Siparişi iptal et…
+        </button>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         {!notAcik && <button type="button" onClick={() => setNotAcik(true)} className={IKINCIL}>Not ekle</button>}
@@ -178,7 +225,7 @@ export default function SiparisDetay({
           <button type="button" onClick={() => onEylem(eylem.eylem)} disabled={bekliyor} className={`${BIRINCIL} ${notAcik ? "col-span-2" : ""}`}>
             {bekliyor ? "Kaydediliyor…" : eylem.ad}
           </button>
-        ) : (
+        ) : s.durum === "iptal" ? null : (
           <button type="button" onClick={onIade} className={`${IKINCIL} ${notAcik ? "col-span-2" : ""}`}>İade / değişim aç</button>
         )}
       </div>

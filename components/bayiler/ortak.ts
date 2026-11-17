@@ -139,13 +139,16 @@ export function bayiOzeti(bayi: AktifBayi, tum: BayiHareketi[], d: Donem) {
   const tur = (l: BayiHareketi[], t: BayiHareketi["tur"]) => l.filter((h) => h.tur === t);
   const sevkTum = say(tur(kendi, "sevkiyat"));
   const satisTum = say(tur(kendi, "satis"));
+  const iadeTum = say(tur(kendi, "iade"));
   const sevk = say(tur(donemdeki, "sevkiyat"));
+  const iade = say(tur(donemdeki, "iade"));
+  for (const m of ["ONE", "ONE Lite", "toplam"] as const) sevk[m] = Math.max(0, sevk[m] - iade[m]); // iade edilen sevkiyat MOQ'dan düşer
   const moqHedef = bayi.moqHedef * d.ceyrekler.length;
   return {
     sevk,
     satis: say(tur(donemdeki, "satis")),
     lisans: tur(donemdeki, "lisans").reduce((t, h) => t + h.kalemler.length, 0),
-    stok: { ONE: sevkTum.ONE - satisTum.ONE, "ONE Lite": sevkTum["ONE Lite"] - satisTum["ONE Lite"], toplam: sevkTum.toplam - satisTum.toplam },
+    stok: { ONE: sevkTum.ONE - satisTum.ONE - iadeTum.ONE, "ONE Lite": sevkTum["ONE Lite"] - satisTum["ONE Lite"] - iadeTum["ONE Lite"], toplam: sevkTum.toplam - satisTum.toplam - iadeTum.toplam },
     moqHedef,
     moqYuzde: moqHedef ? Math.min(100, Math.round((sevk.toplam / moqHedef) * 100)) : 0,
     hareketler: donemdeki,
@@ -154,11 +157,23 @@ export function bayiOzeti(bayi: AktifBayi, tum: BayiHareketi[], d: Donem) {
 
 /** Bayinin stoktaki, seri numarası bilinen cihazları (satışta seçilebilsin) */
 export function stoktakiSeriler(bayiId: string, tum: BayiHareketi[]) {
-  const satilan = new Set(tum.filter((h) => h.bayiId === bayiId && h.tur === "satis").flatMap((h) => h.kalemler.map((k) => k.seriNo)));
+  const satilan = new Set(tum.filter((h) => h.bayiId === bayiId && (h.tur === "satis" || h.tur === "iade")).flatMap((h) => h.kalemler.map((k) => k.seriNo)));
   return tum
     .filter((h) => h.bayiId === bayiId && h.tur === "sevkiyat")
     .flatMap((h) => h.kalemler)
     .filter((k): k is { model: typeof k.model; seriNo: string } => !!k.seriNo && !satilan.has(k.seriNo));
+}
+
+/** Seri numarası girilmeden sevk edilmiş, hâlâ stokta olan cihaz sayısı (model başına).
+ *  Bayi satış bildirirken bu cihazların seri numarasını yazar; adet bu sayıyı geçemez. */
+export function seriBilinmeyenStok(bayiId: string, tum: BayiHareketi[]) {
+  const sonuc: Record<"ONE" | "ONE Lite", number> = { ONE: 0, "ONE Lite": 0 };
+  for (const h of tum) {
+    if (h.bayiId !== bayiId || (h.tur !== "sevkiyat" && h.tur !== "satis" && h.tur !== "iade")) continue;
+    for (const k of h.kalemler) sonuc[k.model] += h.tur === "sevkiyat" ? 1 : -1;
+  }
+  for (const s of stoktakiSeriler(bayiId, tum)) sonuc[s.model] -= 1;
+  return { ONE: Math.max(0, sonuc.ONE), "ONE Lite": Math.max(0, sonuc["ONE Lite"]) };
 }
 
 export const moqRengi = (yuzde: number) => (yuzde >= 80 ? "bg-[#1F8A4C]" : yuzde >= 50 ? "bg-[#E58A2B]" : "bg-[#D93F3F]");

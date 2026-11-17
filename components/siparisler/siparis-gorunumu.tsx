@@ -10,9 +10,9 @@ import { csvIndir } from "@/lib/disa-aktar";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import type { Musteri } from "@/components/musteriler/queries";
 import type { CihazModeli, FiyatListesi } from "@/lib/urunler";
-import { iadeIlerlet, odemeAlindi, siparisNotu, siparisiTamamla, type IadeSonucu, type IslemSonucu } from "./actions";
+import { iadeIlerlet, odemeAlindi, siparisIptal, siparisNotu, siparisiTamamla, type IadeSonucu, type IslemSonucu } from "./actions";
 import type { Iade, Siparis, StokKalemi } from "./queries";
-import { DURUM_ADI, SEKMELER, faturaBekliyor, icerikOzeti, sekmede, type Eylem, type Sekme } from "./ortak";
+import { DURUM_ADI, SEKMELER, acikSiparis, faturaBekliyor, icerikOzeti, sekmede, type Eylem, type Sekme } from "./ortak";
 import OzetKartlari from "./ozet-kartlari";
 import SiparisTablosu from "./siparis-tablosu";
 import SiparisDetay from "./siparis-detay";
@@ -70,7 +70,7 @@ export default function SiparisGorunumu({
     setFaturasiz(acik);
   };
   const [arama, setArama] = useState("");
-  const [seciliId, setSeciliId] = useState<string | null>(seciliIlk ?? ilk.find((s) => s.durum !== "tamamlandi")?.id ?? ilk[0]?.id ?? null);
+  const [seciliId, setSeciliId] = useState<string | null>(seciliIlk ?? ilk.find(acikSiparis)?.id ?? ilk[0]?.id ?? null);
   const [pencere, setPencere] = useState<Pencere>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [bekliyor, baslat] = useTransition();
@@ -130,6 +130,13 @@ export default function SiparisGorunumu({
   const notEkle = async (metin: string) => {
     if (!secili) return false;
     const s = await siparisNotu(secili.id, metin);
+    uygula(s);
+    return !s.hata;
+  };
+
+  const iptalEt = async (neden: string) => {
+    if (!secili) return false;
+    const s = await siparisIptal(secili.id, neden);
     uygula(s);
     return !s.hata;
   };
@@ -220,6 +227,7 @@ export default function SiparisGorunumu({
             onEylem={eylem}
             onFatura={() => setPencere("fatura")}
             onNot={notEkle}
+            onIptal={iptalEt}
             onMusteriAc={setAcikMusteri}
             onIade={() => setPencere("iade")}
           />

@@ -10,7 +10,7 @@ import { SERI_DESENI, isoFark, seriAyikla } from "./ortak";
 import {
   ROLLER,
   bilesenEkle, bilesenGuncelle, fiyatKaydet, getBilesenler, getEkip, getHavuz, getIcUretim, getKargoFirmalari, getPartiler, getRecete, getTedarik, havuzaEkle,
-  icUretimEkle, icUretimiGuncelle, kargoFirmalariKaydet, kullaniciKaydet as kullaniciKaydetDepo, partiEkle, partiyiGuncelle, tedarikEkle, tedarikiGuncelle,
+  icUretimEkle, icUretimiGuncelle, kargoFirmalariKaydet, servisAdresiKaydetDepo, type ServisAdresi, kullaniciKaydet as kullaniciKaydetDepo, partiEkle, partiyiGuncelle, tedarikEkle, tedarikiGuncelle,
   type BilesenKalemi, type BilesenKaynagi, type HavuzSeri, type IcUretimEmri, type Kullanici, type Recete, type Rol, type TedarikSiparisi, type UretimPartisi,
 } from "./queries";
 
@@ -330,6 +330,7 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
     if (p.cihaz !== null && !(Number.isInteger(p.cihaz) && p.cihaz >= 1 && p.cihaz <= 1000)) return { hata: `${ad} cihaz kapsamı 1–1000 arası olmalı.` };
   }
   if (!(f.kdv >= 0 && f.kdv <= 0.5)) return { hata: "KDV oranı %0–50 arası olmalı." };
+  if (!(f.eurKur >= 1 && f.eurKur <= 1000)) return { hata: "EUR kuru 1–1000 TL arası olmalı." };
   const stok = await getStok();
   for (const [kod, fiyat] of Object.entries(aksesuar)) {
     const k = stok.find((x) => x.kod === kod && x.fiyat !== null);
@@ -341,10 +342,21 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
     cihaz: { ONE: Math.round(f.cihaz.ONE), "ONE Lite": Math.round(f.cihaz["ONE Lite"]) },
     lisans: Object.fromEntries(Object.entries(f.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? null : Math.round(v.fiyat), cihaz: v.cihaz }])) as FiyatListesi["lisans"],
     kdv: Math.round(f.kdv * 1000) / 1000,
+    eurKur: Math.round(f.eurKur * 100) / 100,
   };
   await fiyatKaydet(temiz);
   yenile();
   return { fiyat: temiz };
+}
+
+/** Bayi portalında RMA gönderim talimatında gösterilen servis adresi */
+export async function servisAdresiKaydet(s: ServisAdresi): Promise<{ hata?: string; servis?: ServisAdresi }> {
+  const temiz = { ad: s.ad.trim().slice(0, 80), adres: s.adres.trim().slice(0, 200), telefon: s.telefon.trim().slice(0, 30) };
+  if (temiz.ad.length < 2 || temiz.adres.length < 10) return { hata: "Servis adı ve açık adresi girin." };
+  await servisAdresiKaydetDepo(temiz);
+  revalidatePath("/operasyon");
+  revalidatePath("/portal/rma");
+  return { servis: temiz };
 }
 
 export async function kargoFirmalariniKaydet(liste: string[]): Promise<AyarSonucu> {

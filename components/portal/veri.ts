@@ -14,6 +14,7 @@ export async function bayiVerisi() {
     ...o,
     basvuru: basvurular.find((b) => b.id === o.bayi.id) ?? null,
     hareketler: hareketler.filter((h) => h.bayiId === o.bayi.id),
+    tumHareketler: hareketler,
     stokSeriler: stoktakiSeriler(o.bayi.id, hareketler),
     cihazlar: cihazlar.filter((c) => c.bayiId === o.bayi.id),
     siparisler: siparisler.filter((s) => s.bayiId === o.bayi.id),

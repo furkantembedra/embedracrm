@@ -6,19 +6,12 @@ import Chip, { type ChipTon } from "@/components/ui/chip";
 export type Oncelik = "Yüksek" | "Orta" | "Düşük";
 export type SonTalep = { no: number; konu: string; musteri: string; oncelik: Oncelik; acilis: string };
 
-const DEMO: SonTalep[] = [
-  { no: 4821, konu: "Flash sonrası ECU yanıt vermiyor", musteri: "Volant Lenkung Service", oncelik: "Yüksek", acilis: "Bugün 09:02" },
-  { no: 4819, konu: "Lisans aktivasyon kodu geçersiz", musteri: "Polska EPS Serwis", oncelik: "Yüksek", acilis: "Bugün 10:15" },
-  { no: 4817, konu: "K-Line bağlantı hatası · Fiat Doblo", musteri: "Kaya Oto Elektronik", oncelik: "Orta", acilis: "Bugün 08:40" },
-  { no: 4810, konu: "Yeni model talebi · Hyundai Tucson", musteri: "Başkent Rot & Direksiyon", oncelik: "Düşük", acilis: "31 Eki" },
-];
-
 const TON: Record<Oncelik, ChipTon> = { Yüksek: "err", Orta: "warn", Düşük: "gray" };
 
 const TH = "border-b border-line px-2 py-2.5 text-left text-xs font-semibold text-muted";
 const TD = "border-b border-bg px-2 py-3";
 
-export default function SonTalepler({ veri = DEMO }: { veri?: SonTalep[] }) {
+export default function SonTalepler({ veri }: { veri: SonTalep[] }) {
   return (
     <Card title="Son destek talepleri" action={{ href: "/destek", label: "Destek talepleri" }}>
       {veri.length === 0 ? (
