@@ -1,7 +1,8 @@
 // Toplu e-posta ve WhatsApp gönderimi için sağlayıcı bağlantıları. Yalnızca sunucuda import edin.
 //
 // E-posta (Resend):   RESEND_API_KEY, EPOSTA_GONDEREN="Embedra <bulten@embedra.com>" (alan adı Resend'de doğrulanmış olmalı)
-// WhatsApp (Meta Cloud API): WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, isteğe bağlı WHATSAPP_SABLON_DILI (varsayılan "tr")
+// WhatsApp (Meta Cloud API): WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, isteğe bağlı WHATSAPP_SABLON_DILI (varsayılan "tr"),
+//   isteğe bağlı META_GRAPH_URL (varsayılan https://graph.facebook.com; testlerde sahte sunucu)
 //   Pazarlama mesajı yalnızca Meta'da onaylanmış şablonla gönderilebilir; şablondaki {{1}} kişi adı, {{2}} firma adıdır.
 //
 // Anahtarlar tanımlı değilse DEMO modundadır: hiçbir şey gönderilmez, yalnızca adresler doğrulanıp sonuç kaydedilir.
@@ -12,6 +13,11 @@ export type GonderimSonucu = { ok: true } | { ok: false; hata: string };
 export const EPOSTA_GECERLI = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Uluslararası biçimde rakamlar (ülke kodu dahil, 10–15 hane) */
 export const TELEFON_GECERLI = /^\d{10,15}$/;
+
+/** Meta Graph API kök adresi. Testlerde META_GRAPH_URL ile sahte sunucuya yönlendirilir (test/sahte/meta.ts). */
+export function graphAdresi() {
+  return (process.env.META_GRAPH_URL || "https://graph.facebook.com").replace(/\/$/, "");
+}
 
 export function saglayicilar() {
   return {
@@ -56,7 +62,7 @@ export async function whatsappGonder(w: { telefon: string; sablon: string; param
   if (!saglayicilar().whatsapp) return { ok: true }; // demo
   if (!w.sablon) return { ok: false, hata: "WhatsApp şablon adı girilmemiş" };
   try {
-    const r = await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+    const r = await fetch(`${graphAdresi()}/v21.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
