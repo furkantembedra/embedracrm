@@ -2,7 +2,7 @@
 // Operasyon: üretim partileri, tedarik siparişleri ve ayarlar (Server Actions).
 // Depoya alınan sağlam cihazlar sipariş deposuna (stok) ve seri no havuzuna girer;
 // teslim alınan tedarik bileşen stoğuna ya da (kablo ise) sipariş deposuna eklenir.
-import { oturumGerekli } from "@/lib/oturum";
+import { oturumGerekli, rolEksik } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli, type FiyatListesi, type LisansPaketi } from "@/lib/urunler";
 import { getCihazlar } from "@/components/cihaz-lisans/queries";
@@ -391,7 +391,8 @@ export async function kargoFirmalariniKaydet(liste: string[]): Promise<AyarSonuc
 }
 
 export async function kullaniciKaydet(k: { id?: string; ad: string; eposta: string; rol: string; aktif: boolean }): Promise<AyarSonucu> {
-  await oturumGerekli(["Yönetici"]);
+  const yetki = await rolEksik(["Yönetici"]);
+  if (yetki) return { hata: yetki };
   const ekip = await getEkip();
   if (!k.ad.trim()) return { hata: "Ad soyad yazın." };
   if (!/^\S+@\S+\.\S+$/.test(k.eposta.trim())) return { hata: "Geçerli bir e-posta yazın." };

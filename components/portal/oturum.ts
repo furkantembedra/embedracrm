@@ -4,6 +4,7 @@
 //    tutulur; veri erişimi ekip üyesinin kendi yetkisiyle (CRM policy) olur, portal ekranları bu bayiye göre süzer.
 // Her sayfa ve her işlem bayiId'yi buradan alır (formdan gelen bayiId'ye güvenilmez).
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { getAktifBayiler, type AktifBayi } from "@/components/bayiler/queries";
@@ -55,7 +56,8 @@ function gorunumBayisi(ham: string | undefined): string | null {
   return Number(bitis) * 1000 < Date.now() ? null : bayiId;
 }
 
-export async function portalOturumu(): Promise<PortalOturumu | null> {
+/** Bir render içinde tek kez çalışır (cache): kenar menü, yönetici bandı ve sayfa aynı sonucu paylaşır. */
+export const portalOturumu = cache(async function portalOturumu(): Promise<PortalOturumu | null> {
   await connection(); // oturum istek anında okunur, prerender'da değil
   const gorunum = gorunumBayisi((await cookies()).get(CEREZ)?.value);
   const [hesap, crm] = await Promise.all([bayiHesabi(), gorunum ? crmKullanicisi() : Promise.resolve(null)]);
@@ -64,4 +66,4 @@ export async function portalOturumu(): Promise<PortalOturumu | null> {
   const bayi = (await getAktifBayiler()).find((x) => x.id === bayiId);
   if (!bayi) return null;
   return { bayi, mod: hesap ? "bayi" : "yonetici" };
-}
+});

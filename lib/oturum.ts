@@ -33,6 +33,16 @@ export const bayiHesabi = cache(async function bayiHesabi(): Promise<{ bayiId: s
  * Oturum yoksa ya da hesap aktif ekip üyesi değilse, roller verilmişse ve kullanıcının rolü listede yoksa hata fırlatır.
  * sistemOlarak(…) içinde (webhook, zamanlayıcı) null döner: o yolların kendi doğrulaması var.
  */
+/**
+ * Form durumu döndüren rol kısıtlı Server Action'lar için: oturum yoksa yine hata fırlatır, rol yetmiyorsa
+ * fırlatmak yerine gösterilecek mesajı döner (arayüz hata ekranına düşmesin). Rol yetiyorsa null.
+ */
+export async function rolEksik(roller: readonly Rol[]): Promise<string | null> {
+  const k = await oturumGerekli();
+  if (!k || roller.includes(k.rol as Rol)) return null;
+  return `Bu işlem için yetkiniz yok (yalnızca ${roller.join(" / ")}).`;
+}
+
 export async function oturumGerekli(roller?: readonly Rol[]): Promise<CrmKullanicisi | null> {
   if (sistemdeMi()) return null;
   const k = await crmKullanicisi();

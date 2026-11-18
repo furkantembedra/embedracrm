@@ -1,7 +1,9 @@
 "use server";
 // CRM: bayi dokümanı yükleme / silme, duyuru yayınlama / silme.
-// Yalnızca Yönetici ve Pazarlama rolleri (oturumGerekli).
-import { oturumGerekli } from "@/lib/oturum";
+// Yalnızca Yönetici ve Pazarlama rolleri (rolEksik; oturum yoksa hata fırlatır).
+import { rolEksik } from "@/lib/oturum";
+
+const ROLLER = ["Yönetici", "Pazarlama"] as const;
 import { revalidatePath } from "next/cache";
 import { getAktifBayiler } from "@/components/bayiler/queries";
 import { simdiYerel } from "@/components/rma/islemler";
@@ -21,7 +23,8 @@ async function hedefOku(form: FormData): Promise<"hepsi" | string[] | null> {
 }
 
 export async function dokumanYukle(_o: DokumanFormDurumu, form: FormData): Promise<DokumanFormDurumu> {
-  await oturumGerekli(["Yönetici", "Pazarlama"]);
+  const yetki = await rolEksik(ROLLER);
+  if (yetki) return { hatalar: { genel: yetki } };
   const baslik = kirp(form.get("baslik"), 120);
   const kategori = kirp(form.get("kategori"), 40) as DokumanKategorisi;
   const dosya = form.get("dosya");
@@ -45,14 +48,17 @@ export async function dokumanYukle(_o: DokumanFormDurumu, form: FormData): Promi
   return { tamam: `${baslik} yüklendi ve ${hedef === "hepsi" ? "tüm bayilerle" : `${hedef.length} bayiyle`} paylaşıldı.`, zaman: Date.now() };
 }
 
-export async function dokumanSil(id: string) {
-  await oturumGerekli(["Yönetici", "Pazarlama"]);
+export async function dokumanSil(id: string): Promise<{ hata?: string }> {
+  const yetki = await rolEksik(ROLLER);
+  if (yetki) return { hata: yetki };
   await dokumanSilDepo(id);
   yenile();
+  return {};
 }
 
 export async function duyuruYayinla(_o: DokumanFormDurumu, form: FormData): Promise<DokumanFormDurumu> {
-  await oturumGerekli(["Yönetici", "Pazarlama"]);
+  const yetki = await rolEksik(ROLLER);
+  if (yetki) return { hatalar: { genel: yetki } };
   const baslik = kirp(form.get("baslik"), 120);
   const metin = kirp(form.get("metin"), 1000);
   const hatalar: Record<string, string> = {};
@@ -67,8 +73,10 @@ export async function duyuruYayinla(_o: DokumanFormDurumu, form: FormData): Prom
   return { tamam: "Duyuru yayınlandı.", zaman: Date.now() };
 }
 
-export async function duyuruSil(id: string) {
-  await oturumGerekli(["Yönetici", "Pazarlama"]);
+export async function duyuruSil(id: string): Promise<{ hata?: string }> {
+  const yetki = await rolEksik(ROLLER);
+  if (yetki) return { hata: yetki };
   await duyuruSilDepo(id);
   yenile();
+  return {};
 }

@@ -79,7 +79,7 @@ export default function DokumanYonetimi({ dokumanlar, duyurular, bayiler, egitim
                     <td className="py-2.5">
                       <span className="flex justify-end gap-1">
                         <a href={`/api/bayi-dokuman/${d.id}`} target="_blank" rel="noreferrer" aria-label={`${d.baslik} aç`} className="flex h-9 w-9 items-center justify-center rounded-lg text-[#474A42] hover:bg-bg"><Download size={16} aria-hidden="true" /></a>
-                        <button type="button" aria-label={`${d.baslik} sil`} onClick={() => { if (confirm(`"${d.baslik}" silinsin mi? Bayiler artık göremez.`)) baslat(async () => { await dokumanSil(d.id); router.refresh(); }); }}
+                        <button type="button" aria-label={`${d.baslik} sil`} onClick={() => { if (confirm(`"${d.baslik}" silinsin mi? Bayiler artık göremez.`)) baslat(async () => { const s = await dokumanSil(d.id); if (s.hata) alert(s.hata); else router.refresh(); }); }}
                           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#474A42] hover:bg-err-bg hover:text-err"><Trash2 size={16} aria-hidden="true" /></button>
                       </span>
                     </td>
@@ -102,7 +102,7 @@ export default function DokumanYonetimi({ dokumanlar, duyurular, bayiler, egitim
                   <b className="text-base">{d.baslik}</b>
                   {d.onem === "onemli" && <Chip ton="warn">Önemli</Chip>}
                   <span className="ml-auto text-xs text-muted">{tarihTr(d.tarih)}</span>
-                  <button type="button" aria-label={`${d.baslik} sil`} onClick={() => { if (confirm("Duyuru silinsin mi?")) baslat(async () => { await duyuruSil(d.id); router.refresh(); }); }}
+                  <button type="button" aria-label={`${d.baslik} sil`} onClick={() => { if (confirm("Duyuru silinsin mi?")) baslat(async () => { const s = await duyuruSil(d.id); if (s.hata) alert(s.hata); else router.refresh(); }); }}
                     className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#474A42] hover:bg-err-bg hover:text-err"><Trash2 size={16} aria-hidden="true" /></button>
                 </div>
                 <p className="whitespace-pre-line text-sm text-[#474A42]">{d.metin}</p>
@@ -212,6 +212,7 @@ function YuklemeFormu({ bayiler, kapat }: { bayiler: Bayi[]; kapat: () => void }
         {h.dosya && <span className="text-xs font-semibold text-err">{h.dosya}</span>}
       </label>
       <HedefSecimi bayiler={bayiler} hata={h.hedef} />
+      {h.genel && <p role="alert" className="rounded-control bg-err-bg px-3 py-2 text-[13px] font-semibold text-err">{h.genel}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={kapat} className="min-h-11 cursor-pointer rounded-control border border-line-strong px-4 text-sm font-bold hover:bg-[#F4F5F0]">Vazgeç</button>
         <button type="submit" disabled={bekliyor} className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control bg-ink px-5 text-sm font-bold text-white hover:bg-ink-soft disabled:opacity-60"><Upload size={16} aria-hidden="true" />{bekliyor ? "Yükleniyor…" : "Yükle ve paylaş"}</button>
@@ -229,6 +230,7 @@ function DuyuruFormu({ bayiler, kapat }: { bayiler: Bayi[]; kapat: () => void })
       <label className={ALAN}>Metin *<textarea name="metin" rows={4} maxLength={1000} className="rounded-control border border-line-strong bg-card px-3 py-2.5 text-sm font-medium outline-none focus:border-ink" />{h.metin && <span className="text-xs font-semibold text-err">{h.metin}</span>}</label>
       <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold"><input type="checkbox" name="onem" value="onemli" className="h-4 w-4 accent-ink" />Önemli (portalda vurgulu gösterilir)</label>
       <HedefSecimi bayiler={bayiler} hata={h.hedef} />
+      {h.genel && <p role="alert" className="rounded-control bg-err-bg px-3 py-2 text-[13px] font-semibold text-err">{h.genel}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={kapat} className="min-h-11 cursor-pointer rounded-control border border-line-strong px-4 text-sm font-bold hover:bg-[#F4F5F0]">Vazgeç</button>
         <button type="submit" disabled={bekliyor} className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control bg-ink px-5 text-sm font-bold text-white hover:bg-ink-soft disabled:opacity-60"><Plus size={16} aria-hidden="true" />{bekliyor ? "Yayınlanıyor…" : "Yayınla"}</button>
