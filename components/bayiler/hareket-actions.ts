@@ -1,12 +1,15 @@
 "use server";
 // Aktif bayi hareketleri (Server Actions): bayiye cihaz sevki, bayinin bildirdiği satış, bayinin sattığı lisans.
 // Lisans modeli: bayi lisansı Embedra'dan alıp müşterisine satar; satışları bayi bildirir.
+import { crmKullanicisi, oturumGerekli } from "@/lib/oturum";
+import { portalOturumu } from "@/components/portal/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { cihazEkleDepo, cihaziGuncelle, getCihaz, type Cihaz, type LisansPlani } from "@/components/cihaz-lisans/queries";
 import { ayEkle, lisansUygula } from "@/components/cihaz-lisans/ortak";
 import { getMusteri, musteriEkle, musteriyiGuncelle, type Musteri } from "@/components/musteriler/queries";
 import { ULKELER, getAktifBayiler, getBayiHareketleri, hareketEkle, type BayiHareketi } from "./queries";
+import { sistemOlarak, sistemdeMi } from "@/lib/supabase/db";
 
 const SERI_NO = /^EO1-\d{4}-\d{4}$/;
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
@@ -29,7 +32,13 @@ async function bayiBul(id: string) {
 
 /** Embedra'dan bayiye cihaz sevki: stok ve MOQ'nun gerçekleşen kısmı artar. */
 export async function cihazSevkEt(_o: HareketDurumu, form: FormData): Promise<HareketDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
+  // CRM ekibi ve bayi portalı (portalTopluSatis) çağırır; bayi yalnızca kendi adına bildirebilir
+  if (!sistemdeMi() && !(await crmKullanicisi())) {
+    const p = await portalOturumu();
+    if (!p || p.bayi.id !== metin("bayiId")) throw new Error("Oturum gerekli: lütfen tekrar giriş yapın.");
+  }
   const bayi = await bayiBul(metin("bayiId"));
   const tarih = metin("tarih");
   const model = metin("model") as CihazModeli;
@@ -66,7 +75,6 @@ export async function cihazSevkEt(_o: HareketDurumu, form: FormData): Promise<Ha
   };
   await hareketEkle(hareket);
   // Stok / satış / MOQ sayaçları hareketlerden hesaplanır (getAktifBayiler)
-  // TODO: Supabase: insert into dealer_movements (+ devices with owner_dealer_id)
   yenile();
   return { hareket, cihazlar, zaman: Date.now() };
 }
@@ -116,7 +124,11 @@ export async function satisBildir(_o: HareketDurumu, form: FormData): Promise<Ha
       lisansBitis: null, toplamDeger: null, sonTemas: "Bugün", durum: "Yeni müşteri", yetkililer: [], vergiNo: "", acikTalep: 0, cihazlar: [],
       olaylar: [olay, { metin: `Bayi müşterisi · ${bayi.ad}`, zaman: "Bugün", tur: "not" }],
     };
-    await musteriEkle(musteri);
+    // Bayi oturumunda (portal) yeni müşteri satırı RLS yüzünden geri okunamaz: bayi müşteriyi ancak cihaz / hareket
+    // bağlandıktan sonra görür, insert…returning hata verir. Bayi kimliği yukarıda RLS'li getAktifBayiler ile doğrulandığı
+    // için yalnızca bu kayıt gizli anahtarla açılır; cihaz ve hareket yazımları yine oturumun RLS'iyle yapılır.
+    const m = musteri;
+    await sistemOlarak(() => musteriEkle(m));
     yeni = true;
   } else {
     musteri = await musteriyiGuncelle(musteriSecim, (m) => m.olaylar.unshift(olay));
@@ -150,6 +162,7 @@ export async function satisBildir(_o: HareketDurumu, form: FormData): Promise<Ha
 
 /** Bayinin müşterisine sattığı lisans: cihaza lisans tanımlanır ve hareket olarak kaydedilir. */
 export async function lisansSat(_o: HareketDurumu, form: FormData): Promise<HareketDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const bayi = await bayiBul(metin("bayiId"));
   const seriNo = metin("seriNo");

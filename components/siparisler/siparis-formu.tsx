@@ -9,7 +9,8 @@ import { useFormGonder } from "@/lib/use-form-gonder";
 import { CIHAZ_MODELLERI, URUN_BILGI, VARSAYILAN_FIYAT, type CihazModeli, type FiyatListesi } from "@/lib/urunler";
 import { LISANS_SECENEKLERI, gerekenLisans, urunTutari, type LisansSecenegi } from "@/components/satis-hatti/urun-secimi";
 import { siparisKaydet, type SiparisFormDurumu } from "./actions";
-import { ODEME_YONTEMLERI, type OdemeYontemi, type Siparis, type StokKalemi } from "./queries";
+import { type OdemeYontemi, type Siparis, type StokKalemi } from "./queries";
+import { ODEME_YONTEMLERI } from "./sabitler";
 
 const GIRDI = "min-h-11 w-full rounded-control border border-line-strong bg-card px-3 text-sm font-medium outline-none focus:border-ink disabled:opacity-50 aria-[invalid=true]:border-err";
 const ALAN = "flex min-w-0 flex-col gap-1.5 text-[13px] font-bold";

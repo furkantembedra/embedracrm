@@ -10,7 +10,7 @@ import { ArrowLeft, Check, Copy, Printer, Send, X } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import Chip from "@/components/ui/chip";
 import { kalemAdi, kalemKdvli, teklifToplami } from "@/components/teklifler/ortak";
-import { DURUM_ADI } from "@/components/teklifler/queries";
+import { DURUM_ADI } from "@/components/teklifler/sabitler";
 import { DURUM_TONU, tarihYaz } from "@/components/teklifler/teklif-listesi";
 import { useBugun } from "@/lib/use-bugun";
 import BayiTeklifFormu from "./bayi-teklif-formu";

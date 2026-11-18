@@ -72,7 +72,8 @@ function AktifMenu() {
   return <Menu aktif={usePathname() ?? ""} />;
 }
 
-export default function Sidebar() {
+/** kullanici: alt köşedeki oturum kartı (sunucuda, Suspense içinde render edilir — layout verir) */
+export default function Sidebar({ kullanici }: { kullanici?: React.ReactNode }) {
   return (
     <aside className="bg-ink text-white print:hidden lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0">
       <nav aria-label="Ana menü" className="flex h-full flex-col gap-4 px-3.5 py-4 lg:gap-6 lg:py-5">
@@ -91,13 +92,7 @@ export default function Sidebar() {
           <AktifMenu />
         </Suspense>
 
-        <div className="mt-auto hidden items-center gap-3 border-t border-[#23251F] px-2 pt-3 lg:flex">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue text-sm font-bold">DA</div>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-sm font-bold">Deniz Arslan</span>
-            <span className="text-xs text-[#A4A79D]">Yönetici</span>
-          </div>
-        </div>
+        {kullanici}
       </nav>
     </aside>
   );

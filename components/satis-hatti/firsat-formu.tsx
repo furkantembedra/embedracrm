@@ -8,7 +8,8 @@ import { tl } from "@/lib/format";
 import { LISANS_SECENEKLERI, gerekenLisans, icerikCoz, icerikYaz, urunTutari, type LisansSecenegi, type UrunSecimi } from "./urun-secimi";
 import { useFormGonder } from "@/lib/use-form-gonder";
 import { firsatKaydet, type AsamaSonucu, type FirsatFormDurumu } from "./actions";
-import { ASAMALAR, ASAMA_BILGI, KAYNAKLAR, type Asama, type Firsat } from "./queries";
+import { ASAMALAR, ASAMA_BILGI, KAYNAKLAR, type Asama } from "./sabitler";
+import type { Firsat } from "./queries";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
 const GIRDI =

@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { ChevronDown, Lock, TriangleAlert } from "lucide-react";
 import { tl } from "@/lib/format";
-import { DESTEK_KALEMLERI, KONTROL_LISTESI, type Basvuru, type SozlesmeDetayi } from "./queries";
+import { type Basvuru, type SozlesmeDetayi } from "./queries";
+import { DESTEK_KALEMLERI, KONTROL_LISTESI } from "./sabitler";
 import { maddeOzeti, maddeTamam, moqTutari } from "./ortak";
 
 const GIRDI =

@@ -9,7 +9,8 @@ import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { pdfYazdir } from "@/lib/disa-aktar";
 import { garantiKapsami, kararVer, oncelikDegistir, rmaIlerlet, rmaEkEkle, rmaEkSil, rmaNotEkle, ucretOdendi, ucretOnayla, type RmaIslemSonucu } from "./actions";
-import { ADIM_ADI, GELIS_KANALLARI, HEDEF_GUN, KARAR_ADI, ONCELIKLER, RMA_ADIMLARI, type RmaKaydi, type RmaKarari, type RmaOncelik } from "./queries";
+import { type RmaKaydi, type RmaKarari, type RmaOncelik } from "./queries";
+import { ADIM_ADI, GELIS_KANALLARI, HEDEF_GUN, KARAR_ADI, ONCELIKLER, RMA_ADIMLARI } from "./sabitler";
 import { acikMi, gunSay, kapsamda, onayBekliyor, tarihYaz } from "./ortak";
 
 const BUTON = "min-h-10 cursor-pointer rounded-control px-4 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-50";

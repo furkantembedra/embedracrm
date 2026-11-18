@@ -5,10 +5,9 @@ import { useState, useTransition } from "react";
 import { Copy, Download, Film, Image as ImageIcon, Upload, X } from "lucide-react";
 import { IZIN_KANALLARI, IZIN_KANAL_ADI } from "@/components/musteriler/izin";
 import { icerikKaydet, kampanyaKaydet, listeKaydet, type IcerikSonucu, type KampanyaSonucu, type ListeSonucu } from "./actions";
-import {
-  HAZIR_LISTELER, ICERIK_KANALLARI, KAMPANYA_DURUMLARI, KAMPANYA_KANALLARI,
-  type Icerik, type IcerikKanali, type Kampanya, type KampanyaDurumu, type KampanyaKanali, type ListeFiltresi, type Medya, type Otomasyon, type OzelListe,
-} from "./queries";
+import { type Icerik, type IcerikKanali, type Kampanya, type KampanyaDurumu, type KampanyaKanali, type ListeFiltresi, type Medya, type Otomasyon, type OzelListe } from "./queries";
+import { KAMPANYA_DURUMLARI } from "./sabitler";
+import { HAZIR_LISTELER, ICERIK_KANALLARI, KAMPANYA_KANALLARI } from "./sabitler";
 import { hashtagTemizle, mesajDoldur } from "./ortak";
 
 const GIRDI = "min-h-11 w-full rounded-control border border-line-strong bg-card px-3 text-sm font-medium outline-none focus:border-ink aria-[invalid=true]:border-err";

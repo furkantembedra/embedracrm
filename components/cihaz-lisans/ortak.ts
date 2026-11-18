@@ -1,6 +1,24 @@
 // Cihaz & Lisans bileşenlerinin paylaştığı küçük yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import { GUNCEL_FIRMWARE, type Cihaz, type CihazDurumu, type LisansKaydi, type LisansPlani } from "./queries";
+import type { Cihaz, CihazDurumu, LisansKaydi, LisansPlani } from "./queries";
+
+// Sabitler burada: queries.ts sunucu koduna (Supabase) bağlı olduğu için istemci bileşenleri onları buradan okur.
+export const DURUM_ADI: Record<CihazDurumu, string> = {
+  aktif: "Aktif",
+  bitiyor: "Süresi doluyor",
+  lisanssiz: "Lisanssız",
+  stokta: "Bayi stoğunda",
+};
+
+export const PLAN_ACIKLAMASI: Record<LisansPlani, string> = {
+  Basic: "Temel direksiyon testleri",
+  Pro: "Tam teşhis, flash ve canlı veri",
+  "Pro+": "Pro'nun tümü + 2 cihaz desteği",
+};
+
+/** Bu sürümle başlamayan firmware "eski" sayılır */
+export const GUNCEL_FIRMWARE = "v2.4";
+
 
 export const PLAN_TONU: Record<LisansPlani, ChipTon> = { Basic: "gray", Pro: "ink", "Pro+": "info" };
 export const DURUM_TONU: Record<CihazDurumu, ChipTon> = { aktif: "ok", bitiyor: "err", lisanssiz: "gray", stokta: "info" };

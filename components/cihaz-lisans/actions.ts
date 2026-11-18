@@ -1,5 +1,6 @@
 "use server";
 // Cihaz & Lisans: kaydetme, güncelleme ve silme (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { ayEkle, lisansUygula } from "./ortak";
@@ -30,6 +31,7 @@ const metinAl = (form: FormData) => (ad: string) => String(form.get(ad) ?? "").t
 
 /** Bir cihaza yeni lisans tanımlar veya mevcut lisansı yeniler. */
 export async function lisansTanimla(_onceki: LisansFormDurumu, form: FormData): Promise<LisansFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const seriNo = metin("seriNo");
   const plan = metin("plan") as LisansPlani;
@@ -45,8 +47,7 @@ export async function lisansTanimla(_onceki: LisansFormDurumu, form: FormData): 
 
   const lisans: YeniLisans = { seriNo, plan, baslangic, bitis: ayEkle(baslangic, sure) };
 
-  // TODO: Supabase bağlanınca:
-  // await supabase.from("licenses").insert({ device_serial: seriNo, plan, starts_at: baslangic, ends_at: lisans.bitis });
+  // Cihazın güncel lisansı cihazlar'a, geçmiş kaydı lisanslar'a yazılır (cihaziGuncelle)
   const cihaz = await cihaziGuncelle(seriNo, (c) => lisansUygula(c, lisans));
   if (!cihaz) return { hatalar: { seriNo: "Cihaz bulunamadı." } };
   // Bayinin müşterisindeki cihaz: portal siparişiyle gelen lisansla aynı izi bırakır (bayi yenileme oranı + açık talebin kapanması)
@@ -65,6 +66,7 @@ export async function lisansTanimla(_onceki: LisansFormDurumu, form: FormData): 
 
 /** Yeni EmbedraONE cihazı kaydeder (lisanssız başlar). */
 export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Promise<CihazFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const seriNo = metin("seriNo").toUpperCase();
   const musteri = metin("musteri"); // "id|Ad|Ülke"
@@ -94,7 +96,6 @@ export async function cihazKaydet(_onceki: CihazFormDurumu, form: FormData): Pro
     gecmis: [],
   };
 
-  // TODO: Supabase bağlanınca: await supabase.from("devices").insert({ ... }).select().single();
   if (!(await cihazEkleDepo(cihaz))) return { hatalar: { seriNo: "Bu seri no zaten kayıtlı." } };
   yenile();
 

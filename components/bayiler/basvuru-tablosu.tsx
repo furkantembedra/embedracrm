@@ -2,7 +2,8 @@
 import { Search } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import Chip from "@/components/ui/chip";
-import { ASAMA_BILGI, type Basvuru, type BayiAsamasi } from "./queries";
+import { ASAMA_BILGI } from "./sabitler";
+import type { Basvuru, BayiAsamasi } from "./queries";
 import { ASAMA_TONU, puanRengi, tarihYaz } from "./ortak";
 
 const TH = "px-2 py-2.5 text-left text-xs font-semibold text-muted";

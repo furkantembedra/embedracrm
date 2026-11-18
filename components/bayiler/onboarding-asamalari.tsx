@@ -1,5 +1,6 @@
 // Tümü + Başvuru → Değerlendirme → Sözleşme → Lansman kartları; tıklayınca başvuruları filtreler
-import { ASAMALAR, ASAMA_BILGI, type BayiAsamasi } from "./queries";
+import { ASAMALAR, ASAMA_BILGI } from "./sabitler";
+import type { BayiAsamasi } from "./queries";
 
 export default function OnboardingAsamalari({
   secili,

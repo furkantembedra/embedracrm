@@ -1,7 +1,8 @@
 "use server";
 // CRM › Bayi detayı › Portal paneli: bayinin portal ayarları (temsilci, teslimat adresi, sözleşme süresi) ve
 // portaldan gelen her şey tek yerde: açık siparişler, yenileme / düzeltme talepleri, açık RMA'lar, lisans havuzu.
-// TODO: CRM'e giriş sistemi gelince yalnızca yönetici / satış rolleri çağırabilmeli.
+// Yalnızca Yönetici ve Satış rolleri (oturumGerekli).
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { getCihaz } from "@/components/cihaz-lisans/queries";
 import { getEkip } from "@/components/operasyon/queries";
@@ -17,6 +18,7 @@ import { aktifBayiyiGuncelle, getAktifBayiler } from "./queries";
 export type PortalAyari = { temsilciId: string | null; adres: string; sozlesmeBaslangic: string | null; sozlesmeSureAy: number | null };
 
 export async function bayiPortalPaneli(bayiId: string) {
+  await oturumGerekli(["Yönetici", "Satış"]);
   const bayi = (await getAktifBayiler()).find((b) => b.id === bayiId);
   if (!bayi) return null;
   const [ekip, yenileme, duzeltme, rmalar, siparisler, havuz, talepler] = await Promise.all([
@@ -45,6 +47,7 @@ export async function bayiPortalPaneli(bayiId: string) {
 export type PortalPaneli = NonNullable<Awaited<ReturnType<typeof bayiPortalPaneli>>>;
 
 export async function bayiPortalAyariKaydet(bayiId: string, a: PortalAyari): Promise<{ hata?: string; tamam?: string }> {
+  await oturumGerekli(["Yönetici", "Satış"]);
   const ekip = await getEkip();
   if (a.temsilciId && !ekip.some((k) => k.id === a.temsilciId && k.aktif)) return { hata: "Temsilci seçin." };
   if (a.sozlesmeBaslangic && !/^\d{4}-\d{2}-\d{2}$/.test(a.sozlesmeBaslangic)) return { hata: "Sözleşme başlangıç tarihi geçersiz." };
@@ -61,6 +64,7 @@ export async function bayiPortalAyariKaydet(bayiId: string, a: PortalAyari): Pro
 }
 
 export async function bayiDuzeltmeCoz(id: string, cozum: string): Promise<{ hata?: string }> {
+  await oturumGerekli(["Yönetici", "Satış"]);
   const m = cozum.trim();
   if (m.length < 3) return { hata: "Ne yapıldığını kısaca yazın." };
   if (!(await duzeltmeTalebiCoz(id, m.slice(0, 300)))) return { hata: "Talep bulunamadı." };
@@ -69,6 +73,7 @@ export async function bayiDuzeltmeCoz(id: string, cozum: string): Promise<{ hata
 }
 
 export async function bayiYenilemeTalebiKapat(seriNo: string): Promise<void> {
+  await oturumGerekli(["Yönetici", "Satış"]);
   await yenilemeTalebiSil(seriNo);
   revalidatePath("/portal/lisanslar");
   revalidatePath("/portal");

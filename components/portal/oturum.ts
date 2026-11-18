@@ -1,13 +1,16 @@
-// Bayi portalı oturumu: imzalı, httpOnly çerez. Bayi yalnızca çerezdeki bayiId'nin verisini görür;
-// her sayfa ve her işlem bayiId'yi buradan alır (formdan gelen bayiId'ye güvenilmez).
-// "yonetici" modu: CRM'deki "Bayi gibi görüntüle" ile açılır, portalda üst bantta belirtilir.
+// Bayi portalı oturumu (Supabase Auth).
+//  • "bayi" modu: oturumdaki hesap bayi_kullanicilari'nda bağlı ve erişimi açık → yalnızca kendi bayisinin verisi (RLS).
+//  • "yonetici" modu: CRM ekip üyesi "Bayi gibi görüntüle" dedi → hangi bayiye baktığı imzalı, httpOnly bir çerezde
+//    tutulur; veri erişimi ekip üyesinin kendi yetkisiyle (CRM policy) olur, portal ekranları bu bayiye göre süzer.
+// Her sayfa ve her işlem bayiId'yi buradan alır (formdan gelen bayiId'ye güvenilmez).
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { getAktifBayiler, type AktifBayi } from "@/components/bayiler/queries";
-import { getPortalHesabi } from "./queries";
+import { bayiHesabi, crmKullanicisi } from "@/lib/oturum";
+import { createClient } from "@/lib/supabase/server";
 
-const CEREZ = "embedra_portal";
+const CEREZ = "embedra_portal_gorunum";
 const SURE_SN = 8 * 60 * 60; // 8 saat
 
 function secret() {
@@ -20,31 +23,45 @@ const imzala = (veri: string) => createHmac("sha256", secret()).update(veri).dig
 
 export type PortalOturumu = { bayi: AktifBayi; mod: "bayi" | "yonetici" };
 
+/** Yalnızca "yonetici" modu için: CRM ekip üyesinin görüntülediği bayiyi çereze yazar. Bayi girişi Supabase Auth ile yapılır. */
 export async function oturumAc(bayiId: string, mod: PortalOturumu["mod"]) {
+  if (mod !== "yonetici") return;
+  if (!(await crmKullanicisi())) return;
   const bitis = Math.floor(Date.now() / 1000) + SURE_SN;
-  const veri = `${bayiId}.${mod}.${bitis}`;
+  const veri = `${bayiId}.${bitis}`;
   (await cookies()).set(CEREZ, `${veri}.${imzala(veri)}`, {
     httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SURE_SN,
   });
 }
 
+/** Portal çıkışı: yönetici görünümünü kapatır; bayi hesabıysa Supabase oturumunu da kapatır. */
 export async function oturumKapat() {
-  (await cookies()).delete(CEREZ);
+  const c = await cookies();
+  if (c.get(CEREZ)) {
+    c.delete(CEREZ);
+    return;
+  }
+  await (await createClient()).auth.signOut();
 }
 
-export async function portalOturumu(): Promise<PortalOturumu | null> {
-  await connection(); // süre kontrolü (Date.now) istek anında yapılır, prerender'da değil
-  const ham = (await cookies()).get(CEREZ)?.value;
+function gorunumBayisi(ham: string | undefined): string | null {
   if (!ham) return null;
   const i = ham.lastIndexOf(".");
   const veri = ham.slice(0, i);
   const a = Buffer.from(ham.slice(i + 1));
   const b = Buffer.from(imzala(veri));
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  const [bayiId, mod, bitis] = veri.split(".");
-  if (Number(bitis) * 1000 < Date.now() || (mod !== "bayi" && mod !== "yonetici")) return null;
+  const [bayiId, bitis] = veri.split(".");
+  return Number(bitis) * 1000 < Date.now() ? null : bayiId;
+}
+
+export async function portalOturumu(): Promise<PortalOturumu | null> {
+  await connection(); // oturum istek anında okunur, prerender'da değil
+  const gorunum = gorunumBayisi((await cookies()).get(CEREZ)?.value);
+  const [hesap, crm] = await Promise.all([bayiHesabi(), gorunum ? crmKullanicisi() : Promise.resolve(null)]);
+  const bayiId = hesap?.bayiId ?? (crm ? gorunum : null);
+  if (!bayiId) return null;
   const bayi = (await getAktifBayiler()).find((x) => x.id === bayiId);
   if (!bayi) return null;
-  if (mod === "bayi" && !(await getPortalHesabi(bayiId))?.erisim) return null; // erişim kaldırıldıysa oturum düşer
-  return { bayi, mod };
+  return { bayi, mod: hesap ? "bayi" : "yonetici" };
 }

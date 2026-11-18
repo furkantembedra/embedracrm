@@ -1,7 +1,7 @@
 // Depodaki cihaz ve kablo stoku. Kritik seviyenin altındakiler kırmızı; hazırlanan siparişlerin ihtiyacı ayrıca gösterilir.
 import { Plus } from "lucide-react";
 import type { Siparis, StokKalemi } from "./queries";
-import { CIHAZ_STOK_KODU, KUTU_ICERIGI } from "./queries";
+import { CIHAZ_STOK_KODU, KUTU_ICERIGI } from "./sabitler";
 
 /** Ödeme bekleyen + hazırlanan siparişlerin henüz stoktan düşmemiş ihtiyacı */
 function bekleyenIhtiyac(siparisler: Siparis[]) {

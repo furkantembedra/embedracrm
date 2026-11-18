@@ -7,9 +7,9 @@ import Chip from "@/components/ui/chip";
 import { sayi } from "@/lib/format";
 import { useBugun } from "@/lib/use-bugun";
 import { useSimdi } from "@/lib/use-simdi";
-import { DURUM_ADI, type Cihaz, type CihazDurumu, type LisansPlani } from "./queries";
+import type { Cihaz, CihazDurumu, LisansPlani } from "./queries";
 import { CIHAZ_MODELLERI, URUN_BILGI, type CihazModeli } from "@/lib/urunler";
-import {
+import { DURUM_ADI,
   DURUM_TONU,
   PLAN_TONU,
   eskiFirmware,

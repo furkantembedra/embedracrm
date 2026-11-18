@@ -15,6 +15,7 @@ import { hatirlatmaEkleDepo } from "@/components/hatirlatmalar/queries";
 import { gunEkle } from "@/components/hatirlatmalar/kurallar";
 import { getEngelli } from "@/components/pazarlama/queries";
 import { abonelikJetonu } from "@/lib/abonelik";
+import { sistemOlarak } from "@/lib/supabase/db";
 import { epostaGonder, saglayicilar } from "@/lib/ileti-gonder";
 import { EPOSTA_TUR_LIMITI, FILTRE_ALANLARI, gunYaz } from "./ortak";
 import { getKurallar, islendiIsaretle, islendiMi, kayitEkle, kilitAl, kilitBirak, kuralGuncelle, type CalismaKaydi, type EylemSonucu, type Kural, type KuralFiltresi, type TetikleyiciId } from "./queries";
@@ -225,7 +226,7 @@ export async function otomasyonCalistir(taban: string, yalnizKuralId?: string): 
         ozet.eylem += sonuclar.filter((s) => s.durum === "yapildi").length;
         // Hata olsa da işlenmiş say: yarım kalan bir çalıştırmayı yeniden denemek hatırlatmayı ikilerdi. Hata geçmişte görünür.
         await islendiIsaretle(k.id, e.anahtar);
-        const kayit: CalismaKaydi = { id: crypto.randomUUID(), zaman: new Date().toISOString(), kuralId: k.id, kuralAd: k.ad, kayitAd: e.kayitAd, href: e.href, sonuclar };
+        const kayit: CalismaKaydi = { id: "", zaman: new Date().toISOString(), kuralId: k.id, kuralAd: k.ad, kayitAd: e.kayitAd, href: e.href, sonuclar };
         await kayitEkle(kayit);
       }
       await kuralGuncelle(k.id, (x) => void (x.sonCalisma = new Date().toISOString()));
@@ -234,4 +235,9 @@ export async function otomasyonCalistir(taban: string, yalnizKuralId?: string): 
   } finally {
     await kilitBirak();
   }
+}
+
+/** Zamanlayıcının giriş noktası (instrumentation.ts): oturum olmadığı için gizli anahtarlı istemciyle çalışır. */
+export function otomasyonZamanlayici(taban: string): Promise<CalismaOzeti | null> {
+  return sistemOlarak(() => otomasyonCalistir(taban));
 }

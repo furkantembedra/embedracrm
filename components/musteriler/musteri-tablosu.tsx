@@ -4,10 +4,10 @@
 import { Search } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { basHarfler, kisaTl } from "@/lib/format";
-import { SEGMENT_ADI, type Musteri } from "./queries";
+import type { Musteri } from "./queries";
 import { useBugun } from "@/lib/use-bugun";
 import { modelOzeti } from "@/lib/urunler";
-import { PLAN_TONU, avatarRengi, kalanGun, tarihYaz } from "./ortak";
+import { SEGMENT_ADI, PLAN_TONU, avatarRengi, kalanGun, tarihYaz } from "./ortak";
 
 const TH = "px-2 py-2.5 text-left text-xs font-semibold text-muted";
 const TD = "border-t border-bg px-2 py-3";

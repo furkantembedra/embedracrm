@@ -1,6 +1,9 @@
-// Sipariş & Sevkiyat: veri okuma. Şimdilik demo veri döner (sunucu belleğinde, sayfalar arasında paylaşılır).
-// Supabase bağlanınca fonksiyonların içini supabase.from("orders" | "stock" | "returns")... ile değiştirin.
+// Sipariş & Sevkiyat: veri okuma ve yazma (Supabase: siparisler, siparis_kalemleri, siparis_notlari,
+// siparis_lisans_atamalari, stok_kalemleri, iadeler). Domain id = belge numarası (sp_no, ia_no), stok kodu = st_kod.
 import type { CihazModeli } from "@/lib/urunler";
+import { ODEME_YONTEMLERI, IADE_NEDENLERI, IADE_ADIMLARI, KUTU_ICERIGI, CIHAZ_STOK_KODU } from "./sabitler";
+export { ODEME_YONTEMLERI, IADE_NEDENLERI, IADE_ADIMLARI, KUTU_ICERIGI, CIHAZ_STOK_KODU };
+import { db, sonuc, yerelZaman } from "@/lib/supabase/db";
 
 /** odeme → hazirlaniyor → kargoda → teslim → tamamlandi. Yalnızca lisans içeren siparişte kargo adımları atlanır.
  *  iptal: kargodan önce (ödeme bekliyor / hazırlanıyor) iptal edilen sipariş; gelir ve stok hesaplarına girmez. */
@@ -8,14 +11,13 @@ export type SiparisDurumu = "odeme" | "hazirlaniyor" | "kargoda" | "teslim" | "t
 export type OdemeYontemi = "Kart" | "Havale/EFT" | "Proforma";
 export type ParaBirimi = "TRY" | "EUR";
 
-export const ODEME_YONTEMLERI: OdemeYontemi[] = ["Kart", "Havale/EFT", "Proforma"];
-
 export type Kalem =
   | { tur: "cihaz"; model: CihazModeli; adet: number }
   | { tur: "lisans"; paket: string; adet: number; sureAy: number }
   | { tur: "aksesuar"; stokKodu: string; adet: number };
 
-export type SiparisNotu = { metin: string; zaman: string; sistem?: boolean }; // zaman: "2026-11-06T11:24"
+// _id: siparis_notlari.id (veritabanından gelen notta dolu; kodun yeni eklediği notta boş → kaydedilirken insert edilir)
+export type SiparisNotu = { metin: string; zaman: string; sistem?: boolean; _id?: number }; // zaman: "2026-11-06T11:24"
 
 export type Siparis = {
   id: string; // "S-26-1184" (adres: /siparisler/S-26-1184)
@@ -57,153 +59,323 @@ export type Iade = {
   adim: number; // IADE_ADIMLARI[tur] içindeki sıra
 };
 
-export const IADE_ADIMLARI: Record<IadeTuru, string[]> = {
-  iade: ["Ürün bekleniyor", "Ürün alındı", "Para iadesi yapıldı"],
-  degisim: ["Ürün bekleniyor", "Ürün alındı", "Yeni kargo yolda", "Tamamlandı"],
+// ─────────────────────────────────────────────────────────────
+// Satır ↔ domain dönüşümleri
+// ─────────────────────────────────────────────────────────────
+
+const SIPARIS_SEC =
+  "id, sp_no, sp_tarih, musteri_id, bayi_id, sp_musteri_adi, sp_ulke, sp_adres, sp_tutar, sp_para_birimi, sp_odeme, sp_durum, " +
+  "sp_seri_nolar, sp_kargo_firma, sp_kargo_takip, sp_teslim_tarihi, sp_fatura_no, sp_lisans_bat, " +
+  "sp_iptal_tarihi, sp_iptal_neden, sp_iptal_kim, sp_iptal_odeme_iadesi, teklif:teklifler(tk_no), " +
+  "siparis_kalemleri(sk_sira, sk_tur, sk_model, sk_paket, sk_sure_ay, sk_stok_kodu, sk_adet), " +
+  "siparis_notlari(id, sn_metin, sn_sistem, sn_zaman), siparis_lisans_atamalari(id, sla_seri_no, sla_plan, sla_sure_ay)";
+
+type KalemSatiri = { sk_sira: number; sk_tur: Kalem["tur"]; sk_model: CihazModeli | null; sk_paket: string | null; sk_sure_ay: number | null; sk_stok_kodu: string | null; sk_adet: number };
+type SiparisSatiri = {
+  id: number; sp_no: string; sp_tarih: string; musteri_id: number | null; bayi_id: number | null; sp_musteri_adi: string; sp_ulke: string;
+  sp_adres: string; sp_tutar: number | string; sp_para_birimi: ParaBirimi; sp_odeme: OdemeYontemi; sp_durum: SiparisDurumu;
+  sp_seri_nolar: string[] | null; sp_kargo_firma: string | null; sp_kargo_takip: string | null; sp_teslim_tarihi: string | null;
+  sp_fatura_no: string | null; sp_lisans_bat: string | null; sp_iptal_tarihi: string | null; sp_iptal_neden: string | null;
+  sp_iptal_kim: "embedra" | "bayi" | null; sp_iptal_odeme_iadesi: boolean | null; teklif: { tk_no: string } | null;
+  siparis_kalemleri: KalemSatiri[] | null;
+  siparis_notlari: { id: number; sn_metin: string; sn_sistem: boolean; sn_zaman: string }[] | null;
+  siparis_lisans_atamalari: { id: number; sla_seri_no: string; sla_plan: string; sla_sure_ay: number }[] | null;
 };
-export const IADE_NEDENLERI = ["Cayma hakkı", "Arızalı ürün", "Yanlış ürün gönderildi", "Eksik parça", "Diğer"] as const;
+type StokSatiri = { st_kod: string; st_ad: string; st_adet: number; st_kritik: number; st_hedef: number; st_fiyat: number | string | null };
+type IadeSatiri = { ia_no: string; ia_siparis_no: string; ia_musteri_adi: string; ia_tur: IadeTuru; ia_neden: string; ia_urunler: string[] | null; ia_tarih: string; ia_adim: number };
 
-/** Her cihaz kutusunda bulunan kablolar (kargoya verilirken stoktan düşer) */
-export const KUTU_ICERIGI = ["EO1-CBL-MAIN", "EO1-CBL-PIN", "EO1-CBL-BAT", "EO1-CBL-USB"];
-export const CIHAZ_STOK_KODU: Record<CihazModeli, string> = { ONE: "EO1-HW", "ONE Lite": "EO1L-HW" };
+/** "6" → 6; sayı olmayan kimlik (boş, eski slug, uuid) → null */
+const sayiNo = (v: string | null | undefined) => (v && /^\d+$/.test(v) ? Number(v) : null);
+const benzersizIhlali = (e: unknown) => e instanceof Error && /\(23505\)/.test(e.message);
 
-const STOK: StokKalemi[] = [
-  { kod: "EO1-HW", ad: "EmbedraONE cihaz", adet: 46, kritik: 10, hedef: 100, fiyat: null },
-  { kod: "EO1L-HW", ad: "EmbedraONE LITE cihaz", adet: 21, kritik: 8, hedef: 60, fiyat: null },
-  { kod: "EO1-CBL-MAIN", ad: "Ana teşhis kablosu", adet: 120, kritik: 30, hedef: 150, fiyat: 4_200 },
-  { kod: "EO1-CBL-PIN", ad: "Universal pin kablosu", adet: 18, kritik: 30, hedef: 130, fiyat: 3_500 },
-  { kod: "EO1-CBL-BAT", ad: "Batarya kablosu", adet: 88, kritik: 30, hedef: 130, fiyat: 1_200 },
-  { kod: "EO1-CBL-USB", ad: "USB-C kablo", adet: 140, kritik: 30, hedef: 150, fiyat: 600 },
-];
+function kalemCevir(k: KalemSatiri): Kalem {
+  if (k.sk_tur === "cihaz") return { tur: "cihaz", model: k.sk_model ?? "ONE", adet: k.sk_adet };
+  if (k.sk_tur === "lisans") return { tur: "lisans", paket: k.sk_paket ?? "", adet: k.sk_adet, sureAy: k.sk_sure_ay ?? 12 };
+  return { tur: "aksesuar", stokKodu: k.sk_stok_kodu ?? "", adet: k.sk_adet };
+}
 
-const not = (metin: string, zaman: string): SiparisNotu => ({ metin, zaman, sistem: true });
+function siparisCevir(r: SiparisSatiri): Siparis {
+  const atamalar = r.siparis_lisans_atamalari ?? [];
+  const s: Siparis = {
+    id: r.sp_no,
+    tarih: yerelZaman(r.sp_tarih),
+    musteriId: r.musteri_id != null ? String(r.musteri_id) : null,
+    musteri: r.sp_musteri_adi,
+    ulke: r.sp_ulke,
+    adres: r.sp_adres,
+    bayiId: r.bayi_id != null ? String(r.bayi_id) : null,
+    teklifNo: r.teklif?.tk_no ?? null,
+    kalemler: [...(r.siparis_kalemleri ?? [])].sort((a, b) => a.sk_sira - b.sk_sira).map(kalemCevir),
+    tutar: Number(r.sp_tutar),
+    paraBirimi: r.sp_para_birimi,
+    odeme: r.sp_odeme,
+    durum: r.sp_durum,
+    seriNolar: r.sp_seri_nolar ?? [],
+    kargo: r.sp_kargo_firma ? { firma: r.sp_kargo_firma, takipNo: r.sp_kargo_takip ?? "" } : null,
+    teslimTarihi: r.sp_teslim_tarihi,
+    faturaNo: r.sp_fatura_no,
+    lisansBaslangic: r.sp_lisans_bat,
+    notlar: [...(r.siparis_notlari ?? [])]
+      .sort((a, b) => a.sn_zaman.localeCompare(b.sn_zaman) || a.id - b.id)
+      .map((n) => ({ metin: n.sn_metin, zaman: yerelZaman(n.sn_zaman), ...(n.sn_sistem ? { sistem: true } : {}), _id: n.id })),
+  };
+  if (atamalar.length) {
+    s.lisansAtamalari = [...atamalar].sort((a, b) => a.id - b.id).map((a) => ({ seriNo: a.sla_seri_no, plan: a.sla_plan, sureAy: a.sla_sure_ay }));
+  }
+  if (r.sp_durum === "iptal" || r.sp_iptal_tarihi) {
+    s.iptal = { tarih: r.sp_iptal_tarihi ?? "", neden: r.sp_iptal_neden ?? "", kim: r.sp_iptal_kim ?? "embedra", odemeIadesi: !!r.sp_iptal_odeme_iadesi };
+  }
+  return s;
+}
 
-const DEMO: Siparis[] = [
-  {
-    id: "S-26-1184", tarih: "2026-11-06T11:24", musteriId: "volant", musteri: "Volant Lenkung Service GmbH", ulke: "Almanya",
-    adres: "Industriestr. 14, 70565 Stuttgart, DE",
-    kalemler: [{ tur: "cihaz", model: "ONE", adet: 2 }, { tur: "lisans", paket: "Pro+", adet: 1, sureAy: 12 }],
-    tutar: 9_800, paraBirimi: "EUR", odeme: "Kart", durum: "hazirlaniyor", seriNolar: [], kargo: null, teslimTarihi: null,
-    faturaNo: "EMB2026000431", lisansBaslangic: null,
-    notlar: [not("Web sitesinden kartla ödendi.", "2026-11-06T11:24"), not("İhracat faturası kesildi: EMB2026000431", "2026-11-06T11:40")],
-  },
-  {
-    id: "S-26-1181", tarih: "2026-11-06T09:10", musteriId: null, musteri: "Mert Usta Oto", ulke: "Türkiye", adres: "Gebze OSB, Kocaeli",
-    kalemler: [{ tur: "cihaz", model: "ONE", adet: 1 }, { tur: "lisans", paket: "Pro", adet: 1, sureAy: 12 }],
-    tutar: 168_000, paraBirimi: "TRY", odeme: "Havale/EFT", durum: "odeme", seriNolar: [], kargo: null, teslimTarihi: null,
-    faturaNo: null, lisansBaslangic: null,
-    notlar: [not("Sipariş açıldı, havale bekleniyor.", "2026-11-06T09:10")],
-  },
-  {
-    id: "S-26-1177", tarih: "2026-11-01T14:02", musteriId: "bursa", musteri: "Bursa ECU Lab", ulke: "Türkiye", adres: "Nilüfer, Bursa",
-    kalemler: [{ tur: "lisans", paket: "Pro+", adet: 1, sureAy: 12 }],
-    tutar: 100_800, paraBirimi: "TRY", odeme: "Kart", durum: "tamamlandi", seriNolar: ["EO1-2310-0218"], kargo: null, teslimTarihi: "2026-11-01",
-    faturaNo: "EMB2026000412", lisansBaslangic: "2025-11-11",
-    notlar: [not("Yenileme siparişi, kartla ödendi.", "2026-11-01T14:02"), not("Lisans anahtarı müşteriye iletildi.", "2026-11-01T14:30")],
-  },
-  {
-    id: "S-26-1172", tarih: "2026-10-31T10:15", musteriId: null, bayiId: "directie", musteri: "Direcție Pro SRL", ulke: "Romanya",
-    adres: "Bd. Unirii 22, București, RO",
-    kalemler: [{ tur: "cihaz", model: "ONE", adet: 10 }],
-    tutar: 31_500, paraBirimi: "EUR", odeme: "Proforma", durum: "kargoda",
-    seriNolar: Array.from({ length: 10 }, (_, i) => `EO1-2610-${String(680 + i).padStart(4, "0")}`),
-    kargo: { firma: "DHL Freight", takipNo: "4471 0928 3315" }, teslimTarihi: null, faturaNo: "EMB2026000398", lisansBaslangic: null,
-    notlar: [not("Bayi stoğu siparişi, proforma ile ödendi.", "2026-10-31T10:15"), not("DHL Freight ile kargoya verildi.", "2026-11-02T16:05")],
-  },
-  {
-    id: "S-26-1169", tarih: "2026-10-30T15:40", musteriId: "kaya", musteri: "Kaya Oto Elektronik", ulke: "Türkiye", adres: "Bornova, İzmir",
-    kalemler: [{ tur: "aksesuar", stokKodu: "EO1-CBL-MAIN", adet: 1 }],
-    tutar: 4_200, paraBirimi: "TRY", odeme: "Kart", durum: "teslim", seriNolar: [],
-    kargo: { firma: "Yurtiçi Kargo", takipNo: "2210 4471 09" }, teslimTarihi: "2026-11-02", faturaNo: "EMB2026000401", lisansBaslangic: null,
-    notlar: [not("Yedek kablo siparişi.", "2026-10-30T15:40"), not("Teslim edildi.", "2026-11-02T11:00")],
-  },
-  {
-    id: "S-26-1166", tarih: "2026-10-29T13:05", musteriId: "akdeniz", musteri: "Akdeniz Direksiyon Servisi", ulke: "Türkiye", adres: "Muratpaşa, Antalya",
-    kalemler: [{ tur: "cihaz", model: "ONE Lite", adet: 1 }, { tur: "lisans", paket: "Basic", adet: 1, sureAy: 12 }],
-    tutar: 112_000, paraBirimi: "TRY", odeme: "Kart", durum: "kargoda", seriNolar: ["EO1-2610-0670"],
-    kargo: { firma: "Yurtiçi Kargo", takipNo: "2210 4480 17" }, teslimTarihi: null, faturaNo: null, lisansBaslangic: null,
-    notlar: [not("İkinci cihaz siparişi.", "2026-10-29T13:05"), not("Yurtiçi Kargo ile kargoya verildi.", "2026-11-05T15:20")],
-  },
-  {
-    id: "S-26-1163", tarih: "2026-10-28T10:00", musteriId: "iberia", musteri: "Iberia Dirección SL", ulke: "İspanya", adres: "C/ de Colón 18, Valencia, ES",
-    kalemler: [{ tur: "cihaz", model: "ONE", adet: 1 }, { tur: "lisans", paket: "Basic", adet: 1, sureAy: 12 }],
-    tutar: 4_100, paraBirimi: "EUR", odeme: "Kart", durum: "teslim", seriNolar: ["EO1-2610-0661"],
-    kargo: { firma: "UPS Express", takipNo: "1Z88F4E20444712210" }, teslimTarihi: "2026-11-03", faturaNo: "EMB2026000389", lisansBaslangic: null,
-    notlar: [not("Kartla ödendi.", "2026-10-28T10:00"), not("Teslim edildi, lisans anahtarı bekliyor.", "2026-11-03T09:40")],
-  },
-  {
-    id: "S-26-1158", tarih: "2026-10-27T11:30", musteriId: null, musteri: "Anadolu Teknik Lisesi", ulke: "Türkiye", adres: "Melikgazi, Kayseri",
-    kalemler: [{ tur: "cihaz", model: "ONE", adet: 3 }, { tur: "lisans", paket: "Pro", adet: 3, sureAy: 12 }],
-    tutar: 504_000, paraBirimi: "TRY", odeme: "Havale/EFT", durum: "hazirlaniyor", seriNolar: [], kargo: null, teslimTarihi: null,
-    faturaNo: null, lisansBaslangic: null,
-    notlar: [not("Kamu alımı, havale ile ödendi. e-Fatura kamu kurumuna kesilecek.", "2026-10-28T09:00")],
-  },
-];
+const stokCevir = (r: StokSatiri): StokKalemi => ({
+  kod: r.st_kod, ad: r.st_ad, adet: r.st_adet, kritik: r.st_kritik, hedef: r.st_hedef, fiyat: r.st_fiyat == null ? null : Number(r.st_fiyat),
+});
 
-const DEMO_IADE: Iade[] = [
-  { id: "R-0042", siparisId: "S-26-1149", musteri: "Atelier Direction Lyon", tur: "degisim", neden: "Yanlış ürün gönderildi · kablo seti eksik", urunler: ["1× Universal pin kablosu"], tarih: "2026-11-03", adim: 2 },
-  { id: "R-0041", siparisId: "S-26-1152", musteri: "Sarajevo Auto Elektro", tur: "iade", neden: "Cayma hakkı · kutu açılmamış", urunler: ["EO1-2610-0655"], tarih: "2026-11-02", adim: 0 },
-];
+const iadeCevir = (r: IadeSatiri): Iade => ({
+  id: r.ia_no, siparisId: r.ia_siparis_no, musteri: r.ia_musteri_adi, tur: r.ia_tur, neden: r.ia_neden, urunler: r.ia_urunler ?? [], tarih: r.ia_tarih, adim: r.ia_adim,
+});
 
-const g = globalThis as { __embedraSiparisler?: { siparisler: Siparis[]; stok: StokKalemi[]; iadeler: Iade[] } };
-const DEPO = (g.__embedraSiparisler ??= { siparisler: structuredClone(DEMO), stok: structuredClone(STOK), iadeler: structuredClone(DEMO_IADE) });
+/** Teklif numarası (tk_no) → teklifler.id */
+async function teklifNo(no: string | null | undefined): Promise<number | null> {
+  if (!no) return null;
+  const s = await db();
+  const r = sonuc(await s.from("teklifler").select("id").eq("tk_no", no).maybeSingle(), "Teklif aranırken") as { id: number } | null;
+  return r?.id ?? null;
+}
 
+/** Siparişin skaler alanları → siparisler sütunları (sp_no ve teklif_id hariç) */
+function siparisSutunlari(s: Siparis) {
+  return {
+    sp_tarih: s.tarih,
+    musteri_id: sayiNo(s.musteriId),
+    bayi_id: sayiNo(s.bayiId ?? null),
+    sp_musteri_adi: s.musteri,
+    sp_ulke: s.ulke,
+    sp_adres: s.adres,
+    sp_tutar: s.tutar,
+    sp_para_birimi: s.paraBirimi,
+    sp_odeme: s.odeme,
+    sp_durum: s.durum,
+    sp_seri_nolar: s.seriNolar,
+    sp_kargo_firma: s.kargo?.firma ?? null,
+    sp_kargo_takip: s.kargo?.takipNo ?? null,
+    sp_teslim_tarihi: s.teslimTarihi,
+    sp_fatura_no: s.faturaNo,
+    sp_lisans_bat: s.lisansBaslangic,
+    // iptal.tarih sütunu date: "2026-11-06T11:24" gelirse gün kısmı saklanır
+    sp_iptal_tarihi: s.iptal?.tarih ? s.iptal.tarih.slice(0, 10) : null,
+    sp_iptal_neden: s.iptal?.neden ?? null,
+    sp_iptal_kim: s.iptal?.kim ?? null,
+    sp_iptal_odeme_iadesi: s.iptal ? s.iptal.odemeIadesi : null,
+  };
+}
+
+const kalemSatiri = (siparisId: number, k: Kalem, sira: number) => ({
+  siparis_id: siparisId,
+  sk_sira: sira,
+  sk_tur: k.tur,
+  sk_model: k.tur === "cihaz" ? k.model : null,
+  sk_paket: k.tur === "lisans" ? k.paket : null,
+  sk_sure_ay: k.tur === "lisans" ? k.sureAy : null,
+  sk_stok_kodu: k.tur === "aksesuar" ? k.stokKodu : null,
+  sk_adet: k.adet,
+});
+const notSatiri = (siparisId: number, n: SiparisNotu) => ({ siparis_id: siparisId, sn_metin: n.metin, sn_sistem: !!n.sistem, sn_zaman: n.zaman });
+const atamaSatiri = (siparisId: number, a: { seriNo: string; plan: string; sureAy: number }) => ({
+  siparis_id: siparisId, sla_seri_no: a.seriNo, sla_plan: a.plan, sla_sure_ay: a.sureAy,
+});
+
+/** Belge numarasındaki sayı: "S-26-1184" → 1184, "R-0042" → 42 */
+
+// ─────────────────────────────────────────────────────────────
+// Okuma
+// ─────────────────────────────────────────────────────────────
+
+/** En yeni sipariş başta. Bayi oturumunda RLS yalnızca bayinin siparişlerini döner. */
 export async function getSiparisler(): Promise<Siparis[]> {
-  return DEPO.siparisler;
+  const s = await db();
+  const r = sonuc(
+    await s.from("siparisler").select(SIPARIS_SEC).order("sp_tarih", { ascending: false }).order("id", { ascending: false }),
+    "Siparişler okunurken",
+  );
+  return (r as unknown as SiparisSatiri[]).map(siparisCevir);
 }
 
 export async function getSiparis(id: string): Promise<Siparis | null> {
-  return DEPO.siparisler.find((s) => s.id === id) ?? null;
+  const s = await db();
+  const r = sonuc(await s.from("siparisler").select(SIPARIS_SEC).eq("sp_no", id).maybeSingle(), "Sipariş okunurken");
+  return r ? siparisCevir(r as unknown as SiparisSatiri) : null;
 }
 
 export async function getStok(): Promise<StokKalemi[]> {
-  return DEPO.stok;
+  const s = await db();
+  const r = sonuc(await s.from("stok_kalemleri").select("st_kod, st_ad, st_adet, st_kritik, st_hedef, st_fiyat").order("id"), "Depo stoğu okunurken");
+  return (r as StokSatiri[]).map(stokCevir);
 }
 
 export async function getIadeler(): Promise<Iade[]> {
-  return DEPO.iadeler;
+  const s = await db();
+  const r = sonuc(
+    await s.from("iadeler").select("ia_no, ia_siparis_no, ia_musteri_adi, ia_tur, ia_neden, ia_urunler, ia_tarih, ia_adim").order("ia_tarih", { ascending: false }).order("id", { ascending: false }),
+    "İadeler okunurken",
+  );
+  return (r as IadeSatiri[]).map(iadeCevir);
 }
 
-/** Sıradaki sipariş numarası: "S-26-1185" */
+/** Sıradaki sipariş numarası: "S-26-1185" (çakışmada siparisEkle yeniden numara alır) */
+/** Sıradaki belge numarası. Bayi oturumu yalnızca kendi kayıtlarını gördüğü için tüm tablodan veritabanında hesaplanır. */
 export async function sonrakiSiparisNo(): Promise<string> {
-  const en = Math.max(0, ...DEPO.siparisler.map((s) => Number(s.id.split("-")[2]) || 0));
-  return `S-26-${en + 1}`;
+  const s = await db();
+  return sonuc(await s.rpc("sonraki_belge_no", { p_tur: "siparis" }), "Belge numarası alınırken") as string;
 }
 
-// Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
+// ─────────────────────────────────────────────────────────────
+// Yazma (actions.ts ve diğer modüllerin action dosyalarından çağrılır)
+// ─────────────────────────────────────────────────────────────
+
+/** Siparişi alt kayıtlarıyla kaydeder. Numara başka bir kayıtla çakışırsa yeni numara alır ve s.id'ye yazar. */
 export async function siparisEkle(s: Siparis) {
-  DEPO.siparisler.unshift(s);
+  const c = await db();
+  const teklifId = await teklifNo(s.teklifNo);
+  let satir: { id: number } | null = null;
+  for (let deneme = 0; !satir; deneme++) {
+    try {
+      satir = sonuc(
+        await c.from("siparisler").insert({ ...siparisSutunlari(s), sp_no: s.id, teklif_id: teklifId }).select("id").single(),
+        "Sipariş kaydedilirken",
+      ) as { id: number };
+    } catch (e) {
+      if (!benzersizIhlali(e) || deneme >= 2) throw e;
+      s.id = await sonrakiSiparisNo();
+    }
+  }
+  const no = satir.id;
+  if (s.kalemler.length) sonuc(await c.from("siparis_kalemleri").insert(s.kalemler.map((k, i) => kalemSatiri(no, k, i))), "Sipariş kalemleri kaydedilirken");
+  if (s.notlar.length) sonuc(await c.from("siparis_notlari").insert(s.notlar.map((n) => notSatiri(no, n))), "Sipariş notları kaydedilirken");
+  if (s.lisansAtamalari?.length) {
+    sonuc(await c.from("siparis_lisans_atamalari").insert(s.lisansAtamalari.map((a) => atamaSatiri(no, a))), "Lisans atamaları kaydedilirken");
+  }
 }
 
+/** Siparişi okur, geri çağırmayla değiştirir, farkı yazar ve güncel siparişi döner.
+ *  Skaler alanlar tek update; notlarda _id'siz olanlar eklenir, çıkarılanlar silinir; kalemler / lisans atamaları değiştiyse yeniden yazılır. */
 export async function siparisiGuncelle(id: string, f: (s: Siparis) => void): Promise<Siparis | null> {
-  const s = DEPO.siparisler.find((x) => x.id === id);
-  if (s) f(s);
-  return s ?? null;
+  const c = await db();
+  const ham = sonuc(await c.from("siparisler").select("id").eq("sp_no", id).maybeSingle(), "Sipariş aranırken") as { id: number } | null;
+  const eski = ham ? await getSiparis(id) : null;
+  if (!ham || !eski) return null;
+  const no = ham.id;
+  const s = structuredClone(eski);
+  f(s);
+
+  const sutunlar: Record<string, unknown> = siparisSutunlari(s);
+  if ((s.teklifNo ?? null) !== (eski.teklifNo ?? null)) sutunlar.teklif_id = await teklifNo(s.teklifNo);
+  if (s.id !== eski.id) sutunlar.sp_no = s.id;
+  sonuc(await c.from("siparisler").update(sutunlar).eq("id", no), "Sipariş güncellenirken");
+
+  if (JSON.stringify(s.kalemler) !== JSON.stringify(eski.kalemler)) {
+    sonuc(await c.from("siparis_kalemleri").delete().eq("siparis_id", no), "Sipariş kalemleri silinirken");
+    if (s.kalemler.length) sonuc(await c.from("siparis_kalemleri").insert(s.kalemler.map((k, i) => kalemSatiri(no, k, i))), "Sipariş kalemleri kaydedilirken");
+  }
+  if (JSON.stringify(s.lisansAtamalari ?? []) !== JSON.stringify(eski.lisansAtamalari ?? [])) {
+    sonuc(await c.from("siparis_lisans_atamalari").delete().eq("siparis_id", no), "Lisans atamaları silinirken");
+    if (s.lisansAtamalari?.length) {
+      sonuc(await c.from("siparis_lisans_atamalari").insert(s.lisansAtamalari.map((a) => atamaSatiri(no, a))), "Lisans atamaları kaydedilirken");
+    }
+  }
+
+  const kalan = new Set(s.notlar.flatMap((n) => (n._id ? [n._id] : [])));
+  const silinen = eski.notlar.filter((n) => n._id && !kalan.has(n._id)).map((n) => n._id!);
+  if (silinen.length) sonuc(await c.from("siparis_notlari").delete().in("id", silinen), "Sipariş notları silinirken");
+  for (const n of s.notlar) {
+    const o = n._id ? eski.notlar.find((x) => x._id === n._id) : undefined;
+    if (o && (o.metin !== n.metin || o.zaman !== n.zaman || !!o.sistem !== !!n.sistem)) {
+      const { siparis_id: _, ...degisen } = notSatiri(no, n);
+      sonuc(await c.from("siparis_notlari").update(degisen).eq("id", n._id!), "Sipariş notu güncellenirken");
+    }
+  }
+  const yeni = s.notlar.filter((n) => !n._id);
+  if (yeni.length) sonuc(await c.from("siparis_notlari").insert(yeni.map((n) => notSatiri(no, n))), "Sipariş notları kaydedilirken");
+
+  return getSiparis(s.id);
 }
 
-export async function stokGuncelle(kod: string, fark: number) {
-  const k = DEPO.stok.find((x) => x.kod === kod);
-  if (k) k.adet = Math.max(0, k.adet + fark);
-  return k ?? null;
+/** Depo stoğunu fark kadar değiştirir (0'ın altına inmez). Eş zamanlı yazımlara karşı karşılaştır-yaz:
+ *  okunan adet değişmemişse güncellenir, değişmişse yeniden denenir. Bulunamazsa null. */
+export async function stokGuncelle(kod: string, fark: number): Promise<StokKalemi | null> {
+  const s = await db();
+  for (let deneme = 0; deneme < 5; deneme++) {
+    const k = sonuc(await s.from("stok_kalemleri").select("st_adet").eq("st_kod", kod).maybeSingle(), "Stok okunurken") as { st_adet: number } | null;
+    if (!k) return null;
+    const r = sonuc(
+      await s
+        .from("stok_kalemleri")
+        .update({ st_adet: Math.max(0, k.st_adet + fark) })
+        .eq("st_kod", kod)
+        .eq("st_adet", k.st_adet)
+        .select("st_kod, st_ad, st_adet, st_kritik, st_hedef, st_fiyat"),
+      "Stok güncellenirken",
+    ) as StokSatiri[];
+    if (r.length) return stokCevir(r[0]);
+  }
+  throw new Error("Stok güncellenemedi: kayıt aynı anda başka bir işlemle değişiyor, tekrar deneyin.");
 }
 
 export async function stokKalemiEkle(k: StokKalemi) {
-  DEPO.stok.push(k);
+  const s = await db();
+  sonuc(
+    await s.from("stok_kalemleri").insert({ st_kod: k.kod, st_ad: k.ad, st_adet: k.adet, st_kritik: k.kritik, st_hedef: k.hedef, st_fiyat: k.fiyat }),
+    "Stok kalemi kaydedilirken",
+  );
 }
 
+/** Siparişe bağlı iade / değişim kaydı. siparis_id, sipariş hâlâ varsa doldurulur. Numara çakışırsa yeni numara alır ve i.id'ye yazar. */
 export async function iadeEkle(i: Iade) {
-  DEPO.iadeler.unshift(i);
+  const s = await db();
+  const sp = sonuc(await s.from("siparisler").select("id").eq("sp_no", i.siparisId).maybeSingle(), "Sipariş aranırken") as { id: number } | null;
+  for (let deneme = 0; ; deneme++) {
+    try {
+      sonuc(
+        await s.from("iadeler").insert({
+          ia_no: i.id, ia_siparis_no: i.siparisId, siparis_id: sp?.id ?? null, ia_musteri_adi: i.musteri, ia_tur: i.tur,
+          ia_neden: i.neden, ia_urunler: i.urunler ?? [], ia_tarih: i.tarih, ia_adim: i.adim,
+        }),
+        "İade kaydedilirken",
+      );
+      return;
+    } catch (e) {
+      if (!benzersizIhlali(e) || deneme >= 2) throw e;
+      i.id = await sonrakiIadeNo();
+    }
+  }
 }
 
 export async function iadeyiGuncelle(id: string, f: (i: Iade) => void): Promise<Iade | null> {
-  const i = DEPO.iadeler.find((x) => x.id === id);
-  if (i) f(i);
-  return i ?? null;
+  const s = await db();
+  const r = sonuc(
+    await s.from("iadeler").select("ia_no, ia_siparis_no, ia_musteri_adi, ia_tur, ia_neden, ia_urunler, ia_tarih, ia_adim").eq("ia_no", id).maybeSingle(),
+    "İade okunurken",
+  ) as IadeSatiri | null;
+  if (!r) return null;
+  const i = iadeCevir(r);
+  f(i);
+  const guncel = sonuc(
+    await s
+      .from("iadeler")
+      .update({ ia_musteri_adi: i.musteri, ia_tur: i.tur, ia_neden: i.neden, ia_urunler: i.urunler ?? [], ia_tarih: i.tarih, ia_adim: i.adim })
+      .eq("ia_no", id)
+      .select("ia_no, ia_siparis_no, ia_musteri_adi, ia_tur, ia_neden, ia_urunler, ia_tarih, ia_adim")
+      .single(),
+    "İade güncellenirken",
+  ) as IadeSatiri;
+  return iadeCevir(guncel);
 }
 
+/** Sıradaki belge numarası. Bayi oturumu yalnızca kendi kayıtlarını gördüğü için tüm tablodan veritabanında hesaplanır. */
 export async function sonrakiIadeNo(): Promise<string> {
-  const en = Math.max(0, ...DEPO.iadeler.map((i) => Number(i.id.slice(2)) || 0));
-  return `R-${String(en + 1).padStart(4, "0")}`;
+  const s = await db();
+  return sonuc(await s.rpc("sonraki_belge_no", { p_tur: "iade" }), "Belge numarası alınırken") as string;
 }
 
 /** Satış hattında kazanılan fırsattan "ödeme bekliyor" sipariş açar (satis-hatti/actions.ts çağırır) */
@@ -213,7 +385,7 @@ export async function firsattanSiparisAc(f: { firma: string; musteriId: string; 
   const p = (n: number) => String(n).padStart(2, "0");
   const zaman = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   const siparis: Siparis = {
-    id: await sonrakiSiparisNo(), tarih: zaman, musteriId: f.musteriId, musteri: f.firma, ulke: f.ulke, adres: f.konum,
+    id: await sonrakiSiparisNo(), tarih: zaman, musteriId: f.musteriId || null, musteri: f.firma, ulke: f.ulke, adres: f.konum,
     kalemler, tutar: f.tutar, paraBirimi: "TRY", odeme: "Havale/EFT", durum: "odeme", seriNolar: [], kargo: null,
     teslimTarihi: null, faturaNo: null, lisansBaslangic: null,
     notlar: [{ metin: `Satış hattında kazanılan fırsattan açıldı: ${f.icerik}`, zaman, sistem: true }],

@@ -4,7 +4,10 @@ import { medyaGetir } from "@/components/pazarlama/medya-deposu";
 
 export async function GET(istek: NextRequest, ctx: RouteContext<"/api/medya/[id]">) {
   const { id } = await ctx.params;
-  const d = medyaGetir(id);
+  const d = await medyaGetir(id).catch((e) => {
+    console.error("[medya okuma]", e);
+    return null;
+  });
   if (!d) return new Response("Bulunamadı", { status: 404 });
   const indir = istek.nextUrl.searchParams.has("indir");
   return new Response(new Blob([d.veri as BlobPart], { type: d.tip }), {

@@ -13,7 +13,8 @@ import { useBugun } from "@/lib/use-bugun";
 import type { FiyatListesi } from "@/lib/urunler";
 import TeklifFormu from "./teklif-formu";
 import { suresiDoldu, teklifToplami } from "./ortak";
-import { DURUM_ADI, type Teklif } from "./queries";
+import { type Teklif } from "./queries";
+import { DURUM_ADI } from "./sabitler";
 
 type Filtre = "tumu" | "acik" | "taslak" | "kabul" | "red" | "doldu";
 const FILTRELER: { id: Filtre; ad: string }[] = [

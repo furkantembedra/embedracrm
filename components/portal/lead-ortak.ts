@@ -17,7 +17,7 @@ export const ACIK_ASAMALAR: LeadAsamasi[] = ["yeni", "gorusuldu", "demo", "tekli
 export const LEAD_KAYNAKLARI = ["Fuar", "Referans", "Sosyal medya", "Saha ziyareti", "Mevcut müşteri", "Web sitesi", "Diğer"] as const;
 export const KAYIP_NEDENLERI = ["Fiyat", "Rakip ürün", "Bütçe yok", "Zamanlama", "Yanıt vermedi", "Diğer"] as const;
 
-export type LeadNotu = { zaman: string; metin: string; sistem?: boolean }; // zaman "2026-11-16T12:30"
+export type LeadNotu = { zaman: string; metin: string; sistem?: boolean; _id?: number }; // zaman "2026-11-16T12:30" · _id: veritabanı satırı (yeni notta yok)
 /** Bayinin müşterisine verdiği teklif. Kalem tipi ve hesaplar CRM teklifleriyle aynı (components/teklifler). */
 export type BayiTeklif = {
   id: string; // "DP-2026-015" (ilk sürüm), "DP-2026-015-v2"

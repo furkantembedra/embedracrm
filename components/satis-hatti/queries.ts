@@ -1,27 +1,10 @@
-// Satış Hattı: veri okuma. Şimdilik demo veri döner;
-// Supabase bağlanınca getFirsatlar() içini supabase.from("deals")... ile değiştirin.
+// Satış Hattı: veri okuma ve yazma (Supabase).
+// Tablolar: satis_hatti (aşama: asama.kod, kaynak: kaynak.f_kaynak, sıra: f_sira), whatsapp_mesajlari (yazışma).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { db, sonuc } from "@/lib/supabase/db";
+import { ASAMALAR, KAYNAKLAR, type Asama, type KayipBilgisi, type KayipNedeni, type Kaynak } from "./sabitler";
 
-export const ASAMALAR = ["yeni", "demo", "teklif", "muzakere", "kazanildi", "kaybedildi"] as const;
-export type Asama = (typeof ASAMALAR)[number];
-
-export const ASAMA_BILGI: Record<Asama, { ad: string; renk: string }> = {
-  yeni: { ad: "Yeni lead", renk: "#C9CCC2" },
-  demo: { ad: "Demo planlandı", renk: "#2F4BFF" },
-  teklif: { ad: "Teklif gönderildi", renk: "#E58A2B" },
-  muzakere: { ad: "Müzakere", renk: "#0E0F0C" },
-  kazanildi: { ad: "Kazanıldı", renk: "#B6DD2E" },
-  kaybedildi: { ad: "Kaybedildi", renk: "#D93F3F" },
-};
-
-/** Kazanıldı ve Kaybedildi kapalı aşamalardır: açık fırsat değerine ve gecikme uyarısına girmez */
-export const KAPALI_ASAMALAR: readonly Asama[] = ["kazanildi", "kaybedildi"];
-
-export const KAYIP_NEDENLERI = ["Fiyat yüksek bulundu", "Rakibi seçti", "Bütçe yok", "Yanıt vermiyor", "İhtiyacı kalmadı", "Diğer"] as const;
-export type KayipNedeni = (typeof KAYIP_NEDENLERI)[number];
-export type KayipBilgisi = { neden: KayipNedeni; aciklama?: string };
-
-export const KAYNAKLAR = ["Web sitesi", "WhatsApp", "Instagram", "Bayi", "Fuar", "Mevcut müşteri"] as const;
-export type Kaynak = (typeof KAYNAKLAR)[number];
+export * from "./sabitler";
 
 /** WhatsApp yazışması: gelen mesajlar webhook'tan, giden notlar CRM'den */
 export type WhatsappMesaji = { id: string; metin: string; zaman: string; yon: "gelen" | "giden"; tur: string }; // zaman: ISO
@@ -44,74 +27,264 @@ export type Firsat = {
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
 };
 
-const DEMO: Firsat[] = [
-  { id: "f1", firma: "Mert Usta Oto", konum: "Kocaeli, TR", kaynak: "Instagram", icerik: "1× ONE + Pro lisans", tutar: 184_000, asama: "yeni", sonrakiAdim: "İlk arama", sonrakiTarih: "2026-11-03" },
-  { id: "f2", firma: "Sarajevo Auto Elektro", konum: "Bosna-Hersek", kaynak: "Web sitesi", icerik: "1× ONE + Basic", tutar: 142_000, asama: "yeni", sonrakiAdim: "Fiyat listesi gönder", sonrakiTarih: "2026-11-04" },
-  { id: "f3", firma: "Konya Direksiyon Merkezi", konum: "Konya, TR", kaynak: "WhatsApp", icerik: "2× ONE + Pro+", tutar: 356_000, asama: "yeni", sonrakiAdim: "İhtiyaç analizi", sonrakiTarih: "2026-11-04" },
-  { id: "f4", firma: "Iberia Dirección SL", konum: "Valencia, ES", kaynak: "Fuar", icerik: "3× ONE + Pro+", tutar: 520_000, asama: "demo", sonrakiAdim: "Online demo 14:00", sonrakiTarih: "2026-11-05" },
-  { id: "f5", firma: "Ege Meslek Yüksekokulu", konum: "Manisa, TR", kaynak: "Mevcut müşteri", icerik: "Eğitim seti · 4 cihaz", tutar: 520_000, asama: "demo", sonrakiAdim: "Laboratuvar ziyareti", sonrakiTarih: "2026-11-07" },
-  { id: "f6", firma: "Atelier Direction Lyon", konum: "Lyon, FR", kaynak: "Web sitesi", icerik: "Basic → Pro yükseltme", tutar: 106_000, asama: "teklif", sonrakiAdim: "Takip e-postası", sonrakiTarih: "2026-10-31" },
-  { id: "f7", firma: "Başkent Rot & Direksiyon", konum: "Ankara, TR", kaynak: "Mevcut müşteri", icerik: "Pro yükseltme + 1 cihaz", tutar: 214_000, asama: "teklif", sonrakiAdim: "Teklif EMB-2026-342", sonrakiTarih: "2026-11-06" },
-  { id: "f8", firma: "Polska EPS Serwis", konum: "Poznań, PL", kaynak: "Bayi", icerik: "10× ONE · bayi stoğu", tutar: 1_410_000, asama: "muzakere", sonrakiAdim: "MOQ ve bölge hakkı", sonrakiTarih: "2026-11-08" },
-  { id: "f9", firma: "Nordic Steering AB", konum: "Göteborg, SE", kaynak: "Mevcut müşteri", icerik: "Pro+ yenileme · 2 yıl", tutar: 234_000, asama: "muzakere", sonrakiAdim: "İndirim onayı", sonrakiTarih: "2026-11-12" },
-  { id: "f10", firma: "Volant Lenkung Service", konum: "Stuttgart, DE", kaynak: "Fuar", icerik: "2× ONE + Pro+", tutar: 359_000, asama: "kazanildi", sonrakiAdim: "Sevkiyat hazırlanıyor", sonrakiTarih: "2026-11-03" },
-  { id: "f11", firma: "Bursa ECU Lab", konum: "Bursa, TR", kaynak: "WhatsApp", icerik: "Pro+ yenileme", tutar: 96_000, asama: "kazanildi", sonrakiAdim: "Fatura kesildi", sonrakiTarih: "2026-11-01" },
-  { id: "f12", firma: "Rota Servis Konya", konum: "Konya, TR", kaynak: "Web sitesi", icerik: "1× ONE + Pro", tutar: 178_000, asama: "kaybedildi", sonrakiAdim: "6 ay sonra tekrar ara", sonrakiTarih: "2027-04-15", kayipNedeni: "Bütçe yok" },
-];
 
-// Lead'lerin geldiği kampanyalar (demo): pazarlama sayfasındaki "gelen lead / satışa dönen" buradan sayılır
-const DEMO_KAMPANYA: Record<string, string> = { f1: "k-reels", f6: "k-pro", f3: "k-pro", f5: "k-ekim", f9: "k-yenileme", f11: "k-yenileme", f12: "k-reels" };
+/* ---------- Satır ↔ domain ---------- */
 
-// Demo depo: sunucu belleğinde, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
-const g = globalThis as { __embedraFirsatlar?: Firsat[] };
-const DEPO = (g.__embedraFirsatlar ??= DEMO.map((f) => ({ ...f, kampanyaId: DEMO_KAMPANYA[f.id] ?? null })));
-
-// Sonradan eklenen alanların demo değerleri (bellekte eski depo varsa da tamamlanır)
-const DEMO_EK: Record<string, Partial<Firsat>> = {
-  f3: { telefon: "+905321112233", mesajlar: [{ id: "demo-wa-1", metin: "Merhaba, 2 adet ONE ve Pro+ lisans için fiyat alabilir miyim?", zaman: "2026-11-03T10:12:00.000Z", yon: "gelen", tur: "text" }] },
-  f11: { telefon: "+905441234567" },
-  f2: { sonHareket: "2026-10-30" },
-  f8: { sonHareket: "2026-11-02" },
-  f4: { sonHareket: "2026-11-04" },
+type MesajSatiri = { id: number; w_mesaj_id: string; w_metin: string; w_yon: "gelen" | "giden"; w_tur: string; w_zaman: string };
+type FirsatSatiri = {
+  id: number;
+  f_firma: string;
+  f_konum: string | null;
+  f_icerik: string | null;
+  f_tutar: number | string | null;
+  f_sonraki_adim: string | null;
+  f_sonraki_tarih: string | null;
+  f_kayip_nedeni: KayipNedeni | null;
+  f_kayip_aciklama: string | null;
+  kampanya_id: number | null;
+  f_telefon: string | null;
+  f_son_hareket: string;
+  f_sira: number;
+  asama: { kod: Asama } | null;
+  kaynak: { f_kaynak: string } | null;
+  mesajlar: MesajSatiri[];
 };
-for (const f of DEPO) for (const [k, v] of Object.entries(DEMO_EK[f.id] ?? {})) (f as Record<string, unknown>)[k] ??= v;
 
+const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, f_sonraki_tarih, f_kayip_nedeni, f_kayip_aciklama,
+  kampanya_id, f_telefon, f_son_hareket, f_sira,
+  asama:asama!satis_hatti_asama_id_fkey(kod),
+  kaynak:kaynak!satis_hatti_kaynak_id_fkey(f_kaynak),
+  mesajlar:whatsapp_mesajlari!whatsapp_mesajlari_satis_hatti_id_fkey(id, w_mesaj_id, w_metin, w_yon, w_tur, w_zaman)`;
+
+function satirdanFirsat(r: FirsatSatiri): Firsat {
+  const mesajlar = [...(r.mesajlar ?? [])]
+    .sort((a, b) => (a.w_zaman === b.w_zaman ? a.id - b.id : a.w_zaman < b.w_zaman ? -1 : 1))
+    .map((m) => ({ id: m.w_mesaj_id, metin: m.w_metin, zaman: new Date(m.w_zaman).toISOString(), yon: m.w_yon, tur: m.w_tur }));
+  return {
+    id: String(r.id),
+    firma: r.f_firma,
+    konum: r.f_konum ?? "—",
+    kaynak: (KAYNAKLAR as readonly string[]).includes(r.kaynak?.f_kaynak ?? "") ? (r.kaynak!.f_kaynak as Kaynak) : "Web sitesi",
+    icerik: r.f_icerik ?? "",
+    tutar: Number(r.f_tutar ?? 0),
+    asama: r.asama && (ASAMALAR as readonly string[]).includes(r.asama.kod) ? r.asama.kod : "yeni",
+    sonrakiAdim: r.f_sonraki_adim ?? "",
+    sonrakiTarih: r.f_sonraki_tarih ?? "",
+    kayipNedeni: r.f_kayip_nedeni ?? undefined,
+    kayipAciklama: r.f_kayip_aciklama ?? undefined,
+    kampanyaId: r.kampanya_id != null ? String(r.kampanya_id) : null,
+    telefon: r.f_telefon ?? undefined,
+    mesajlar,
+    sonHareket: r.f_son_hareket,
+  };
+}
+
+/** Yerel tarih "2026-11-06" */
+function bugunIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const sayiKimlik = (v: string | null | undefined) => (v && /^\d+$/.test(v) ? Number(v) : null);
+
+async function asamaKimligi(s: SupabaseClient, kod: Asama): Promise<number> {
+  const r = sonuc(await s.from("asama").select("id").eq("kod", kod).single(), "Aşama okunurken") as { id: number };
+  return r.id;
+}
+
+async function kaynakKimligi(s: SupabaseClient, ad: Kaynak): Promise<number | null> {
+  const r = sonuc(await s.from("kaynak").select("id").eq("f_kaynak", ad).maybeSingle(), "Kaynak okunurken") as { id: number } | null;
+  return r?.id ?? null;
+}
+
+/** Sütunun sonuna eklenecek kartın sırası */
+async function sonrakiSira(s: SupabaseClient, asamaId: number): Promise<number> {
+  const r = sonuc(
+    await s.from("satis_hatti").select("f_sira").eq("asama_id", asamaId).order("f_sira", { ascending: false }).limit(1).maybeSingle(),
+    "Satış hattı sırası okunurken",
+  ) as { f_sira: number } | null;
+  return (r?.f_sira ?? -1) + 1;
+}
+
+/** WhatsApp mesajlarını ekler; aynı wamid zaten kayıtlıysa atlanır (w_mesaj_id unique) */
+async function mesajlariEkle(s: SupabaseClient, firsatId: number, mesajlar: WhatsappMesaji[]) {
+  if (!mesajlar.length) return;
+  sonuc(
+    await s.from("whatsapp_mesajlari").upsert(
+      mesajlar.map((m) => ({ satis_hatti_id: firsatId, w_mesaj_id: m.id, w_metin: m.metin, w_yon: m.yon, w_tur: m.tur || "text", w_zaman: m.zaman })),
+      { onConflict: "w_mesaj_id", ignoreDuplicates: true },
+    ),
+    "WhatsApp mesajı kaydedilirken",
+  );
+}
+
+async function firsatOku(s: SupabaseClient, id: string): Promise<Firsat | null> {
+  const no = sayiKimlik(id);
+  if (no == null) return null;
+  const r = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).eq("id", no).maybeSingle(), "Fırsat okunurken") as unknown as FirsatSatiri | null;
+  return r ? satirdanFirsat(r) : null;
+}
+
+/** Yeni fırsat satırı; veritabanının verdiği id geçirilen nesnenin üstüne yazılır */
+async function firsatYaz(s: SupabaseClient, f: Firsat, sonHareket: string) {
+  const asamaId = await asamaKimligi(s, f.asama);
+  const { id } = sonuc(
+    await s
+      .from("satis_hatti")
+      .insert({
+        f_firma: f.firma,
+        f_konum: f.konum,
+        kaynak_id: await kaynakKimligi(s, f.kaynak),
+        f_icerik: f.icerik,
+        f_tutar: f.tutar,
+        asama_id: asamaId,
+        f_sonraki_adim: f.sonrakiAdim,
+        f_sonraki_tarih: f.sonrakiTarih || null,
+        f_kayip_nedeni: f.kayipNedeni ?? null,
+        f_kayip_aciklama: f.kayipAciklama ?? null,
+        kampanya_id: sayiKimlik(f.kampanyaId),
+        f_telefon: f.telefon ?? null,
+        f_son_hareket: sonHareket,
+        f_sira: await sonrakiSira(s, asamaId),
+      })
+      .select("id")
+      .single(),
+    "Fırsat kaydedilirken",
+  ) as { id: number };
+  f.id = String(id);
+  f.sonHareket = sonHareket;
+  await mesajlariEkle(s, id, f.mesajlar ?? []);
+}
+
+/* ---------- Okuma ---------- */
+
+/** Tüm fırsatlar; sütun içi sıra f_sira'dan (sayfa aşamaya göre süzer, sıra korunur) */
 export async function getFirsatlar(): Promise<Firsat[]> {
-  return DEPO;
-}
-
-// Aşağıdakiler yalnızca actions.ts'ten çağrılır. TODO: Supabase bağlanınca insert/update sorgularına dönüşecek.
-export async function firsatKaydetDepo(f: Firsat) {
-  const i = DEPO.findIndex((x) => x.id === f.id);
-  const sonHareket = new Date().toISOString().slice(0, 10);
-  if (i >= 0) {
-    const e = DEPO[i];
-    DEPO[i] = { ...f, asama: e.asama, kayipNedeni: e.kayipNedeni, kayipAciklama: e.kayipAciklama, telefon: f.telefon ?? e.telefon, mesajlar: e.mesajlar, sonHareket };
-  } else DEPO.push({ ...f, sonHareket });
-}
-
-export async function firsatAsamasiDepo(id: string, asama: Asama, kayip?: KayipBilgisi) {
-  const f = DEPO.find((x) => x.id === id);
-  if (!f) return;
-  f.asama = asama;
-  f.sonHareket = new Date().toISOString().slice(0, 10);
-  f.kayipNedeni = kayip?.neden;
-  f.kayipAciklama = kayip?.aciklama;
+  const s = await db();
+  const rows = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).order("f_sira").order("id"), "Satış hattı okunurken") as unknown as FirsatSatiri[];
+  return rows.map(satirdanFirsat);
 }
 
 export async function getFirsat(id: string): Promise<Firsat | null> {
-  return DEPO.find((x) => x.id === id) ?? null;
+  return firsatOku(await db(), id);
 }
 
-/** Aşama dışındaki alanları günceller (teklif tutarı, WhatsApp mesajı, bayi yönlendirmesi) */
+/* ---------- Yazma (yalnızca actions / sunucu kodundan çağrılır) ---------- */
+
+/** Formdan kayıt: id veritabanında varsa bilgileri günceller (aşama, kayıp nedeni ve mesajlar değişmez), yoksa ekler. */
+export async function firsatKaydetDepo(f: Firsat) {
+  const s = await db();
+  const sonHareket = bugunIso();
+  const mevcut = await firsatOku(s, f.id);
+  if (!mevcut) return firsatYaz(s, f, sonHareket);
+  sonuc(
+    await s
+      .from("satis_hatti")
+      .update({
+        f_firma: f.firma,
+        f_konum: f.konum,
+        kaynak_id: await kaynakKimligi(s, f.kaynak),
+        f_icerik: f.icerik,
+        f_tutar: f.tutar,
+        f_sonraki_adim: f.sonrakiAdim,
+        f_sonraki_tarih: f.sonrakiTarih || null,
+        kampanya_id: sayiKimlik(f.kampanyaId),
+        f_telefon: f.telefon ?? mevcut.telefon ?? null,
+        f_son_hareket: sonHareket,
+      })
+      .eq("id", Number(f.id)),
+    "Fırsat güncellenirken",
+  );
+}
+
+/** Aşama değişikliği: kart yeni sütunun sonuna gider; kayıp nedeni yalnızca Kaybedildi'de dolu */
+export async function firsatAsamasiDepo(id: string, asama: Asama, kayip?: KayipBilgisi) {
+  const no = sayiKimlik(id);
+  if (no == null) return;
+  const s = await db();
+  const asamaId = await asamaKimligi(s, asama);
+  sonuc(
+    await s
+      .from("satis_hatti")
+      .update({
+        asama_id: asamaId,
+        f_sira: await sonrakiSira(s, asamaId),
+        f_son_hareket: bugunIso(),
+        f_kayip_nedeni: kayip?.neden ?? null,
+        f_kayip_aciklama: kayip?.aciklama ?? null,
+      })
+      .eq("id", no),
+    "Fırsat aşaması güncellenirken",
+  );
+}
+
+/** Aşama dışındaki alanları günceller (teklif tutarı, WhatsApp mesajı, bayi yönlendirmesi).
+ *  Kaydı okur, geri çağırmayı uygular, değişen sütunları ve yeni mesajları yazar. */
 export async function firsatiGuncelle(id: string, f: (x: Firsat) => void): Promise<Firsat | null> {
-  const x = DEPO.find((y) => y.id === id);
+  const s = await db();
+  const x = await firsatOku(s, id);
   if (!x) return null;
+  const once = structuredClone(x);
   f(x);
-  x.sonHareket = new Date().toISOString().slice(0, 10);
+  x.sonHareket = bugunIso();
+
+  const d: Record<string, unknown> = { f_son_hareket: x.sonHareket };
+  if (x.firma !== once.firma) d.f_firma = x.firma;
+  if (x.konum !== once.konum) d.f_konum = x.konum;
+  if (x.kaynak !== once.kaynak) d.kaynak_id = await kaynakKimligi(s, x.kaynak);
+  if (x.icerik !== once.icerik) d.f_icerik = x.icerik;
+  if (x.tutar !== once.tutar) d.f_tutar = x.tutar;
+  if (x.asama !== once.asama) {
+    d.asama_id = await asamaKimligi(s, x.asama);
+    d.f_sira = await sonrakiSira(s, d.asama_id as number);
+  }
+  if (x.sonrakiAdim !== once.sonrakiAdim) d.f_sonraki_adim = x.sonrakiAdim;
+  if (x.sonrakiTarih !== once.sonrakiTarih) d.f_sonraki_tarih = x.sonrakiTarih || null;
+  if (x.kayipNedeni !== once.kayipNedeni) d.f_kayip_nedeni = x.kayipNedeni ?? null;
+  if (x.kayipAciklama !== once.kayipAciklama) d.f_kayip_aciklama = x.kayipAciklama ?? null;
+  if ((x.kampanyaId ?? null) !== (once.kampanyaId ?? null)) d.kampanya_id = sayiKimlik(x.kampanyaId);
+  if (x.telefon !== once.telefon) d.f_telefon = x.telefon ?? null;
+  sonuc(await s.from("satis_hatti").update(d).eq("id", Number(once.id)), "Fırsat güncellenirken");
+
+  const eskiMesajlar = new Set((once.mesajlar ?? []).map((m) => m.id));
+  await mesajlariEkle(s, Number(once.id), (x.mesajlar ?? []).filter((m) => !eskiMesajlar.has(m.id)));
+  x.id = once.id;
   return x;
 }
 
+/** Yeni fırsat (WhatsApp lead'i vb.). Gerçek id geçirilen nesnenin üstüne yazılır. */
 export async function firsatEkleDepo(f: Firsat) {
-  DEPO.push({ ...f, sonHareket: f.sonHareket ?? new Date().toISOString().slice(0, 10) });
+  await firsatYaz(await db(), f, f.sonHareket ?? bugunIso());
+}
+
+/** Kazanılan fırsat müşteriye bir kez işlenir: işaret yoksa koyar ve true döner (ikinci sürüklemede false). */
+export async function firsatKazanciIsaretle(id: string): Promise<boolean> {
+  const no = sayiKimlik(id);
+  if (no == null) return false;
+  const s = await db();
+  const rows = sonuc(
+    await s.from("satis_hatti").update({ f_kazanc_islendi: true }).eq("id", no).eq("f_kazanc_islendi", false).select("id"),
+    "Fırsat kazancı işaretlenirken",
+  ) as { id: number }[];
+  return rows.length > 0;
+}
+
+/** Kazanılan fırsatı müşteri kaydına bağlar */
+export async function firsatMusteriBagla(id: string, musteriId: string) {
+  const no = sayiKimlik(id);
+  const m = sayiKimlik(musteriId);
+  if (no == null || m == null) return;
+  const s = await db();
+  sonuc(await s.from("satis_hatti").update({ musteri_id: m }).eq("id", no), "Fırsat müşteriye bağlanırken");
+}
+
+/** Sütun içi sıra: verilen sırayla f_sira = 0, 1, 2… */
+export async function firsatSirasiDepo(idler: string[]) {
+  const s = await db();
+  await Promise.all(
+    idler.map(async (id, sira) => {
+      const no = sayiKimlik(id);
+      if (no != null) sonuc(await s.from("satis_hatti").update({ f_sira: sira }).eq("id", no), "Satış hattı sırası kaydedilirken");
+    }),
+  );
 }

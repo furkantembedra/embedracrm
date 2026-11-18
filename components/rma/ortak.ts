@@ -1,6 +1,7 @@
 // RMA ekranlarının paylaştığı yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import { ADIM_ADI, type RmaKaydi } from "./queries";
+import { ADIM_ADI } from "./sabitler";
+import type { RmaKaydi } from "./queries";
 
 /** Kapanmış: müşteriye gönderildi ya da iade kararıyla tamamlandı (cihaz geri gönderilmez). Gönderim bekleyen tamamlanmış kayıt hâlâ açıktır. */
 export const acikMi = (r: Pick<RmaKaydi, "adim" | "karar">) => !(r.adim === "gonderildi" || (r.adim === "tamamlandi" && r.karar === "iade"));

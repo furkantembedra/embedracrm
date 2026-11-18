@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { AlignLeft, Film, Hash, Image as Gorsel, Plus, X } from "lucide-react";
 import { useBugun } from "@/lib/use-bugun";
-import { ICERIK_KANALLARI, type Icerik, type Kampanya } from "./queries";
+import { type Icerik, type Kampanya } from "./queries";
+import { ICERIK_KANALLARI } from "./sabitler";
 import { GUN_ADI, ICERIK_RENGI, gunEkle, gunSayisi, haftaBasi, isoGun, type Donem } from "./ortak";
 
 export default function IcerikTakvimi({

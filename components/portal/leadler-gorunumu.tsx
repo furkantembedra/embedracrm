@@ -15,7 +15,7 @@ import type { PortalFormDurumu } from "./actions";
 import { portalLeadAsama, portalLeadKaydet, portalLeadKazan, portalLeadNot, portalLeadTakip } from "./lead-actions";
 import BayiTeklifFormu from "./bayi-teklif-formu";
 import { LisansSecici } from "./satis-bildir";
-import { DURUM_ADI as TEKLIF_DURUM } from "@/components/teklifler/queries";
+import { DURUM_ADI as TEKLIF_DURUM } from "@/components/teklifler/sabitler";
 import { DURUM_TONU as TEKLIF_TONU } from "@/components/teklifler/teklif-listesi";
 import { teklifToplami } from "@/components/teklifler/ortak";
 import { ACIK_ASAMALAR, ASAMA_AD, KAYIP_NEDENLERI, LEAD_ASAMALARI, LEAD_KAYNAKLARI, guncelTeklif, type BayiLead, type BayiTeklif, type LeadAsamasi } from "./lead-ortak";

@@ -4,7 +4,8 @@
 import { CircleCheck, Paperclip } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { useBugun } from "@/lib/use-bugun";
-import { DURUM_ADI, NOT_BILGI, type Talep, type TalepDurumu, type TalepNotu } from "./queries";
+import { type Talep, type TalepDurumu, type TalepNotu } from "./queries";
+import { DURUM_ADI, NOT_BILGI } from "./sabitler";
 import { DURUM_TONU, ONCELIK_TONU, zamanYaz } from "./ortak";
 import NotFormu from "./not-formu";
 

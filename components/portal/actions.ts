@@ -1,5 +1,6 @@
 "use server";
 // Bayi portalı (Server Actions). Bayi kimliği her zaman oturum çerezinden alınır.
+import { oturumGerekli as ekipGerekli } from "@/lib/oturum";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getAktifBayiler, getBasvurular, getBayiHareketleri, ULKELER } from "@/components/bayiler/queries";
@@ -17,7 +18,7 @@ import { ODEME_SECENEKLERI, bayiFiyati, enErkenTeslim, katalogOlustur, kayitliAd
 import { hatirlatmaEkleDepo } from "@/components/hatirlatmalar/queries";
 import { simdiYerel } from "@/components/rma/islemler";
 import { oturumAc, oturumKapat, portalOturumu } from "./oturum";
-import { DEMO_SIFRE, duzeltmeTalebiEkle, getPortalHesabi, getYenilemeTalepleri, hesapBulEpostayla, portalHesabiniGuncelle, sifreDogru, yenilemeTalebiEkle } from "./queries";
+import { duzeltmeTalebiEkle, getPortalHesabi, getYenilemeTalepleri, portalHesabiniGuncelle, yenilemeTalebiEkle } from "./queries";
 
 export type PortalFormDurumu = { hata?: string; hatalar?: Record<string, string>; tamam?: string; zaman?: number; kayitId?: string };
 
@@ -33,29 +34,7 @@ async function bildir(baslik: string, aciklama: string, sorumluId: string, kayit
   });
 }
 
-/* ---------- Oturum ---------- */
-
-// Basit kaba kuvvet koruması: e-posta başına 5 hatalı denemeden sonra 10 dk bekleme
-const g = globalThis as { __embedraPortalDeneme?: Map<string, { n: number; ilk: number }> };
-const DENEME = (g.__embedraPortalDeneme ??= new Map());
-
-export async function girisYap(_o: PortalFormDurumu, form: FormData): Promise<PortalFormDurumu> {
-  const eposta = String(form.get("eposta") ?? "").trim().toLowerCase();
-  const sifre = String(form.get("sifre") ?? "");
-  if (!eposta || !sifre) return { hata: "E-posta ve şifreyi girin." };
-  const d = DENEME.get(eposta);
-  if (d && d.n >= 5 && Date.now() - d.ilk < 10 * 60_000) return { hata: "Çok fazla hatalı deneme. 10 dakika sonra tekrar deneyin." };
-  const hesap = await hesapBulEpostayla(eposta);
-  if (!hesap || !sifreDogru(sifre, hesap.sifreOzeti)) {
-    DENEME.set(eposta, d && Date.now() - d.ilk < 10 * 60_000 ? { n: d.n + 1, ilk: d.ilk } : { n: 1, ilk: Date.now() });
-    return { hata: "E-posta ya da şifre hatalı." };
-  }
-  if (!hesap.erisim) return { hata: "Portal erişiminiz kapalı. Embedra bayi sorumlunuzla görüşün." };
-  DENEME.delete(eposta);
-  await portalHesabiniGuncelle(hesap.bayiId, (h) => void (h.sonGiris = simdiYerel()));
-  await oturumAc(hesap.bayiId, "bayi");
-  redirect("/portal");
-}
+/* ---------- Oturum (giriş: components/giris/actions.ts, Supabase Auth) ---------- */
 
 export async function cikisYap() {
   const o = await portalOturumu();
@@ -64,20 +43,23 @@ export async function cikisYap() {
 }
 
 /* ---------- Yönetici (CRM › Bayi detayı) ---------- */
-// TODO: admin paneline taşınınca bu iki işlem yalnızca "Yönetici" / "Satış" rolüne açılmalı.
+// Yalnızca CRM ekibinden Yönetici ve Satış rolleri (ekipGerekli).
 
 export async function portalDurumu(bayiId: string) {
+  await ekipGerekli(["Yönetici", "Satış"]);
   const h = await getPortalHesabi(bayiId);
-  return { erisim: !!h?.erisim, eposta: h?.eposta ?? null, sonGiris: h?.sonGiris ?? null, demoSifre: DEMO_SIFRE };
+  return { erisim: !!h?.erisim, eposta: h?.eposta ?? null, sonGiris: h?.sonGiris ?? null };
 }
 
 export async function portalErisimiAyarla(bayiId: string, erisim: boolean) {
+  await ekipGerekli(["Yönetici", "Satış"]);
   if (!(await getAktifBayiler()).some((b) => b.id === bayiId)) return { hata: "Bayi bulunamadı." };
   const h = await portalHesabiniGuncelle(bayiId, (x) => void (x.erisim = erisim));
-  return { erisim: h.erisim, eposta: h.eposta, sonGiris: h.sonGiris, demoSifre: DEMO_SIFRE };
+  return { erisim: h.erisim, eposta: h.eposta, sonGiris: h.sonGiris };
 }
 
 export async function bayiGibiGoruntule(bayiId: string) {
+  await ekipGerekli(["Yönetici", "Satış"]);
   if (!(await getAktifBayiler()).some((b) => b.id === bayiId)) return;
   await oturumAc(bayiId, "yonetici");
   redirect("/portal");

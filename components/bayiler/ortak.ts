@@ -2,7 +2,8 @@
 import type { ChipTon } from "@/components/ui/chip";
 import { URUN_BILGI } from "@/lib/urunler";
 import { tl } from "@/lib/format";
-import { ASAMALAR, HEDEF_ULKELER, ULKELER, type AktifBayi, type Basvuru, type BayiAsamasi, type BayiHareketi, type SozlesmeDetayi } from "./queries";
+import { ASAMALAR, HEDEF_ULKELER, ULKELER } from "./sabitler";
+import type { AktifBayi, Basvuru, BayiAsamasi, BayiHareketi, SozlesmeDetayi } from "./queries";
 
 export const ASAMA_TONU: Record<BayiAsamasi, ChipTon> = { basvuru: "gray", degerlendirme: "info", sozlesme: "warn", lansman: "lime" };
 

@@ -1,10 +1,11 @@
 "use server";
 // Pazarlama & Bülten: içerik, kampanya ve hedef liste kayıtları (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { IZIN_KANALLARI, IZIN_KAYNAKLARI, type IzinKanali } from "@/components/musteriler/izin";
 import { EPOSTA_GECERLI, saglayicilar } from "@/lib/ileti-gonder";
-import { medyaGetir } from "./medya-deposu";
+import { medyaVarOlanlar } from "./medya-deposu";
 import { gonderimKanali, kampanyaGonder, kampanyaKitlesi, testGonder, type GonderSonucu } from "./gonderim";
 import { hashtagTemizle, telefonRakam } from "./ortak";
 import {
@@ -32,6 +33,7 @@ export async function icerikKaydet(v: {
   medya: Medya[];
   bayiPaylas?: boolean;
 }): Promise<IcerikSonucu> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   if (!TARIH.test(v.tarih)) hatalar.tarih = "Tarih seçin.";
   if (!ICERIK_KANALLARI.includes(v.kanal as IcerikKanali)) hatalar.kanal = "Kanal seçin.";
@@ -40,7 +42,8 @@ export async function icerikKaydet(v: {
   const hashtaglar = [...new Set(v.hashtaglar.map(hashtagTemizle).filter(Boolean))];
   if (hashtaglar.length > 30) hatalar.hashtaglar = "En fazla 30 hashtag (Instagram sınırı).";
   // Yalnızca gerçekten yüklenmiş dosyalar kabul edilir
-  const medya = v.medya.filter((m) => medyaGetir(m.id)).slice(0, 10).map((m) => ({ id: m.id, ad: String(m.ad).slice(0, 120), tur: m.tur === "video" ? "video" : "gorsel", boyut: Number(m.boyut) || 0 }) as Medya);
+  const yuklenmis = await medyaVarOlanlar(v.medya.map((m) => m.id));
+  const medya = v.medya.filter((m) => yuklenmis.has(m.id)).slice(0, 10).map((m) => ({ id: m.id, ad: String(m.ad).slice(0, 120), tur: m.tur === "video" ? "video" : "gorsel", boyut: Number(m.boyut) || 0 }) as Medya);
   if (Object.keys(hatalar).length) return { hatalar };
   const kampanyaVar = v.kampanyaId && (await getKampanyalar()).some((k) => k.id === v.kampanyaId);
   const alanlar = {
@@ -59,6 +62,7 @@ export async function icerikKaydet(v: {
 }
 
 export async function icerikPaylasildi(id: string, deger: boolean) {
+  await oturumGerekli();
   const i = await icerigiGuncelle(id, (x) => {
     x.paylasildi = deger;
   });
@@ -68,6 +72,7 @@ export async function icerikPaylasildi(id: string, deger: boolean) {
 
 /** Takvimde sürükleyip başka güne bırakılan içeriğin tarihini değiştirir */
 export async function icerikTasi(id: string, tarih: string) {
+  await oturumGerekli();
   if (!TARIH.test(tarih)) return false;
   const i = await icerigiGuncelle(id, (x) => {
     x.tarih = tarih;
@@ -77,6 +82,7 @@ export async function icerikTasi(id: string, tarih: string) {
 }
 
 export async function icerikSil(id: string) {
+  await oturumGerekli();
   const ok = await icerigiSil(id);
   yenile();
   return ok;
@@ -85,6 +91,7 @@ export async function icerikSil(id: string) {
 export type KampanyaSonucu = { kampanya?: Kampanya; hatalar?: Record<string, string> };
 
 export async function kampanyaKaydet(v: Omit<Kampanya, "id"> & { id?: string }): Promise<KampanyaSonucu> {
+  await oturumGerekli();
   const mesajli = v.kanal === "E-posta" || v.kanal === "WhatsApp";
   const hatalar: Record<string, string> = {};
   const listeler = [...HAZIR_LISTELER.map((l) => l.id as string), ...(await getOzelListeler()).map((l) => l.id)];
@@ -117,6 +124,7 @@ export async function kampanyaKaydet(v: Omit<Kampanya, "id"> & { id?: string }):
 export type ListeSonucu = { liste?: OzelListe; hata?: string };
 
 export async function listeKaydet(ad: string, filtre: ListeFiltresi): Promise<ListeSonucu> {
+  await oturumGerekli();
   if (!ad.trim()) return { hata: "Listeye bir ad verin." };
   const liste: OzelListe = {
     id: crypto.randomUUID(),
@@ -129,6 +137,7 @@ export async function listeKaydet(ad: string, filtre: ListeFiltresi): Promise<Li
 }
 
 export async function listeSil(id: string): Promise<{ hata?: string }> {
+  await oturumGerekli();
   if ((await getKampanyalar()).some((k) => k.listeId === id)) return { hata: "Bu liste bir kampanyada kullanılıyor; önce kampanyanın listesini değiştirin." };
   await ozelListeSil(id);
   yenile();
@@ -147,6 +156,7 @@ export async function listeIceAktar(v: {
   izinKaynagi: string;
   kisiler: AktarilanKisi[];
 }): Promise<ListeSonucu & { hatalar?: Record<string, string> }> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   if (!v.ad.trim()) hatalar.ad = "Listeye bir ad verin.";
   const izinler = v.izinler.filter((k) => (IZIN_KANALLARI as readonly string[]).includes(k));
@@ -203,6 +213,7 @@ export type KitleOnizleme = {
 
 /** Gönder penceresi: kaç kişiye gidecek, kaçı neden atlanacak, gerçek mi demo mu */
 export async function kitleOnizleme(kampanyaId: string): Promise<KitleOnizleme> {
+  await oturumGerekli();
   const k = await kampanyaBul(kampanyaId);
   const kanal = k && gonderimKanali(k);
   if (!k || !kanal) return { hata: "Bu kampanyadan toplu mesaj gönderilmez." };
@@ -216,6 +227,7 @@ export async function kitleOnizleme(kampanyaId: string): Promise<KitleOnizleme> 
 }
 
 export async function kampanyayiGonder(kampanyaId: string): Promise<GonderSonucu> {
+  await oturumGerekli();
   const k = await kampanyaBul(kampanyaId);
   if (!k) return { hata: "Kampanya bulunamadı." };
   if (k.durum === "Tamamlandı") return { hata: "Tamamlanan kampanyadan gönderim yapılmaz." };
@@ -226,6 +238,7 @@ export async function kampanyayiGonder(kampanyaId: string): Promise<GonderSonucu
 }
 
 export async function denemeGonder(kampanyaId: string, kime: string): Promise<GonderSonucu> {
+  await oturumGerekli();
   const k = await kampanyaBul(kampanyaId);
   if (!k) return { hata: "Kampanya bulunamadı." };
   const kanal = gonderimKanali(k);

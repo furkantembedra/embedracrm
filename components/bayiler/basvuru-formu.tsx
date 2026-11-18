@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { basvuruKaydet, type BasvuruFormDurumu } from "./actions";
-import { ULKELER, type Basvuru } from "./queries";
+import { type Basvuru } from "./queries";
+import { ULKELER } from "./sabitler";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
 const GIRDI =

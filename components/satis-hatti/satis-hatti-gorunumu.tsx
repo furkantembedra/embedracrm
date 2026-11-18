@@ -12,8 +12,9 @@ import OzetKartlari from "./ozet-kartlari";
 import Kanban from "./kanban";
 import { yerlestir, type BirakmaKonumu } from "./ortak";
 import FirsatFormu from "./firsat-formu";
-import { firsatAsamasiGuncelle, type AsamaSonucu } from "./actions";
-import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type Firsat, type KayipBilgisi, type KayipNedeni } from "./queries";
+import { firsatAsamasiGuncelle, firsatSirasiKaydet, type AsamaSonucu } from "./actions";
+import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type KayipBilgisi, type KayipNedeni } from "./sabitler";
+import type { Firsat } from "./queries";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import TeklifFormu from "@/components/teklifler/teklif-formu";
 import HatirlatmaFormu from "@/components/hatirlatmalar/hatirlatma-formu";
@@ -196,14 +197,19 @@ export default function SatisHattiGorunumu({
 
   /** Kartı sütununda bir yukarı (-1) ya da aşağı (+1) kaydırır (klavye / dokunmatik için). */
   function sirala(id: string, yon: -1 | 1) {
-    setFirsatlar((l) => {
-      const f = l.find((x) => x.id === id);
-      if (!f) return l;
-      const sutun = l.filter((x) => x.asama === f.asama);
-      const i = sutun.findIndex((x) => x.id === id);
-      const komsu = sutun[i + yon];
-      return komsu ? yerlestir(l, f, { hedefId: komsu.id, once: yon === -1 }) : l;
-    });
+    const f = firsatlar.find((x) => x.id === id);
+    if (!f) return;
+    const sutun = firsatlar.filter((x) => x.asama === f.asama);
+    const i = sutun.findIndex((x) => x.id === id);
+    const komsu = sutun[i + yon];
+    if (komsu) siraDegistir(f, { hedefId: komsu.id, once: yon === -1 });
+  }
+
+  /** Aynı sütunda yer değiştirir ve sütunun yeni sırasını kaydeder (satis_hatti.f_sira) */
+  function siraDegistir(f: Firsat, konum: BirakmaKonumu) {
+    const yeni = yerlestir(firsatlar, f, konum);
+    setFirsatlar(yeni);
+    baslat(() => firsatSirasiKaydet(yeni.filter((x) => x.asama === f.asama).map((x) => x.id)));
   }
 
   function tasi(id: string, asama: Asama, kayip?: KayipBilgisi, konum?: BirakmaKonumu) {
@@ -211,8 +217,7 @@ export default function SatisHattiGorunumu({
     if (!firsat) return;
     if (firsat.asama === asama) {
       // Aynı sütun: yalnızca sıra değişir
-      if (konum) setFirsatlar((l) => yerlestir(l, firsat, konum));
-      // TODO: Supabase bağlanınca sıra satis_hatti.f_sira sütununa yazılacak
+      if (konum) siraDegistir(firsat, konum);
       return;
     }
     if (asama === "kaybedildi" && !kayip) {

@@ -2,7 +2,8 @@
 
 // Açık fırsat değeri, kazanılan, kazanma oranı, geciken takip
 import { kisaTl } from "@/lib/format";
-import { KAPALI_ASAMALAR, type Firsat } from "./queries";
+import { KAPALI_ASAMALAR } from "./sabitler";
+import type { Firsat } from "./queries";
 import { gunFarki, useBugun } from "@/lib/use-bugun";
 
 export default function OzetKartlari({ firsatlar }: { firsatlar: Firsat[] }) {

@@ -2,7 +2,8 @@
 
 // Hedef listeler: CRM kayıtlarından süzülür, Excel'de açılan CSV olarak indirilir. Filtreli liste kaydedilebilir.
 import { BadgePercent, Clock, Download, FileSpreadsheet, Globe, Mail, Plus, Trash2, Upload, UserX, Users } from "lucide-react";
-import { HAZIR_LISTELER, type OzelListe } from "./queries";
+import { type OzelListe } from "./queries";
+import { HAZIR_LISTELER } from "./sabitler";
 
 const SIMGE = {
   bitiyor: { simge: Clock, zemin: "bg-err-bg", renk: "text-err" },

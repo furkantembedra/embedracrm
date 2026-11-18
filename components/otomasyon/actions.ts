@@ -1,5 +1,6 @@
 "use server";
 // Otomasyon (Server Actions). Kurallar yalnızca sunucuda saklanır ve çalışır; ekran bu işlemlerle okur / değiştirir.
+import { oturumGerekli } from "@/lib/oturum";
 import { headers } from "next/headers";
 import { getEkip, type Kullanici } from "@/components/operasyon/queries";
 import { saglayicilar } from "@/lib/ileti-gonder";
@@ -26,6 +27,7 @@ async function onizle(k: Pick<Kural, "id" | "tetikleyici" | "gun" | "filtre">): 
 }
 
 export async function otomasyonVerisi(): Promise<OtomasyonVerisi> {
+  await oturumGerekli();
   const [kurallar, kayitlar, ekip] = await Promise.all([getKurallar(), getCalismaKayitlari(), getEkip()]);
   return {
     kurallar: await Promise.all(kurallar.map(async (k) => ({ ...k, onizleme: await onizle(k) }))),
@@ -38,6 +40,7 @@ export async function otomasyonVerisi(): Promise<OtomasyonVerisi> {
 export type KuralFormDurumu = { hatalar?: Record<string, string>; kural?: Kural; zaman?: number };
 
 export async function kuralFormuKaydet(_o: KuralFormDurumu, form: FormData): Promise<KuralFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const ekip = await getEkip();
   const hatalar: Record<string, string> = {};
@@ -89,10 +92,12 @@ export async function kuralFormuKaydet(_o: KuralFormDurumu, form: FormData): Pro
 }
 
 export async function kuralAcKapat(id: string, aktif: boolean) {
+  await oturumGerekli();
   await kuralGuncelle(id, (k) => void (k.aktif = aktif));
 }
 
 export async function kuralSilAction(id: string) {
+  await oturumGerekli();
   await kuralSil(id);
 }
 
@@ -103,9 +108,11 @@ async function taban() {
 
 /** Tek bir kuralı hemen çalıştırır (pasif olsa bile): yalnızca daha önce işlenmemiş kayıtlara uygulanır. */
 export async function kuraliSimdiCalistir(id: string): Promise<{ ozet: CalismaOzeti | null }> {
+  await oturumGerekli();
   return { ozet: await otomasyonCalistir(await taban(), id) };
 }
 
 export async function tumKurallariCalistir(): Promise<{ ozet: CalismaOzeti | null }> {
+  await oturumGerekli();
   return { ozet: await otomasyonCalistir(await taban()) };
 }

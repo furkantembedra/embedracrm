@@ -5,7 +5,7 @@
 import type { Cihaz } from "@/components/cihaz-lisans/queries";
 import type { FiyatListesi } from "@/lib/urunler";
 import type { Siparis, StokKalemi } from "@/components/siparisler/queries";
-import { ULKELER } from "@/components/bayiler/queries";
+import { ULKELER } from "@/components/bayiler/sabitler";
 
 export const AY_KISA = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 export const AY_UZUN = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];

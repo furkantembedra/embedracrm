@@ -14,7 +14,8 @@ import type { FiyatListesi } from "@/lib/urunler";
 import TeklifFormu from "./teklif-formu";
 import { teklifDurumuDegistir } from "./actions";
 import { kalemAdi, kalemKdvli, odemeYontemiBul, siparisDisiKalemler, suresiDoldu, teklifToplami } from "./ortak";
-import { DURUM_ADI, type Teklif } from "./queries";
+import { type Teklif } from "./queries";
+import { DURUM_ADI } from "./sabitler";
 import { DURUM_TONU, tarihYaz } from "./teklif-listesi";
 
 const BUTON = "inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-4 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50";

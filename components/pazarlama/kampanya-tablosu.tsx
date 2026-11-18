@@ -4,7 +4,8 @@
 // Satıra tıklanınca kampanya düzenlenir; indirme düğmesi kampanyanın hedef listesini Excel'e (CSV) verir.
 import { Download, Send } from "lucide-react";
 import Chip from "@/components/ui/chip";
-import { KAMPANYA_KANALLARI, type Gonderim, type Kampanya, type KampanyaKanali } from "./queries";
+import { type Gonderim, type Kampanya, type KampanyaKanali } from "./queries";
+import { KAMPANYA_KANALLARI } from "./sabitler";
 import { IZIN_KANAL_ADI, type IzinKanali } from "@/components/musteriler/izin";
 import { DURUM_TONU, KAMPANYA_IZNI, KANAL_TONU, kampanyaTarihi } from "./ortak";
 

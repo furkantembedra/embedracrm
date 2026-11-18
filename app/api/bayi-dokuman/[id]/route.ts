@@ -1,12 +1,13 @@
 // Bayi dokümanını döndürür. ?indir=1 ile dosya olarak iner.
-// Portal oturumu varsa yalnızca o bayiye açık dokümanlar verilir. "sozlesme" kimliği oturumdaki bayinin
+// Portal oturumu varsa yalnızca o bayiye açık dokümanlar verilir (RLS de yalnızca açık olanları döndürür). "sozlesme" kimliği oturumdaki bayinin
 // sözleşme özetini PDF olarak üretir. Örnek (demo) dokümanların dosyası anında üretilir.
-// TODO: CRM'e giriş sistemi gelince CRM tarafı da oturumla kontrol edilmeli (şu an CRM'de giriş yok).
+// Portal oturumu yoksa çağıran aktif CRM ekip üyesi olmalı (aksi hâlde 401).
 import type { NextRequest } from "next/server";
 import { getBasvurular } from "@/components/bayiler/queries";
 import { dokumanDosyasi, getDokuman, ornekPdf } from "@/components/bayi-dokumanlar/queries";
 import { DOSYA_TIPLERI, hedefteMi } from "@/components/bayi-dokumanlar/ortak";
 import { portalOturumu } from "@/components/portal/oturum";
+import { crmKullanicisi } from "@/lib/oturum";
 
 const ayEkle = (t: string, ay: number) => { const d = new Date(t + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + ay); return d.toISOString().slice(0, 10); };
 
@@ -44,10 +45,11 @@ export async function GET(istek: NextRequest, ctx: RouteContext<"/api/bayi-dokum
     return yanit(pdf, "application/pdf", `Sozlesme-${b.id}.pdf`, indir);
   }
 
+  if (!oturum && !(await crmKullanicisi())) return new Response("Oturum gerekli", { status: 401 });
   const d = await getDokuman(id);
   if (!d) return new Response("Bulunamadı", { status: 404 });
   if (oturum && !hedefteMi(d.hedef, oturum.bayi.id)) return new Response("Yetkisiz", { status: 403 });
-  const dosya = dokumanDosyasi(id);
+  const dosya = await dokumanDosyasi(id); // Storage'dan (bayi oturumunda storage RLS'i de hedefi denetler)
   if (dosya) {
     const tip = d.mime && d.mime in DOSYA_TIPLERI ? d.mime : "application/octet-stream";
     return yanit(dosya, tip, d.dosyaAdi, indir);

@@ -2,6 +2,7 @@
 // Teklifler: kaydetme, revizyon ve durum değişikliği (Server Actions).
 // Gönderilen teklif fırsatı "Teklif gönderildi" aşamasına taşır ve tutarını günceller;
 // kabul edilen teklif fırsatı kazandırır (müşteri + sipariş satış hattının akışıyla açılır).
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { LISANS_SECENEKLERI } from "@/components/satis-hatti/urun-secimi";
@@ -46,6 +47,7 @@ function kalemleriOku(json: string): TeklifKalemi[] | null {
 export type TeklifFormDurumu = { hatalar?: Record<string, string>; teklif?: Teklif; zaman?: number };
 
 export async function teklifKaydet(_o: TeklifFormDurumu, form: FormData): Promise<TeklifFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const firsat = await getFirsat(metin("firsatId"));
   const onceki = metin("oncekiId") ? await getTeklif(metin("oncekiId")) : null;
@@ -90,8 +92,9 @@ export async function teklifKaydet(_o: TeklifFormDurumu, form: FormData): Promis
     sonuc: null,
   };
   // Aynı fırsatın açık (taslak / gönderilmiş) eski sürümleri revize sayılır
+  // (okunan nesneyi değiştirmek artık kaydetmez; teklifiGuncelle ile veritabanına yazılır)
   for (const t of await getTeklifler()) {
-    if (t.kok === teklif.kok && ["taslak", "gonderildi", "red"].includes(t.durum)) t.durum = "revize";
+    if (t.kok === teklif.kok && ["taslak", "gonderildi", "red"].includes(t.durum)) await teklifiGuncelle(t.id, (x) => void (x.durum = "revize"));
   }
   await teklifEkle(teklif);
   if (gonder) await gonderildiIsle(teklif);
@@ -123,6 +126,7 @@ async function gonderildiIsle(t: Teklif) {
 export type TeklifIslemSonucu = { teklif?: Teklif; hata?: string; musteri?: { id: string; ad: string; yeni: boolean; siparisNo?: string } };
 
 export async function teklifDurumuDegistir(id: string, durum: "gonderildi" | "kabul" | "red"): Promise<TeklifIslemSonucu> {
+  await oturumGerekli();
   const t = await getTeklif(id);
   if (!t) return { hata: "Teklif bulunamadı." };
   // Taslak da doğrudan kabul edilebilir (telefonda/yüz yüze onay): önce gönderildi sayılır, sonra siparişe dönüşür

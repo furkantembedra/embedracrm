@@ -2,14 +2,16 @@
 // Operasyon: üretim partileri, tedarik siparişleri ve ayarlar (Server Actions).
 // Depoya alınan sağlam cihazlar sipariş deposuna (stok) ve seri no havuzuna girer;
 // teslim alınan tedarik bileşen stoğuna ya da (kablo ise) sipariş deposuna eklenir.
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, type CihazModeli, type FiyatListesi, type LisansPaketi } from "@/lib/urunler";
 import { getCihazlar } from "@/components/cihaz-lisans/queries";
 import { CIHAZ_STOK_KODU, getSiparisler, getStok, stokGuncelle, stokKalemiEkle } from "@/components/siparisler/queries";
+import { db, sonuc } from "@/lib/supabase/db";
 import { SERI_DESENI, isoFark, seriAyikla } from "./ortak";
 import {
   ROLLER,
-  bilesenEkle, bilesenGuncelle, fiyatKaydet, getBilesenler, getEkip, getHavuz, getIcUretim, getKargoFirmalari, getPartiler, getRecete, getTedarik, havuzaEkle,
+  bilesenEkle, bilesenGuncelle, bilesenKaynagiGuncelle, fiyatKaydet, getBilesenler, getEkip, getHavuz, getIcUretim, getKargoFirmalari, getPartiler, getRecete, getTedarik, havuzaEkle,
   icUretimEkle, icUretimiGuncelle, kargoFirmalariKaydet, servisAdresiKaydetDepo, type ServisAdresi, kullaniciKaydet as kullaniciKaydetDepo, partiEkle, partiyiGuncelle, tedarikEkle, tedarikiGuncelle,
   type BilesenKalemi, type BilesenKaynagi, type HavuzSeri, type IcUretimEmri, type Kullanici, type Recete, type Rol, type TedarikSiparisi, type UretimPartisi,
 } from "./queries";
@@ -45,6 +47,7 @@ async function durum(): Promise<UretimSonucu> {
 /* ---------- Üretim partileri ---------- */
 
 export async function partiPlanla(v: { model: string; adet: number; hedefTarih: string; not: string }): Promise<UretimSonucu> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   if (!CIHAZ_MODELLERI.includes(v.model as CihazModeli)) hatalar.model = "Model seçin.";
   if (!Number.isInteger(v.adet) || v.adet < 1 || v.adet > 1000) hatalar.adet = "1–1000 arası adet yazın.";
@@ -61,6 +64,7 @@ export async function partiPlanla(v: { model: string; adet: number; hedefTarih: 
 }
 
 export async function uretimeAl(id: string): Promise<UretimSonucu> {
+  await oturumGerekli();
   const p = (await getPartiler()).find((x) => x.id === id);
   if (p?.durum !== "planlandi") return { hata: "Yalnızca planlanan parti üretime alınır." };
   const bilesenler = await getBilesenler();
@@ -78,6 +82,7 @@ export async function uretimeAl(id: string): Promise<UretimSonucu> {
 }
 
 export async function kaliteyeGonder(id: string): Promise<UretimSonucu> {
+  await oturumGerekli();
   const p = await partiyiGuncelle(id, (x) => {
     if (x.durum === "uretimde") x.durum = "kalite";
   });
@@ -181,11 +186,13 @@ async function kaliteIsle(id: string, asama: "kalite" | "tamir", v: KaliteGirdis
 
 /** Kalite kontrol sonucu: sağlamlar depoya (seri no otomatik ya da elle), hatalılar tamir / sök / hurda */
 export async function depoyaAl(id: string, v: KaliteGirdisi): Promise<UretimSonucu> {
+  await oturumGerekli();
   return kaliteIsle(id, "kalite", v);
 }
 
 /** Tamirdeki cihazların sonucu: onarılanlar depoya, onarılamayanlar sök / hurda, kalanlar tamirde bekler */
 export async function tamirSonucu(id: string, v: KaliteGirdisi): Promise<UretimSonucu> {
+  await oturumGerekli();
   return kaliteIsle(id, "tamir", v);
 }
 
@@ -215,6 +222,7 @@ async function yeniKalemiKur(y: YeniKalem, kaynak: BilesenKaynagi): Promise<{ ka
 /* ---------- Tedarik ---------- */
 
 export async function tedarikVer(v: { tedarikci: string; kalemKodu: string; adet: number; beklenen: string; yeni: YeniKalem | null }): Promise<UretimSonucu> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   const bilesen = (await getBilesenler()).find((b) => b.kod === v.kalemKodu);
   const kablo = (await getStok()).find((k) => k.kod === v.kalemKodu && !k.kod.endsWith("-HW")); // cihazlar tedarikle değil üretimle gelir
@@ -239,6 +247,7 @@ export async function tedarikVer(v: { tedarikci: string; kalemKodu: string; adet
 }
 
 export async function tedarikYolda(id: string): Promise<UretimSonucu> {
+  await oturumGerekli();
   const t = await tedarikiGuncelle(id, (x) => {
     if (x.durum === "siparis") x.durum = "yolda";
   });
@@ -248,6 +257,7 @@ export async function tedarikYolda(id: string): Promise<UretimSonucu> {
 }
 
 export async function tedarikTeslimAl(id: string): Promise<UretimSonucu> {
+  await oturumGerekli();
   const t = (await getTedarik()).find((x) => x.id === id);
   if (!t || t.durum === "teslim") return { hata: "Bu sipariş zaten teslim alındı." };
   if (t.durum !== "yolda") return { hata: "Sipariş yola çıkmadan teslim alınamaz; önce “Yola çıktı” olarak işaretleyin." };
@@ -262,6 +272,7 @@ export async function tedarikTeslimAl(id: string): Promise<UretimSonucu> {
 /* ---------- İç üretim ---------- */
 
 export async function icUretimBaslat(v: { kalemKodu: string; hedef: number; baslangic: string; gun: number; not: string; yeni: YeniKalem | null }): Promise<UretimSonucu> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   const bilesen = (await getBilesenler()).find((b) => b.kod === v.kalemKodu);
   if (!v.yeni && !bilesen) hatalar.kalemKodu = "Üretilecek bileşeni seçin.";
@@ -274,7 +285,7 @@ export async function icUretimBaslat(v: { kalemKodu: string; hedef: number; basl
     const y = await yeniKalemiKur({ ...v.yeni, tur: "bilesen" }, "ic");
     if (y.hatalar) return { hatalar: y.hatalar };
     kalem = y.kalem!;
-  } else if (bilesen && bilesen.kaynak !== "ic") bilesen.kaynak = "ic"; // dışarıdan alınan bir parçayı artık kendimiz üretiyoruz
+  } else if (bilesen && bilesen.kaynak !== "ic") await bilesenKaynagiGuncelle(bilesen.kod, "ic"); // dışarıdan alınan bir parçayı artık kendimiz üretiyoruz
   const en = Math.max(0, ...(await getIcUretim()).map((e) => Number(e.id.slice(3)) || 0));
   await icUretimEkle({
     id: `IU-${String(en + 1).padStart(4, "0")}`, kalemKodu: kalem!.kod, kalemAdi: kalem!.ad, hedef: v.hedef,
@@ -286,6 +297,7 @@ export async function icUretimBaslat(v: { kalemKodu: string; hedef: number; basl
 
 /** Personelin gün sonu girişi: üretilen adet bileşen stoğuna eklenir */
 export async function icUretimGir(emirId: string, v: { tarih: string; adet: number; personel: string; not: string }): Promise<UretimSonucu> {
+  await oturumGerekli();
   const e = (await getIcUretim()).find((x) => x.id === emirId);
   if (!e) return { hata: "Üretim emri bulunamadı." };
   const hatalar: Record<string, string> = {};
@@ -307,6 +319,7 @@ export async function icUretimGir(emirId: string, v: { tarih: string; adet: numb
 
 /** Yanlış girişi geri al: adet bileşen stoğundan düşer */
 export async function icUretimGirisiSil(emirId: string, girisId: string): Promise<UretimSonucu> {
+  await oturumGerekli();
   const e = (await getIcUretim()).find((x) => x.id === emirId);
   const g = e?.girisler.find((x) => x.id === girisId);
   if (!e || !g) return { hata: "Giriş bulunamadı." };
@@ -323,6 +336,7 @@ export async function icUretimGirisiSil(emirId: string, girisId: string): Promis
 export type AyarSonucu = { hata?: string; fiyat?: FiyatListesi; kargo?: string[]; ekip?: Kullanici[] };
 
 export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<string, number>): Promise<AyarSonucu> {
+  await oturumGerekli();
   const tamSayi = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n > 0 && n < 100_000_000;
   if (!CIHAZ_MODELLERI.every((m) => tamSayi(f.cihaz[m]))) return { hata: "Cihaz fiyatları sıfırdan büyük olmalı." };
   for (const [ad, p] of Object.entries(f.lisans) as [LisansPaketi, { fiyat: number | null; cihaz: number | null }][]) {
@@ -332,11 +346,18 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
   if (!(f.kdv >= 0 && f.kdv <= 0.5)) return { hata: "KDV oranı %0–50 arası olmalı." };
   if (!(f.eurKur >= 1 && f.eurKur <= 1000)) return { hata: "EUR kuru 1–1000 TL arası olmalı." };
   const stok = await getStok();
+  const aksesuarFiyatlari: { kod: string; fiyat: number }[] = [];
   for (const [kod, fiyat] of Object.entries(aksesuar)) {
     const k = stok.find((x) => x.kod === kod && x.fiyat !== null);
     if (!k) continue;
     if (!tamSayi(fiyat)) return { hata: `${k.ad} fiyatı sıfırdan büyük olmalı.` };
-    k.fiyat = fiyat; // TODO: Supabase'de stock_items.price güncellenir
+    aksesuarFiyatlari.push({ kod, fiyat });
+  }
+  // Aksesuar satış fiyatı sipariş deposundaki kalemde tutulur (stok_kalemleri.st_fiyat).
+  // Sipariş modülünde fiyat güncelleyen bir fonksiyon olmadığı için doğrudan yazılır.
+  if (aksesuarFiyatlari.length) {
+    const s = await db();
+    for (const a of aksesuarFiyatlari) sonuc(await s.from("stok_kalemleri").update({ st_fiyat: a.fiyat }).eq("st_kod", a.kod), "Aksesuar fiyatı kaydediliyor");
   }
   const temiz: FiyatListesi = {
     cihaz: { ONE: Math.round(f.cihaz.ONE), "ONE Lite": Math.round(f.cihaz["ONE Lite"]) },
@@ -351,6 +372,7 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
 
 /** Bayi portalında RMA gönderim talimatında gösterilen servis adresi */
 export async function servisAdresiKaydet(s: ServisAdresi): Promise<{ hata?: string; servis?: ServisAdresi }> {
+  await oturumGerekli();
   const temiz = { ad: s.ad.trim().slice(0, 80), adres: s.adres.trim().slice(0, 200), telefon: s.telefon.trim().slice(0, 30) };
   if (temiz.ad.length < 2 || temiz.adres.length < 10) return { hata: "Servis adı ve açık adresi girin." };
   await servisAdresiKaydetDepo(temiz);
@@ -360,6 +382,7 @@ export async function servisAdresiKaydet(s: ServisAdresi): Promise<{ hata?: stri
 }
 
 export async function kargoFirmalariniKaydet(liste: string[]): Promise<AyarSonucu> {
+  await oturumGerekli();
   const temiz = [...new Set(liste.map((x) => x.trim()).filter(Boolean))].slice(0, 30);
   if (!temiz.length) return { hata: "En az bir kargo firması kalmalı." };
   await kargoFirmalariKaydet(temiz);
@@ -368,6 +391,7 @@ export async function kargoFirmalariniKaydet(liste: string[]): Promise<AyarSonuc
 }
 
 export async function kullaniciKaydet(k: { id?: string; ad: string; eposta: string; rol: string; aktif: boolean }): Promise<AyarSonucu> {
+  await oturumGerekli(["Yönetici"]);
   const ekip = await getEkip();
   if (!k.ad.trim()) return { hata: "Ad soyad yazın." };
   if (!/^\S+@\S+\.\S+$/.test(k.eposta.trim())) return { hata: "Geçerli bir e-posta yazın." };
@@ -375,7 +399,8 @@ export async function kullaniciKaydet(k: { id?: string; ad: string; eposta: stri
   if (ekip.some((x) => x.id !== k.id && x.eposta.toLowerCase() === k.eposta.trim().toLowerCase())) return { hata: "Bu e-posta başka bir kullanıcıda kayıtlı." };
   const yoneticiKalir = ekip.some((x) => x.id !== k.id && x.rol === "Yönetici" && x.aktif) || (k.rol === "Yönetici" && k.aktif);
   if (!yoneticiKalir) return { hata: "En az bir aktif yönetici kalmalı." };
-  await kullaniciKaydetDepo({ id: k.id || crypto.randomUUID(), ad: k.ad.trim(), eposta: k.eposta.trim().toLowerCase(), rol: k.rol as Rol, aktif: k.aktif });
+  // Yeni kullanıcıda id boş gider, veritabanı verir
+  await kullaniciKaydetDepo({ id: k.id || "", ad: k.ad.trim(), eposta: k.eposta.trim().toLowerCase(), rol: k.rol as Rol, aktif: k.aktif });
   revalidatePath("/operasyon");
   return { ekip: structuredClone(await getEkip()) };
 }
@@ -384,6 +409,7 @@ export async function kullaniciKaydet(k: { id?: string; ad: string; eposta: stri
 
 /** Seçilen eksik kalemler için: dış kaynaklılara tedarik siparişi (son tedarikçiyle), iç kaynaklılara iç üretim emri açar. */
 export async function ihtiyactanOlustur(secimler: { kod: string; adet: number }[]): Promise<UretimSonucu> {
+  await oturumGerekli();
   if (!secimler.length) return { hata: "En az bir kalem seçin." };
   const [bilesenler, tedarik] = await Promise.all([getBilesenler(), getTedarik()]);
   const bugunIso = bugun();

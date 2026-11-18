@@ -2,6 +2,7 @@
 // Sipariş & Sevkiyat: kaydetme ve adım güncellemeleri (Server Actions).
 // Seri no atanınca cihazlar Cihaz & Lisans'a eklenir; kargoya verilince depo stoğu düşer;
 // lisans teslim edilince lisans cihazlara işlenir; bayi siparişi bayi hareketlerine sevkiyat olarak yazılır.
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { CIHAZ_MODELLERI, LISANS_PAKETLERI, type CihazModeli } from "@/lib/urunler";
 import { getFiyatListesi, getKargoFirmalari, havuzdanCikar } from "@/components/operasyon/queries";
@@ -60,6 +61,7 @@ async function guncelle(id: string, notMetni: string, f: (s: Siparis) => void): 
 export type SiparisFormDurumu = { hatalar?: Record<string, string>; siparis?: Siparis; zaman?: number };
 
 export async function siparisKaydet(_onceki: SiparisFormDurumu, form: FormData): Promise<SiparisFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const sayi = (ad: string) => {
     const n = parseInt(metin(ad), 10);
@@ -154,6 +156,7 @@ export async function siparisKaydet(_onceki: SiparisFormDurumu, form: FormData):
 
 /** Kargodan önce iptal (CRM). Bayi siparişinde bayinin temsilcisine haber verilmez: işlemi Embedra yapıyor. */
 export async function siparisIptal(id: string, neden: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const r = await siparisiIptalEt(id, neden, "embedra", simdi());
   if (r.hata || !r.siparis) return { hata: r.hata ?? "Sipariş bulunamadı." };
   yenile(id);
@@ -164,6 +167,7 @@ export async function siparisIptal(id: string, neden: string): Promise<IslemSonu
 /* ---------- Adımlar ---------- */
 
 export async function odemeAlindi(id: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   if (s?.durum !== "odeme") return { hata: "Bu sipariş ödeme beklemiyor." };
   return guncelle(id, "Ödeme alındı, hazırlığa geçti.", (x) => {
@@ -172,6 +176,7 @@ export async function odemeAlindi(id: string): Promise<IslemSonucu> {
 }
 
 export async function seriAta(id: string, metin: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   if (!s || s.durum !== "hazirlaniyor") return { hata: "Seri no yalnızca hazırlanan siparişe atanır." };
   const gerekli = cihazAdedi(s) - s.seriNolar.length;
@@ -215,6 +220,7 @@ export async function seriAta(id: string, metin: string): Promise<IslemSonucu> {
 }
 
 export async function kargoyaVer(id: string, firma: string, takipNo: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   if (!s || s.durum !== "hazirlaniyor" || dijital(s)) return { hata: "Bu sipariş kargoya verilemez." };
   if (!seriTamam(s)) return { hata: "Önce tüm cihazlara seri no atayın." };
@@ -253,6 +259,7 @@ export async function kargoyaVer(id: string, firma: string, takipNo: string): Pr
 }
 
 export async function teslimEdildi(id: string, tarih: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   if (s?.durum !== "kargoda") return { hata: "Sipariş kargoda değil." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tarih)) return { hata: "Teslim tarihini seçin." };
@@ -263,6 +270,7 @@ export async function teslimEdildi(id: string, tarih: string): Promise<IslemSonu
 }
 
 export async function lisansTeslim(id: string, baslangic: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   const uygun = s && lisansVar(s) && (s.durum === "teslim" || (s.durum === "hazirlaniyor" && dijital(s)));
   if (!s || !uygun) return { hata: "Bu siparişte teslim edilecek lisans yok." };
@@ -325,6 +333,7 @@ export async function lisansTeslim(id: string, baslangic: string): Promise<Islem
 }
 
 export async function siparisiTamamla(id: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const s = await getSiparis(id);
   if (s?.durum !== "teslim") return { hata: "Yalnızca teslim edilen sipariş tamamlanır." };
   await musteriOlayi(s, `Sipariş #${s.id} tamamlandı`);
@@ -334,6 +343,7 @@ export async function siparisiTamamla(id: string): Promise<IslemSonucu> {
 }
 
 export async function faturaKes(id: string, no: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const temiz = no.trim().toUpperCase();
   if (!/^[A-Z0-9-]{6,20}$/.test(temiz)) return { hata: "Fatura numarasını yazın (ör. EMB2026000432)." };
   return guncelle(id, `Fatura kesildi: ${temiz}`, (x) => {
@@ -342,6 +352,7 @@ export async function faturaKes(id: string, no: string): Promise<IslemSonucu> {
 }
 
 export async function siparisNotu(id: string, metin: string): Promise<IslemSonucu> {
+  await oturumGerekli();
   const temiz = metin.trim();
   if (!temiz) return { hata: "Notu yazın." };
   const s = await siparisiGuncelle(id, (x) => {
@@ -355,6 +366,7 @@ export async function siparisNotu(id: string, metin: string): Promise<IslemSonuc
 /* ---------- Depo ve iade ---------- */
 
 export async function stokGirisi(kod: string, adet: number): Promise<IslemSonucu> {
+  await oturumGerekli();
   if (!Number.isInteger(adet) || adet < 1 || adet > 10_000) return { hata: "1–10.000 arası adet yazın." };
   if (!(await stokGuncelle(kod, adet))) return { hata: "Ürün bulunamadı." };
   yenile();
@@ -363,6 +375,7 @@ export async function stokGirisi(kod: string, adet: number): Promise<IslemSonucu
 
 /** Depoya yeni ürün tanımlar (ör. yeni bir kablo ya da aksesuar). Fiyatı girilirse manuel siparişte aksesuar olarak seçilebilir. */
 export async function yeniStokKalemi(veri: { kod: string; ad: string; adet: number; kritik: number; hedef: number; fiyat: number | null }): Promise<IslemSonucu & { hatalar?: Record<string, string> }> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   const kod = veri.kod.trim().toUpperCase();
   const ad = veri.ad.trim();
@@ -385,6 +398,7 @@ export async function yeniStokKalemi(veri: { kod: string; ad: string; adet: numb
 export type IadeSonucu = { iade?: Iade; hata?: string; hatalar?: Record<string, string> };
 
 export async function iadeKaydet(veri: { siparisId: string; tur: IadeTuru; neden: string; aciklama: string; urunler: string[] }): Promise<IadeSonucu> {
+  await oturumGerekli();
   const hatalar: Record<string, string> = {};
   const s = veri.siparisId ? await getSiparis(veri.siparisId) : null;
   if (!s) hatalar.siparisId = "Siparişi seçin.";
@@ -415,6 +429,7 @@ export async function iadeKaydet(veri: { siparisId: string; tur: IadeTuru; neden
 }
 
 export async function iadeIlerlet(id: string): Promise<IadeSonucu> {
+  await oturumGerekli();
   const i = await iadeyiGuncelle(id, (x) => {
     if (x.adim < IADE_ADIMLARI[x.tur].length - 1) x.adim += 1;
   });

@@ -17,9 +17,12 @@ export default function BayiPortalPaneli({ bayiId }: { bayiId: string }) {
   const [mesaj, setMesaj] = useState<{ hata?: string; tamam?: string }>({});
   const [ayar, setAyar] = useState<PortalPaneli["ayar"] | null>(null);
   const [cozum, setCozum] = useState<Record<string, string>>({});
-  const yukle = useCallback(() => bayiPortalPaneli(bayiId).then((d) => { if (d) { setV(d); setAyar(d.ayar); } }), [bayiId]);
+  const [yetkisiz, setYetkisiz] = useState(false);
+  // Yalnızca Yönetici / Satış: diğer roller için sunucu reddeder
+  const yukle = useCallback(() => bayiPortalPaneli(bayiId).then((d) => { if (d) { setV(d); setAyar(d.ayar); } }, () => setYetkisiz(true)), [bayiId]);
   useEffect(() => { yukle(); }, [yukle]);
 
+  if (yetkisiz) return <p className="text-xs text-muted">Bayi portalı paneli yalnızca Yönetici ve Satış rollerine açık.</p>;
   if (!v || !ayar) return <p className="text-xs text-muted">Portal bilgileri yükleniyor…</p>;
   const acikDuzeltme = v.duzeltme.filter((d) => d.durum === "acik");
   const havuzToplam = v.havuz.reduce((t, k) => t + k.adet, 0);

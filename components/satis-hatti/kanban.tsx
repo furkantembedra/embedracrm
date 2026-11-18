@@ -4,7 +4,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { kisaTl } from "@/lib/format";
-import { ASAMALAR, ASAMA_BILGI, type Asama, type Firsat } from "./queries";
+import { ASAMALAR, ASAMA_BILGI, type Asama } from "./sabitler";
+import type { Firsat } from "./queries";
 import FirsatKarti, { type KartEylemi } from "./firsat-karti";
 import type { BirakmaKonumu } from "./ortak";
 

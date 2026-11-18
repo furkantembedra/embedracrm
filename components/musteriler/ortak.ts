@@ -1,7 +1,15 @@
 // Müşteriler bileşenlerinin paylaştığı küçük yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import type { CihazDurumu, IzinKanali, Plan, Yetkili } from "./queries";
+import type { CihazDurumu, IzinKanali, Plan, Segment, Yetkili } from "./queries";
 import { IZIN_KANALLARI } from "./izin";
+
+// queries.ts sunucu koduna (Supabase) bağlı olduğu için istemci bileşenleri sabitleri buradan okur; queries.ts de dışa açar.
+export const SEGMENT_ADI: Record<Segment, string> = {
+  servis: "Servis",
+  muhendislik: "Mühendislik",
+  egitim: "Eğitim",
+  bayi: "Bayi",
+};
 
 export const PLAN_TONU: Record<Plan, ChipTon> = { Basic: "gray", Pro: "ink", "Pro+": "info", Lead: "warn" };
 

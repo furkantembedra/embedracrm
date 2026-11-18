@@ -2,7 +2,8 @@
 import type { ChipTon } from "@/components/ui/chip";
 import { gunFarki } from "@/lib/use-bugun";
 import { IZIN_KANAL_ADI, type IzinKanali } from "@/components/musteriler/izin";
-import { HAZIR_LISTELER, type IcerikKanali, type KampanyaDurumu, type KampanyaKanali, type ListeFiltresi, type OzelListe } from "./queries";
+import { HAZIR_LISTELER } from "./sabitler";
+import type { IcerikKanali, KampanyaDurumu, KampanyaKanali, ListeFiltresi, OzelListe } from "./queries";
 
 export const ICERIK_RENGI: Record<IcerikKanali, string> = {
   Instagram: "#2F4BFF",

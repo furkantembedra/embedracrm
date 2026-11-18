@@ -8,8 +8,8 @@ import Chip from "@/components/ui/chip";
 import { useBugun } from "@/lib/use-bugun";
 import { useSimdi } from "@/lib/use-simdi";
 import type { YeniLisans } from "./actions";
-import { DURUM_ADI, type Cihaz } from "./queries";
-import { DURUM_TONU, PLAN_TONU, guncelDurum, kalanYaz, lisansIlerleme, lisansUygula, sonGorulmeYaz, tarihYaz, zamanYaz } from "./ortak";
+import type { Cihaz } from "./queries";
+import { DURUM_ADI, DURUM_TONU, PLAN_TONU, guncelDurum, kalanYaz, lisansIlerleme, lisansUygula, sonGorulmeYaz, tarihYaz, zamanYaz } from "./ortak";
 import LisansFormu from "./lisans-formu";
 import { URUN_BILGI } from "@/lib/urunler";
 

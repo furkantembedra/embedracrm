@@ -1,5 +1,6 @@
 "use server";
 // Müşteriler: kaydetme, güncelleme ve silme (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import {
   IZIN_KANALLARI, IZIN_KANAL_ADI, IZIN_KAYNAKLARI, musteriEkle, musteriyiGuncelle,
@@ -18,6 +19,7 @@ const PLANLAR: Plan[] = ["Lead", "Basic", "Pro", "Pro+"];
 export type FormDurumu = { hatalar?: Record<string, string>; musteri?: Musteri };
 
 export async function musteriKaydet(_onceki: FormDurumu, form: FormData): Promise<FormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const ad = metin("ad");
   const telefon = metin("telefon");
@@ -65,6 +67,7 @@ export type NotFormDurumu = { hata?: string; olay?: Olay; id?: string; zaman?: n
 
 /** Müşterinin zaman çizelgesine not ekler. */
 export async function notEkle(_onceki: NotFormDurumu, form: FormData): Promise<NotFormDurumu> {
+  await oturumGerekli();
   const id = String(form.get("musteriId") ?? "");
   const metin = String(form.get("not") ?? "").trim();
   if (!metin) return { hata: "Not boş olamaz." };
@@ -78,7 +81,6 @@ export async function notEkle(_onceki: NotFormDurumu, form: FormData): Promise<N
   });
   if (!m) return { hata: "Müşteri bulunamadı." };
 
-  // TODO: Supabase bağlanınca: await supabase.from("customer_events").insert({ customer_id: id, kind: "note", body: metin });
   musteriSayfalariniYenile(id);
   return { olay, id, zaman: Date.now() };
 }
@@ -94,6 +96,7 @@ export type YetkiliFormDurumu = { hatalar?: Record<string, string>; yetkililer?:
 
 /** Yeni yetkili ekler; formda yetkiliId varsa o kişiyi günceller. */
 export async function yetkiliKaydet(_onceki: YetkiliFormDurumu, form: FormData): Promise<YetkiliFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const musteriId = metin("musteriId");
   const yetkiliId = metin("yetkiliId");
@@ -120,27 +123,27 @@ export async function yetkiliKaydet(_onceki: YetkiliFormDurumu, form: FormData):
   });
   if (!m) return { hatalar: { ad: "Müşteri bulunamadı." } };
 
-  // TODO: Supabase bağlanınca: await supabase.from("customer_contacts").upsert({ id: kisi.id, customer_id: musteriId, name: kisi.ad, ... });
   musteriSayfalariniYenile(musteriId);
   return { yetkililer: [...m.yetkililer], zaman: Date.now() };
 }
 
 export async function yetkiliSil(musteriId: string, yetkiliId: string): Promise<Yetkili[]> {
+  await oturumGerekli();
   const m = await musteriyiGuncelle(musteriId, (x) => {
     x.yetkililer = x.yetkililer.filter((y) => y.id !== yetkiliId);
   });
-  // TODO: await supabase.from("customer_contacts").delete().eq("id", yetkiliId);
   musteriSayfalariniYenile(musteriId);
   return m ? [...m.yetkililer] : [];
 }
 
 /** Seçilen yetkiliyi listenin başına alır: Ara / WhatsApp / E-posta düğmeleri onu kullanır. */
 export async function birincilYap(musteriId: string, yetkiliId: string): Promise<Yetkili[]> {
+  await oturumGerekli();
   const m = await musteriyiGuncelle(musteriId, (x) => {
     const kisi = x.yetkililer.find((y) => y.id === yetkiliId);
     if (kisi) x.yetkililer = [kisi, ...x.yetkililer.filter((y) => y.id !== yetkiliId)];
   });
-  // TODO: Supabase'de customers.primary_contact_id alanını güncelleyin.
+  // Sıra musteri_yetkilileri.y_sira'ya yazılır (0 = birincil)
   musteriSayfalariniYenile(musteriId);
   return m ? [...m.yetkililer] : [];
 }
@@ -150,6 +153,7 @@ export async function birincilYap(musteriId: string, yetkiliId: string): Promise
 export type VergiNoDurumu = { hata?: string; vergiNo?: string; zaman?: number };
 
 export async function vergiNoKaydet(_onceki: VergiNoDurumu, form: FormData): Promise<VergiNoDurumu> {
+  await oturumGerekli();
   const musteriId = String(form.get("musteriId") ?? "");
   const vergiNo = String(form.get("vergiNo") ?? "").trim().replace(/\s+/g, " ");
   if (!vergiNo) return { hata: "Vergi numarasını girin." };
@@ -159,7 +163,6 @@ export async function vergiNoKaydet(_onceki: VergiNoDurumu, form: FormData): Pro
     x.vergiNo = vergiNo;
   });
   if (!m) return { hata: "Müşteri bulunamadı." };
-  // TODO: await supabase.from("customers").update({ tax_no: vergiNo }).eq("id", musteriId);
   musteriSayfalariniYenile(musteriId);
   return { vergiNo, zaman: Date.now() };
 }
@@ -180,6 +183,7 @@ export type IzinSonucu = { yetkililer?: Yetkili[]; hata?: string };
 /** Yetkilinin kanal izinlerini günceller. Yeni verilen izne bugünün tarihi ve kaynak yazılır;
  *  kaldırılan izin silinmez, geri çekilme tarihiyle saklanır. Değişiklik müşteri geçmişine işlenir. */
 export async function izinleriKaydet(musteriId: string, yetkiliId: string, secim: Record<IzinKanali, boolean>, kaynak: string): Promise<IzinSonucu> {
+  await oturumGerekli();
   const tarih = bugunIso();
   const verilen: string[] = [];
   const cekilen: string[] = [];
@@ -209,7 +213,7 @@ export async function izinleriKaydet(musteriId: string, yetkiliId: string, secim
   });
   if (hata) return { hata };
   if (!m) return { hata: "Müşteri bulunamadı." };
-  // TODO: Supabase bağlanınca: contact_consents tablosuna (contact_id, channel, granted, granted_at, source, revoked_at) yazın; İYS'ye bildirin.
+  // İzinler iletisim_izinleri'ne yazılır (musteriyiGuncelle). TODO: İYS'ye bildirim.
   musteriSayfalariniYenile(musteriId);
   revalidatePath("/pazarlama");
   return { yetkililer: structuredClone(m.yetkililer) };

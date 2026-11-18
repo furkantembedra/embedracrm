@@ -6,7 +6,8 @@
 // yetkilisine aitse firma adı müşteriden alınır ve mesaj müşterinin zaman çizelgesine de düşer.
 import { revalidatePath } from "next/cache";
 import { firsatEkleDepo, firsatiGuncelle, getFirsatlar, KAPALI_ASAMALAR, type Firsat, type WhatsappMesaji } from "@/components/satis-hatti/queries";
-import { getMusteriler, musteriyiGuncelle } from "@/components/musteriler/queries";
+import { getMusteri, musteriyiGuncelle } from "@/components/musteriler/queries";
+import { db, sonuc as veri } from "@/lib/supabase/db";
 import { telefonGoster, telefonNormalize } from "./telefon";
 
 export type GelenMesaj = {
@@ -18,18 +19,18 @@ export type GelenMesaj = {
   zaman: string; // ISO
 };
 
-const g = globalThis as { __embedraWaIslenen?: Set<string> };
-const ISLENEN = (g.__embedraWaIslenen ??= new Set());
-
 const TUR_METNI: Record<string, string> = {
   image: "📷 Fotoğraf", document: "📄 Belge", location: "📍 Konum", audio: "🎤 Sesli mesaj", video: "🎬 Video", sticker: "Çıkartma", contacts: "👤 Kişi kartı",
 };
 
+/** Webhook'tan (oturumsuz, sistemOlarak içinde) ve satış hattındaki simülasyondan (oturumlu) çağrılır. */
 export async function whatsappMesajiIsle(m: GelenMesaj): Promise<{ firsat: Firsat; yeni: boolean } | null> {
-  if (ISLENEN.has(m.mesajId)) return null;
   const telefon = telefonNormalize(`+${m.waId.replace(/^\+/, "")}`);
   if (!telefon) return null;
-  ISLENEN.add(m.mesajId);
+  // Aynı wamid daha önce işlendiyse (Meta tekrar gönderdi) atlanır: whatsapp_mesajlari.w_mesaj_id unique
+  const s = await db();
+  const islenmis = veri(await s.from("whatsapp_mesajlari").select("id").eq("w_mesaj_id", m.mesajId).maybeSingle(), "WhatsApp mesajı aranırken");
+  if (islenmis) return null;
 
   const metin = m.metin.trim() || TUR_METNI[m.tur] || `[${m.tur}]`;
   const mesaj: WhatsappMesaji = { id: m.mesajId, metin: metin.slice(0, 2000), zaman: m.zaman, yon: "gelen", tur: m.tur };
@@ -42,7 +43,9 @@ export async function whatsappMesajiIsle(m: GelenMesaj): Promise<{ firsat: Firsa
   const acik = firsatlar.filter((f) => f.telefon && telefonNormalize(f.telefon) === telefon && !KAPALI_ASAMALAR.includes(f.asama)).at(-1);
 
   // 2) Numara bir müşteri yetkilisine ait mi?
-  const musteri = (await getMusteriler()).find((x) => x.yetkililer.some((y) => telefonNormalize(y.telefon) === telefon)) ?? null;
+  const yetkililer = veri(await s.from("musteri_yetkilileri").select("musteri_id, y_tel").neq("y_tel", ""), "Yetkili telefonları okunurken") as { musteri_id: number; y_tel: string }[];
+  const sahibi = yetkililer.find((y) => telefonNormalize(y.y_tel) === telefon);
+  const musteri = sahibi ? await getMusteri(String(sahibi.musteri_id)) : null;
   if (musteri) {
     await musteriyiGuncelle(musteri.id, (x) => {
       x.olaylar.unshift({ metin: `WhatsApp: “${metin.slice(0, 120)}”`, zaman: "Bugün · WhatsApp", tur: "arama" });
@@ -77,7 +80,6 @@ export async function whatsappMesajiIsle(m: GelenMesaj): Promise<{ firsat: Firsa
     await firsatEkleDepo(f);
     sonuc = { firsat: f, yeni: true };
   }
-  // TODO (Supabase): insert into whatsapp_messages; deals upsert by phone
   revalidatePath("/satis-hatti");
   revalidatePath("/genel-bakis");
   return sonuc;

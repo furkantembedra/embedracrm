@@ -1,6 +1,10 @@
 // Otomasyon: kullanıcının yönetim panelinden tanımladığı "şu olursa şunu yap" kuralları ve çalışma geçmişi.
-// Şimdilik demo depo (sunucu belleğinde). Supabase bağlanınca supabase.from("automation_rules" | "automation_runs")…
-// ile değiştirin; `islenen` için (kural_id, anahtar) üzerinde unique kısıt kullanın (aynı kayıt için iki kez çalışmayı önler).
+// Veri Supabase'de: otomasyon_kurallari, otomasyon_calismalari, otomasyon_islenenler (kural_id + anahtar birincil anahtar:
+// aynı kayıt için iki kez çalışmayı önler) ve kilitler (aynı anda iki çalıştırmayı önler).
+import { db, kullaniciKimligi, kullaniciNo, sonuc } from "@/lib/supabase/db";
+
+/** sonuc() + boş olmayan veri (select / insert…select sonuçları; maybeSingle için sonuc kullanılır) */
+const kesin = <T,>(r: { data: T; error: { message: string; code?: string } | null }, ne?: string) => sonuc(r, ne) as NonNullable<T>;
 
 export type TetikleyiciId =
   | "lisans-bitiyor"
@@ -42,84 +46,141 @@ export type CalismaKaydi = {
   sonuclar: EylemSonucu[];
 };
 
-const DEMO: Kural[] = [
-  {
-    id: "k-lisans-hatirlatma", ad: "Lisans bitmeden satışa görev aç", aktif: true, tetikleyici: "lisans-bitiyor", gun: 45, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u2", onem: "normal" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-lisans-eposta", ad: "Lisans yenileme e-postası", aktif: false, tetikleyici: "lisans-bitiyor", gun: 30, filtre: {}, engel: null,
-    hatirlatma: null,
-    eposta: {
-      konu: "{firma} · lisansınızın süresi doluyor",
-      metin: "Merhaba,\n\n{detay}\n\nKesintisiz kullanım için yenileme teklifimizi iletmek isteriz. Bu e-postayı yanıtlayarak bize ulaşabilirsiniz.\n\nEmbedra Ekibi",
-    },
-    olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-teklif", ad: "Yanıtsız teklifi takip et", aktif: true, tetikleyici: "teklif-yanitsiz", gun: 5, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u2", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-rma", ad: "Uzayan RMA'yı destek ekibine bildir", aktif: false, tetikleyici: "rma-gecikti", gun: 5, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u3", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-stok", ad: "Kritik stokta operasyona haber ver", aktif: false, tetikleyici: "stok-kritik", gun: 0, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u4", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-sessiz", ad: "Uzun süredir bağlanmayan cihazı destekle kontrol et", aktif: false, tetikleyici: "cihaz-sessiz", gun: 14, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u3", onem: "normal" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-  {
-    id: "k-destek", ad: "Ele alınmayan destek talebini uyar", aktif: false, tetikleyici: "destek-yanitsiz", gun: 1, filtre: {}, engel: null,
-    hatirlatma: { sorumluId: "u3", onem: "yuksek" }, eposta: null, olusturma: "2026-11-01T09:00:00.000Z", sonCalisma: null,
-  },
-];
+/* ---------- Satır → domain dönüşümleri ---------- */
 
-type Depo = { kurallar: Kural[]; kayitlar: CalismaKaydi[]; islenen: Set<string>; calisiyor: boolean };
-const g = globalThis as { __embedraOtomasyon?: Depo };
-const DEPO = (g.__embedraOtomasyon ??= { kurallar: structuredClone(DEMO), kayitlar: [], islenen: new Set(), calisiyor: false });
+type KuralSatiri = {
+  id: number; ok_ad: string; ok_aktif: boolean; ok_tetikleyici: TetikleyiciId; ok_gun: number; ok_filtre: KuralFiltresi | null; ok_engel: string | null;
+  hatirlatma_sorumlu_id: number | null; ok_hatirlatma_onem: "normal" | "yuksek" | null; ok_eposta_konu: string | null; ok_eposta_metin: string | null;
+  ok_son_calisma: string | null; created_at: string;
+};
+const iso = (v: string) => new Date(v).toISOString();
+const kuraldan = (r: KuralSatiri): Kural => ({
+  id: String(r.id),
+  ad: r.ok_ad,
+  aktif: r.ok_aktif,
+  tetikleyici: r.ok_tetikleyici,
+  gun: r.ok_gun,
+  filtre: r.ok_filtre ?? {},
+  engel: r.ok_engel,
+  hatirlatma: r.hatirlatma_sorumlu_id !== null ? { sorumluId: kullaniciKimligi(r.hatirlatma_sorumlu_id), onem: r.ok_hatirlatma_onem ?? "normal" } : null,
+  eposta: r.ok_eposta_konu !== null ? { konu: r.ok_eposta_konu, metin: r.ok_eposta_metin ?? "" } : null,
+  olusturma: iso(r.created_at),
+  sonCalisma: r.ok_son_calisma ? iso(r.ok_son_calisma) : null,
+});
+const kuralSatiri = (k: Kural) => ({
+  ok_ad: k.ad,
+  ok_aktif: k.aktif,
+  ok_tetikleyici: k.tetikleyici,
+  ok_gun: k.gun,
+  ok_filtre: k.filtre ?? {},
+  ok_engel: k.engel,
+  hatirlatma_sorumlu_id: k.hatirlatma ? kullaniciNo(k.hatirlatma.sorumluId) : null,
+  ok_hatirlatma_onem: k.hatirlatma?.onem ?? null,
+  ok_eposta_konu: k.eposta?.konu ?? null,
+  ok_eposta_metin: k.eposta?.metin ?? null,
+  ok_son_calisma: k.sonCalisma,
+});
+/** Domain kimliği → veritabanı id'si (sayı değilse null: o kural veritabanında yok) */
+const kuralNo = (id: string) => (/^\d+$/.test(id) ? Number(id) : null);
 
-export async function getKurallar() {
-  return DEPO.kurallar;
+/* ---------- Okuma ---------- */
+
+export async function getKurallar(): Promise<Kural[]> {
+  const s = await db();
+  // Yeni kural başta (eski depoda unshift ediliyordu)
+  return (sonuc(await s.from("otomasyon_kurallari").select("*").order("id", { ascending: false }), "Otomasyon kuralları okunuyor") as KuralSatiri[]).map(kuraldan);
 }
-export async function getCalismaKayitlari() {
-  return DEPO.kayitlar;
+export async function getCalismaKayitlari(): Promise<CalismaKaydi[]> {
+  const s = await db();
+  const satirlar = kesin(
+    await s.from("otomasyon_calismalari").select("id, kural_id, oc_kural_ad, oc_kayit_ad, oc_href, oc_sonuclar, oc_zaman").order("oc_zaman", { ascending: false }).order("id", { ascending: false }).limit(200),
+    "Otomasyon geçmişi okunuyor",
+  );
+  return satirlar.map((r) => ({
+    id: String(r.id), zaman: iso(r.oc_zaman), kuralId: r.kural_id === null ? "" : String(r.kural_id), kuralAd: r.oc_kural_ad, kayitAd: r.oc_kayit_ad, href: r.oc_href,
+    sonuclar: (r.oc_sonuclar ?? []) as EylemSonucu[],
+  }));
 }
 export async function islendiMi(kuralId: string, anahtar: string) {
-  return DEPO.islenen.has(`${kuralId}|${anahtar}`);
+  const no = kuralNo(kuralId);
+  if (no === null) return false;
+  const s = await db();
+  const r = sonuc(await s.from("otomasyon_islenenler").select("kural_id").eq("kural_id", no).eq("anahtar", anahtar).maybeSingle(), "İşlenen kayıt kontrol ediliyor");
+  return !!r;
 }
 
-// Aşağıdakiler yalnızca actions.ts ve motor.ts'ten çağrılır.
+/* ---------- Yazma (yalnızca actions.ts ve motor.ts'ten çağrılır) ---------- */
+
+/** Var olan kuralı günceller; yoksa ekler ve veritabanının verdiği id / oluşturma zamanını nesnenin üstüne yazar */
 export async function kuralKaydet(k: Kural) {
-  const i = DEPO.kurallar.findIndex((x) => x.id === k.id);
-  if (i >= 0) DEPO.kurallar[i] = k;
-  else DEPO.kurallar.unshift(k);
+  const s = await db();
+  const no = kuralNo(k.id);
+  if (no !== null) {
+    const r = kesin(await s.from("otomasyon_kurallari").update(kuralSatiri(k)).eq("id", no).select("id"), "Otomasyon kuralı güncelleniyor");
+    if (r.length) return;
+  }
+  const yeni = kesin(await s.from("otomasyon_kurallari").insert(kuralSatiri(k)).select("id, created_at").single(), "Otomasyon kuralı ekleniyor");
+  k.id = String(yeni.id);
+  k.olusturma = iso(yeni.created_at);
 }
-export async function kuralGuncelle(id: string, f: (k: Kural) => void) {
-  const k = DEPO.kurallar.find((x) => x.id === id);
-  if (k) f(k);
-  return k ?? null;
+export async function kuralGuncelle(id: string, f: (k: Kural) => void): Promise<Kural | null> {
+  const no = kuralNo(id);
+  if (no === null) return null;
+  const s = await db();
+  const r = sonuc(await s.from("otomasyon_kurallari").select("*").eq("id", no).maybeSingle(), "Otomasyon kuralı okunuyor") as KuralSatiri | null;
+  if (!r) return null;
+  const k = kuraldan(r);
+  f(k);
+  sonuc(await s.from("otomasyon_kurallari").update(kuralSatiri(k)).eq("id", no), "Otomasyon kuralı güncelleniyor");
+  return k;
 }
+/** İşlenen kayıt işaretleri cascade ile silinir; geçmiş kayıtları kalır (kural_id null olur) */
 export async function kuralSil(id: string) {
-  DEPO.kurallar = DEPO.kurallar.filter((k) => k.id !== id);
-  for (const a of [...DEPO.islenen]) if (a.startsWith(`${id}|`)) DEPO.islenen.delete(a);
+  const no = kuralNo(id);
+  if (no === null) return;
+  const s = await db();
+  sonuc(await s.from("otomasyon_kurallari").delete().eq("id", no), "Otomasyon kuralı siliniyor");
 }
 export async function islendiIsaretle(kuralId: string, anahtar: string) {
-  DEPO.islenen.add(`${kuralId}|${anahtar}`);
+  const no = kuralNo(kuralId);
+  if (no === null) return;
+  const s = await db();
+  sonuc(
+    await s.from("otomasyon_islenenler").upsert({ kural_id: no, anahtar }, { onConflict: "kural_id,anahtar", ignoreDuplicates: true }),
+    "İşlenen kayıt işaretleniyor",
+  );
 }
+/** Çalışma kaydı ekler (id veritabanından gelir). Geçmiş en yeni 200 kayıtla sınırlı tutulur. */
 export async function kayitEkle(k: CalismaKaydi) {
-  DEPO.kayitlar.unshift(k);
-  DEPO.kayitlar.length = Math.min(DEPO.kayitlar.length, 200);
+  const s = await db();
+  const yeni = kesin(
+    await s.from("otomasyon_calismalari")
+      .insert({ kural_id: kuralNo(k.kuralId), oc_kural_ad: k.kuralAd, oc_kayit_ad: k.kayitAd, oc_href: k.href, oc_sonuclar: k.sonuclar, oc_zaman: k.zaman })
+      .select("id").single(),
+    "Otomasyon çalışma kaydı ekleniyor",
+  );
+  k.id = String(yeni.id);
+  // 200'ü aşan eski kayıtları sil
+  const sinir = kesin(await s.from("otomasyon_calismalari").select("oc_zaman").order("oc_zaman", { ascending: false }).range(199, 199), "Otomasyon geçmişi okunuyor");
+  if (sinir.length) sonuc(await s.from("otomasyon_calismalari").delete().lt("oc_zaman", sinir[0].oc_zaman), "Eski otomasyon kayıtları siliniyor");
 }
+
+/* ---------- Kilit ---------- */
+
+const KILIT = "otomasyon";
+const KILIT_SURESI_MS = 5 * 60_000; // çöken bir çalıştırma kilidi en fazla 5 dk tutar
+
 /** Aynı anda iki çalıştırma (zamanlayıcı + elle) aynı kaydı ikilemesin. Alındıysa true. */
 export async function kilitAl() {
-  if (DEPO.calisiyor) return false;
-  DEPO.calisiyor = true;
+  const s = await db();
+  // Süresi geçmiş (yarım kalmış çalıştırmadan kalan) kilidi temizle
+  sonuc(await s.from("kilitler").delete().eq("anahtar", KILIT).lt("bitis", new Date().toISOString()), "Eski kilit temizleniyor");
+  const r = await s.from("kilitler").insert({ anahtar: KILIT, bitis: new Date(Date.now() + KILIT_SURESI_MS).toISOString() });
+  if (r.error?.code === "23505") return false; // birincil anahtar ihlali: başka bir çalıştırma sürüyor
+  sonuc(r, "Kilit alınıyor");
   return true;
 }
 export async function kilitBirak() {
-  DEPO.calisiyor = false;
+  const s = await db();
+  sonuc(await s.from("kilitler").delete().eq("anahtar", KILIT), "Kilit bırakılıyor");
 }

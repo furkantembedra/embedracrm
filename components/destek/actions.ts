@@ -1,5 +1,6 @@
 "use server";
 // Destek: kaydetme ve güncelleme (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { KANALLAR, ONCELIKLER } from "@/lib/constants";
 import { getMusteri, musteriyiGuncelle } from "@/components/musteriler/queries";
@@ -23,6 +24,7 @@ function yenile(id?: string) {
 export type TalepFormDurumu = { hatalar?: Record<string, string>; talep?: Talep };
 
 export async function talepKaydet(_onceki: TalepFormDurumu, form: FormData): Promise<TalepFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const musteriId = metin("musteriId");
   const seriNo = metin("seriNo");
@@ -81,6 +83,7 @@ export type NotFormDurumu = { hata?: string; not?: TalepNotu; durum?: TalepDurum
 /** Not kaydeder; "islem" alanı islemde / beklemede / cozuldu / yeniden ise durumu da değiştirir.
  *  Yeni talebe not yazılınca talep kendiliğinden İşlemde'ye geçer. */
 export async function notKaydet(_onceki: NotFormDurumu, form: FormData): Promise<NotFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const id = metin("talepId");
   const islem = metin("islem") as "not" | "islemde" | "beklemede" | "cozuldu" | "yeniden" | "bayiye";
@@ -113,6 +116,7 @@ export async function notKaydet(_onceki: NotFormDurumu, form: FormData): Promise
 }
 
 export async function aracKapsamiIstegi(id: string): Promise<TalepNotu | null> {
+  await oturumGerekli();
   const not: TalepNotu = { tur: "not", metin: "Araç kapsamı isteği olarak işaretlendi; ürün ekibine iletilecek.", zaman: simdiIso() };
   const talep = await talebiGuncelle(id, (t) => {
     t.konu = "Araç kapsamı isteği";

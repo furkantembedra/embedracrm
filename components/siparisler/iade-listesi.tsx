@@ -1,7 +1,8 @@
 // İade ve değişim kayıtları: her kayıt adım adım ilerletilir (ürün bekleniyor → alındı → para iadesi / yeni kargo)
 import { Plus } from "lucide-react";
 import Chip from "@/components/ui/chip";
-import { IADE_ADIMLARI, type Iade } from "./queries";
+import { IADE_ADIMLARI } from "./sabitler";
+import type { Iade } from "./queries";
 
 export default function IadeListesi({
   iadeler,

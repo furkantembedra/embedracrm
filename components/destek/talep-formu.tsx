@@ -9,7 +9,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { Paperclip } from "lucide-react";
 import { KANALLAR, ONCELIKLER } from "@/lib/constants";
 import { talepKaydet, type TalepFormDurumu } from "./actions";
-import { KONULAR, type Talep } from "./queries";
+import { type Talep } from "./queries";
+import { KONULAR } from "./sabitler";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";
 const GIRDI =

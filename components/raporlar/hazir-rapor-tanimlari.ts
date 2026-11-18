@@ -2,7 +2,8 @@
 import type { ChipTon } from "@/components/ui/chip";
 import type { Cihaz } from "@/components/cihaz-lisans/queries";
 import { lisansIlerleme, tarihYaz as cihazTarihi } from "@/components/cihaz-lisans/ortak";
-import { DURUM_ADI as TALEP_DURUMU, type Talep } from "@/components/destek/queries";
+import { DURUM_ADI as TALEP_DURUMU } from "@/components/destek/sabitler";
+import type { Talep } from "@/components/destek/queries";
 import type { AktifBayi } from "@/components/bayiler/queries";
 import { moqYuzde, stokDurumu } from "@/components/bayiler/ortak";
 import { DONEM_BILGI, type Donem, type RaporOzeti } from "./queries";

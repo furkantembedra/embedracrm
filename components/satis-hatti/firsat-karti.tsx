@@ -4,7 +4,8 @@
 import { Bell, ChevronDown, ChevronUp, FileText, MessageCircle, Pencil } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
-import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama, type Firsat } from "./queries";
+import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama } from "./sabitler";
+import type { Firsat } from "./queries";
 import { useBugun } from "@/lib/use-bugun";
 import { KAYNAK_TONU, tarihEtiketi } from "./ortak";
 

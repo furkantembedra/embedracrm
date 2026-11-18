@@ -12,6 +12,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { whatsappMesajiIsle } from "@/components/whatsapp/isle";
+import { sistemOlarak } from "@/lib/supabase/db";
 
 export async function GET(istek: NextRequest) {
   const p = istek.nextUrl.searchParams;
@@ -73,14 +74,15 @@ export async function POST(istek: NextRequest) {
       // Okundu / iletildi gibi durum bildirimleri (statuses) mesaj içermez, atlanır
       for (const m of deger?.messages ?? []) {
         const kisi = deger?.contacts?.find((c) => c.wa_id === m.from);
-        const sonuc = await whatsappMesajiIsle({
+        // Meta oturumsuz çağırır: veritabanı işi gizli anahtarlı istemciyle
+        const sonuc = await sistemOlarak(() => whatsappMesajiIsle({
           waId: m.from,
           ad: kisi?.profile?.name ?? "",
           metin: mesajMetni(m),
           tur: m.type,
           mesajId: m.id,
           zaman: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(),
-        });
+        }));
         if (sonuc) islenen++;
       }
     }

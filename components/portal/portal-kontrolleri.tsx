@@ -9,13 +9,16 @@ type Durum = Awaited<ReturnType<typeof portalDurumu>>;
 
 export default function PortalKontrolleri({ bayiId }: { bayiId: string }) {
   const [durum, setDurum] = useState<Durum | null>(null);
+  const [yetkisiz, setYetkisiz] = useState(false);
   const [bekliyor, baslat] = useTransition();
   useEffect(() => {
     let iptal = false;
-    portalDurumu(bayiId).then((d) => !iptal && setDurum(d));
+    // Yalnızca Yönetici / Satış: diğer roller için sunucu reddeder
+    portalDurumu(bayiId).then((d) => !iptal && setDurum(d), () => !iptal && setYetkisiz(true));
     return () => void (iptal = true);
   }, [bayiId]);
 
+  if (yetkisiz) return <span className="text-xs text-muted">Portal ayarları yalnızca Yönetici ve Satış rollerine açık.</span>;
   if (!durum) return <span className="text-xs text-muted">Portal durumu yükleniyor…</span>;
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -40,7 +43,7 @@ export default function PortalKontrolleri({ bayiId }: { bayiId: string }) {
       </button>
       <span className="text-xs text-muted">
         {durum.erisim ? (
-          <>Portal açık · giriş: <b className="text-ink">{durum.eposta}</b> · demo şifre <code>{durum.demoSifre}</code>{durum.sonGiris ? ` · son giriş ${durum.sonGiris.replace("T", " ")}` : ""}</>
+          <>Portal açık · giriş: <b className="text-ink">{durum.eposta}</b>{durum.sonGiris ? ` · son giriş ${durum.sonGiris.replace("T", " ")}` : ""}</>
         ) : (
           "Portal erişimi kapalı"
         )}

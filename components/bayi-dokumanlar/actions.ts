@@ -1,6 +1,7 @@
 "use server";
 // CRM: bayi dokümanı yükleme / silme, duyuru yayınlama / silme.
-// TODO: CRM'e giriş sistemi gelince yalnızca yönetici / pazarlama rolleri çağırabilmeli.
+// Yalnızca Yönetici ve Pazarlama rolleri (oturumGerekli).
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
 import { getAktifBayiler } from "@/components/bayiler/queries";
 import { simdiYerel } from "@/components/rma/islemler";
@@ -20,6 +21,7 @@ async function hedefOku(form: FormData): Promise<"hepsi" | string[] | null> {
 }
 
 export async function dokumanYukle(_o: DokumanFormDurumu, form: FormData): Promise<DokumanFormDurumu> {
+  await oturumGerekli(["Yönetici", "Pazarlama"]);
   const baslik = kirp(form.get("baslik"), 120);
   const kategori = kirp(form.get("kategori"), 40) as DokumanKategorisi;
   const dosya = form.get("dosya");
@@ -44,11 +46,13 @@ export async function dokumanYukle(_o: DokumanFormDurumu, form: FormData): Promi
 }
 
 export async function dokumanSil(id: string) {
+  await oturumGerekli(["Yönetici", "Pazarlama"]);
   await dokumanSilDepo(id);
   yenile();
 }
 
 export async function duyuruYayinla(_o: DokumanFormDurumu, form: FormData): Promise<DokumanFormDurumu> {
+  await oturumGerekli(["Yönetici", "Pazarlama"]);
   const baslik = kirp(form.get("baslik"), 120);
   const metin = kirp(form.get("metin"), 1000);
   const hatalar: Record<string, string> = {};
@@ -64,6 +68,7 @@ export async function duyuruYayinla(_o: DokumanFormDurumu, form: FormData): Prom
 }
 
 export async function duyuruSil(id: string) {
+  await oturumGerekli(["Yönetici", "Pazarlama"]);
   await duyuruSilDepo(id);
   yenile();
 }

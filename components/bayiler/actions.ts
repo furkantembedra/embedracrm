@@ -1,7 +1,8 @@
 "use server";
 // Bayi & Distribütör: kaydetme ve güncelleme (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
-import { musteriBulAdla, musteriEkle } from "@/components/musteriler/queries";
+import { musteriBulAdla, musteriEkle, musteriyiGuncelle } from "@/components/musteriler/queries";
 import {
   KONTROL_LISTESI,
   ULKELER,
@@ -33,6 +34,7 @@ const bugunIso = () => {
 export type BasvuruFormDurumu = { hatalar?: Record<string, string>; basvuru?: Basvuru };
 
 export async function basvuruKaydet(_onceki: BasvuruFormDurumu, form: FormData): Promise<BasvuruFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const sirket = metin("sirket");
   const yetkili = metin("yetkili");
@@ -76,13 +78,14 @@ export async function basvuruKaydet(_onceki: BasvuruFormDurumu, form: FormData):
 
 /** Başvuruyu listeden kaldırır. Lansmanı yapılmış bayinin aktif bayi ve müşteri kaydı silinmez. */
 export async function basvuruSil(id: string): Promise<{ hata?: string }> {
+  await oturumGerekli();
   if (!(await basvuruyuSil(id))) return { hata: "Başvuru bulunamadı." };
-  // TODO: Supabase bağlanınca: await supabase.from("dealer_applications").delete().eq("id", id);
   yenile(id);
   return {};
 }
 
 export async function kontrolDegistir(id: string, sira: number, deger: boolean) {
+  await oturumGerekli();
   if (sira < 0 || sira >= KONTROL_LISTESI.length) throw new Error("Geçersiz madde");
   await basvuruyuGuncelle(id, (b) => {
     if (b.asama !== "sozlesme") return; // kontrol listesi yalnızca Sözleşme aşamasında değişir
@@ -96,6 +99,7 @@ const sayiVeyaBos = (n: unknown, en: number, enCok: number) =>
 
 /** Sözleşme maddesinin ayrıntısını kaydeder; zorunlu alanlar dolunca madde kendiliğinden işaretlenir. */
 export async function sozlesmeKaydet(id: string, sira: number, d: SozlesmeDetayi): Promise<{ hata?: string; sozlesme?: SozlesmeDetayi; kontroller?: boolean[] }> {
+  await oturumGerekli();
   if (sira < 0 || sira >= KONTROL_LISTESI.length) return { hata: "Geçersiz madde" };
   const temiz: SozlesmeDetayi = {
     bolge: { kapsam: String(d.bolge.kapsam ?? "").trim().slice(0, 120), munhasir: typeof d.bolge.munhasir === "boolean" ? d.bolge.munhasir : null },
@@ -122,12 +126,12 @@ export async function sozlesmeKaydet(id: string, sira: number, d: SozlesmeDetayi
     if (sira === 0 && temiz.bolge.kapsam) x.bolge = temiz.bolge.kapsam;
   });
   if (!b) return { hata: "Başvuru bulunamadı." };
-  // TODO: Supabase bağlanınca: await supabase.from("dealer_applications").update({ contract: temiz, checklist: b.kontroller }).eq("id", id);
   yenile(id);
   return { sozlesme: structuredClone(temiz), kontroller: [...b.kontroller] };
 }
 
 export async function puanKaydet(id: string, puan: number): Promise<{ hata?: string }> {
+  await oturumGerekli();
   if (!Number.isInteger(puan) || puan < 0 || puan > 100) return { hata: "Puan 0–100 arası tam sayı olmalı." };
   await basvuruyuGuncelle(id, (b) => {
     b.puan = puan;
@@ -140,6 +144,7 @@ export type IlerletmeSonucu = { hata?: string; eksikMadde?: number; basvuru?: Ba
 
 /** Başvuruyu bir sonraki aşamaya taşır. Lansmanda bayi aktif bayilere ve müşterilere eklenir. */
 export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
+  await oturumGerekli();
   const b = await basvuruyuGuncelle(id, () => {});
   if (!b) return { hata: "Başvuru bulunamadı." };
   const hedef = sonrakiAsama(b.asama);
@@ -150,8 +155,11 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
     return { hata: `Lansman için kontrol listesi tamamlanmalı: ${eksik.join(", ")}.`, eksikMadde: b.kontroller.findIndex((k) => !k) };
   }
 
+  // Aşama veritabanına yazılır (nesneyi doğrudan değiştirmek artık kaydetmez)
+  await basvuruyuGuncelle(id, (x) => {
+    x.asama = hedef;
+  });
   b.asama = hedef;
-  // TODO: Supabase bağlanınca: await supabase.from("partner_applications").update({ stage: hedef }).eq("id", id);
 
   let musteri: IlerletmeSonucu["musteri"];
   if (hedef === "lansman") {
@@ -164,6 +172,8 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
       stok: (b.sozlesme.moq.one ?? 0) + (b.sozlesme.moq.lite ?? 0) || b.ilkSiparis,
       moqHedef: b.sozlesme.moq.yillik ? Math.ceil(b.sozlesme.moq.yillik / 4) : Math.max(b.ilkSiparis, 1) * 2, // çeyreklik
       moqGerceklesen: 0,
+      sozlesmeBaslangic: b.tarih,
+      sozlesmeSureAy: 24,
     });
 
     // İlk stok: sözleşmedeki ilk sipariş adetleri sevkiyat olarak işlenir (seri no sonradan girilebilir)
@@ -177,9 +187,11 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
     const olay = { metin: `Bayi lansmanı · ${b.bolge}`, zaman: "Bugün · Bayi ağı", tur: "siparis" as const };
     const mevcut = await musteriBulAdla(b.sirket);
     if (mevcut) {
-      mevcut.segment = "bayi";
-      mevcut.durum = "Aktif bayi";
-      mevcut.olaylar.unshift(olay);
+      await musteriyiGuncelle(mevcut.id, (m) => {
+        m.segment = "bayi";
+        m.durum = "Aktif bayi";
+        m.olaylar.unshift(olay);
+      });
       musteri = { id: mevcut.id, ad: mevcut.ad, yeni: false };
     } else {
       const yeni = {
@@ -212,6 +224,7 @@ export async function asamaIlerlet(id: string): Promise<IlerletmeSonucu> {
 export type GorusmeFormDurumu = { hata?: string; gorusme?: Basvuru["gorusme"]; id?: string; zaman?: number };
 
 export async function gorusmeKaydet(_onceki: GorusmeFormDurumu, form: FormData): Promise<GorusmeFormDurumu> {
+  await oturumGerekli();
   const metin = metinAl(form);
   const id = metin("id");
   const tarih = metin("tarih");

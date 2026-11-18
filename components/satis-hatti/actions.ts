@@ -1,13 +1,17 @@
 "use server";
 // Satış Hattı: kaydetme ve güncelleme (Server Actions)
+import { oturumGerekli } from "@/lib/oturum";
 import { revalidatePath } from "next/cache";
-import { musteriBulAdla, musteriEkle, type Musteri, type Plan, type Segment } from "@/components/musteriler/queries";
+import { musteriBulAdla, musteriEkle, musteriyiGuncelle, type Musteri, type Plan, type Segment } from "@/components/musteriler/queries";
 import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { LISANS_SECENEKLERI, icerikCoz, icerikYaz, type LisansSecenegi } from "./urun-secimi";
 import { firsattanSiparisAc, type Kalem } from "@/components/siparisler/queries";
 import { telefonNormalize } from "@/components/whatsapp/telefon";
 import { whatsappMesajiIsle } from "@/components/whatsapp/isle";
-import { ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, firsatAsamasiDepo, firsatKaydetDepo, type Asama, type Firsat, type KayipBilgisi, type Kaynak } from "./queries";
+import {
+  ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, firsatAsamasiDepo, firsatKaydetDepo, firsatKazanciIsaretle, firsatMusteriBagla, firsatSirasiDepo,
+  type Asama, type Firsat, type KayipBilgisi, type Kaynak,
+} from "./queries";
 
 const ULKE_KODU: Record<string, string> = {
   TR: "Türkiye", DE: "Almanya", ES: "İspanya", FR: "Fransa", PL: "Polonya", SE: "İsveç",
@@ -35,22 +39,16 @@ function segmentBul(f: Firsat): Segment {
   return "servis";
 }
 
-// Aynı fırsat Kazanıldı'ya ikinci kez sürüklenirse müşteriye tekrar işlenmesin.
-const g = globalThis as { __embedraKazanilanlar?: Set<string> };
-const ISLENENLER = (g.__embedraKazanilanlar ??= new Set());
-
 export type AsamaSonucu = { musteri?: { id: string; ad: string; yeni: boolean; siparisNo?: string } };
 
 /** kalemler: teklif kabulünde siparişe teklifteki kalemler aynen aktarılır (verilmezse kart içeriğinden okunur) */
 export async function firsatAsamasiGuncelle(firsat: Firsat, asama: Asama, kayip?: KayipBilgisi, kalemler?: Kalem[]): Promise<AsamaSonucu> {
+  await oturumGerekli();
   if (!ASAMALAR.includes(asama)) throw new Error("Geçersiz aşama");
   if (asama === "kaybedildi") {
     if (!kayip || !KAYIP_NEDENLERI.includes(kayip.neden)) throw new Error("Kayıp nedeni seçin");
     if (kayip.neden === "Diğer" && !kayip.aciklama?.trim()) throw new Error("Diğer seçildiyse sebebi yazın");
   }
-  // TODO: Supabase bağlanınca:
-  // await supabase.from("deals").update({ stage: asama, lost_reason: kayip?.neden ?? null, lost_note: kayip?.aciklama ?? null }).eq("id", firsat.id);
-
   await firsatAsamasiDepo(firsat.id, asama, kayip);
   revalidatePath("/pazarlama"); // kampanya başına "satışa dönen" sayısı
   revalidatePath("/satis-hatti");
@@ -70,16 +68,19 @@ async function siparisAc(firsat: Firsat, musteri: { id: string; ulke: string }, 
 
 /** Kazanılan fırsatın firmasını müşterilere ekler; zaten müşteriyse kaydına işler. Ürünleri belliyse sipariş açar. */
 async function kazanilinca(firsat: Firsat, kalemler?: Kalem[]): Promise<AsamaSonucu> {
-  if (ISLENENLER.has(firsat.id)) return {};
-  ISLENENLER.add(firsat.id);
+  // Aynı fırsat Kazanıldı'ya ikinci kez sürüklenirse müşteriye tekrar işlenmesin (satis_hatti.f_kazanc_islendi)
+  if (!(await firsatKazanciIsaretle(firsat.id))) return {};
 
   const olay = { metin: `Fırsat kazanıldı · ${firsat.icerik}`, zaman: "Bugün · Satış hattı", tur: "siparis" as const };
   const mevcut = await musteriBulAdla(firsat.firma);
 
   if (mevcut) {
-    mevcut.olaylar.unshift(olay);
-    mevcut.toplamDeger = (mevcut.toplamDeger ?? 0) + firsat.tutar;
-    mevcut.sonTemas = "Bugün";
+    await musteriyiGuncelle(mevcut.id, (m) => {
+      m.olaylar.unshift(olay);
+      m.toplamDeger = (m.toplamDeger ?? 0) + firsat.tutar;
+      m.sonTemas = "Bugün";
+    });
+    await firsatMusteriBagla(firsat.id, mevcut.id);
     revalidatePath("/musteriler");
     revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
     return { musteri: { id: mevcut.id, ad: mevcut.ad, yeni: false, siparisNo: await siparisAc(firsat, mevcut, kalemler) } };
@@ -104,14 +105,16 @@ async function kazanilinca(firsat: Firsat, kalemler?: Kalem[]): Promise<AsamaSon
     olaylar: [olay, { metin: `Satış hattından müşteriye dönüştü (kaynak: ${firsat.kaynak})`, zaman: "Bugün", tur: "not" }],
   };
   await musteriEkle(musteri);
+  await firsatMusteriBagla(firsat.id, musteri.id);
   revalidatePath("/musteriler");
-    revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
+  revalidatePath("/satis-hatti"); // toast'taki "Müşteriyi aç" penceresi yeni kaydı görsün
   return { musteri: { id: musteri.id, ad: musteri.ad, yeni: true, siparisNo: await siparisAc(firsat, musteri, kalemler) } };
 }
 
 export type FirsatFormDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; zaman?: number } & AsamaSonucu;
 
 export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): Promise<FirsatFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const firma = metin("firma");
   const tutarMetni = metin("tutar");
@@ -163,7 +166,7 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
     telefon: telefon || undefined,
   };
 
-  // TODO: Supabase bağlanınca: yeni ise insert, id varsa update (aşama ve kayıp nedeni değişmez).
+  // Yeni ise eklenir (gerçek id firsat.id'ye yazılır), id varsa güncellenir (aşama ve kayıp nedeni değişmez)
   await firsatKaydetDepo(firsat);
   revalidatePath("/satis-hatti");
   revalidatePath("/pazarlama");
@@ -171,10 +174,18 @@ export async function firsatKaydet(_onceki: FirsatFormDurumu, form: FormData): P
   return { firsat, zaman: Date.now(), ...(firsat.asama === "kazanildi" ? await kazanilinca(firsat) : {}) };
 }
 
+/** Kanban'da aynı sütun içinde sürükleme / klavyeyle kaydırma: sütunun yeni sırası (satis_hatti.f_sira) */
+export async function firsatSirasiKaydet(idler: string[]) {
+  await oturumGerekli();
+  await firsatSirasiDepo(idler.filter((id) => typeof id === "string").slice(0, 500));
+  revalidatePath("/satis-hatti");
+}
+
 export type SimulasyonDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; yeni?: boolean; zaman?: number };
 
 /** Demo: Meta webhook'u gelmiş gibi WhatsApp mesajı işler (webhook'la aynı fonksiyon) */
 export async function whatsappSimuleEt(_o: SimulasyonDurumu, form: FormData): Promise<SimulasyonDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const telefon = telefonNormalize(metin("telefon"));
   const mesaj = metin("mesaj");

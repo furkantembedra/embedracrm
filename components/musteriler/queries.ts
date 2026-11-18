@@ -1,7 +1,10 @@
-// Müşteriler: veri okuma. Şimdilik demo veri döner;
-// Supabase bağlanınca fonksiyonların içini supabase.from("customers")... ile değiştirin.
+// Müşteriler: veri okuma ve yazma (Supabase).
+// Tablolar: musteri, musteri_yetkilileri (y_sira 0 = birincil), iletisim_izinleri (yetkili + kanal),
+// musteri_olaylari (zaman çizelgesi). Plan / lisans bitişi / cihazlar cihazlar tablosundan, açık talep sayısı
+// destek_talepleri'nden türetilir.
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CihazModeli } from "@/lib/urunler";
-import { getCihazlar } from "@/components/cihaz-lisans/queries";
+import { db, sonuc, yerelZaman } from "@/lib/supabase/db";
 
 export type Segment = "servis" | "muhendislik" | "egitim" | "bayi";
 export type Plan = "Basic" | "Pro" | "Pro+" | "Lead";
@@ -9,12 +12,16 @@ export type CihazDurumu = "Lisans aktif" | "Süresi doluyor" | "Serviste" | "Lis
 export type OlayTuru = "siparis" | "destek" | "demo" | "teklif" | "arama" | "not";
 
 export type Cihaz = { seriNo: string; model: CihazModeli; firmware: string; durum: CihazDurumu };
-export type Olay = { metin: string; zaman: string; tur: OlayTuru };
+/** zaman: "Bugün 11:24 · Sipariş" / "28 Eki · Online" / "6 Kas 2025". _id: musteri_olaylari.id (veritabanından gelenlerde dolu) */
+export type Olay = { metin: string; zaman: string; tur: OlayTuru; _id?: number };
 
 import { type IzinKanali, type IzinKaydi } from "./izin";
 export * from "./izin";
+// İstemci bileşenlerinin de kullandığı sabit ortak.ts'te durur (bu dosya sunucu koduna bağlı); buradan da dışa açılır.
+export { SEGMENT_ADI } from "./ortak";
 
-/** Firmadaki iletişim kişisi. Boş alanlar "" olarak tutulur. İlk sıradaki birincil yetkilidir. */
+/** Firmadaki iletişim kişisi. Boş alanlar "" olarak tutulur. İlk sıradaki birincil yetkilidir.
+ *  id: musteri_yetkilileri.id (yeni eklenen kişide kod geçici bir id verir, kayıttan sonra gerçek id yazılır) */
 export type Yetkili = { id: string; ad: string; unvan: string; telefon: string; eposta: string; izinler?: Partial<Record<IzinKanali, IzinKaydi>> };
 
 export type Musteri = {
@@ -23,188 +30,181 @@ export type Musteri = {
   sehir: string;
   ulke: string;
   segment: Segment;
-  plan: Plan;
-  lisansBitis: string | null; // "2027-03-14"
+  plan: Plan; // türetilir: cihazların en geç bitişli geçerli lisansı (cihazı yoksa Lead)
+  lisansBitis: string | null; // "2027-03-14" (türetilir)
   toplamDeger: number | null; // TL
-  sonTemas: string;
+  sonTemas: string; // "Bugün" / "30 Eki"
   durum: string;
   yetkililer: Yetkili[]; // ilk sıradaki birincil yetkili (Ara / WhatsApp / E-posta düğmeleri)
   vergiNo: string; // boşsa ""
-  acikTalep: number;
+  acikTalep: number; // türetilir: çözülmemiş destek talepleri
   /** @deprecated izinler artık yetkili ve kanal bazında: Yetkili.izinler */
   duyuruIzni?: boolean;
-  cihazlar: Cihaz[];
-  olaylar: Olay[];
+  cihazlar: Cihaz[]; // türetilir: cihazlar.musteri_id
+  olaylar: Olay[]; // yeniden eskiye
 };
 
-export const SEGMENT_ADI: Record<Segment, string> = {
-  servis: "Servis",
-  muhendislik: "Mühendislik",
-  egitim: "Eğitim",
-  bayi: "Bayi",
+/* ---------- Tarih yardımcıları (sunucunun yerel saati, yerelZaman ile aynı) ---------- */
+
+const AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const iki = (n: number) => String(n).padStart(2, "0");
+
+/** Yerel tarih "2026-11-06" */
+function bugunIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${iki(d.getMonth() + 1)}-${iki(d.getDate())}`;
+}
+
+/** "2026-10-28" → "28 Eki" (başka yılsa "6 Kas 2025") */
+function gunAyYaz(tarih: string) {
+  const [y, a, g] = tarih.split("-").map(Number);
+  return `${g} ${AYLAR[a - 1]}${String(y) === bugunIso().slice(0, 4) ? "" : ` ${y}`}`;
+}
+
+/** created_at + o_kaynak → "Bugün 11:24 · Sipariş" / "28 Eki · Online" / "6 Kas 2025" */
+function olayZamani(createdAt: string, kaynak: string | null) {
+  const yerel = yerelZaman(createdAt); // "2026-11-04T09:02"
+  const gun = yerel.slice(0, 10);
+  const bas = gun === bugunIso() ? `Bugün ${yerel.slice(11, 16)}` : gunAyYaz(gun);
+  return kaynak ? `${bas} · ${kaynak}` : bas;
+}
+
+/** Kodun yazdığı zaman dizesi → created_at + o_kaynak.
+ *  "Bugün", "Bugün · X", "Bugün 11:24 · X" → şimdi; "06.11.2026 · X" → o günün öğlesi. */
+function olayZamaniCoz(zaman: string): { created_at: string; o_kaynak: string | null } {
+  const i = zaman.indexOf(" · ");
+  const bas = (i >= 0 ? zaman.slice(0, i) : zaman).trim();
+  const kaynak = i >= 0 ? zaman.slice(i + 3).trim() || null : null;
+  const t = bas.match(/^(\d{2})\.(\d{2})\.(\d{4})$/) ?? bas.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (t && bas.includes(".")) return { created_at: new Date(Number(t[3]), Number(t[2]) - 1, Number(t[1]), 12).toISOString(), o_kaynak: kaynak };
+  if (t) return { created_at: new Date(Number(t[1]), Number(t[2]) - 1, Number(t[3]), 12).toISOString(), o_kaynak: kaynak };
+  return { created_at: new Date().toISOString(), o_kaynak: kaynak };
+}
+
+/** m_son_temas → "Bugün" / "30 Eki" */
+const sonTemasYaz = (tarih: string | null) => (!tarih ? "—" : tarih === bugunIso() ? "Bugün" : gunAyYaz(tarih));
+/** "Bugün" / "2026-11-06" → date; tanınmayan biçim undefined (yazılmaz) */
+const sonTemasCoz = (v: string) => (v === "Bugün" ? bugunIso() : /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+
+/* ---------- Satır ↔ domain ---------- */
+
+type IzinSatiri = { i_kanal: IzinKanali; i_verildi: boolean; i_tarih: string; i_kaynak: string; i_cekilme: string | null };
+type YetkiliSatiri = { id: number; y_ad: string; y_unvan: string; y_tel: string; y_eposta: string; y_sira: number; izinler: IzinSatiri[] };
+type OlaySatiri = { id: number; o_tur: OlayTuru; o_metin: string; o_kaynak: string | null; created_at: string };
+type MusteriCihazSatiri = { c_serino: string; c_model: CihazModeli; c_fw: string | null; c_durum: string; c_lisans_bit: string | null; plan: { l_paket: string } | null };
+type MusteriSatiri = {
+  id: number;
+  m_ad: string;
+  m_segment: Segment | null;
+  m_sehir: string | null;
+  m_ulke: string | null;
+  m_vergino: string | null;
+  m_durum: string;
+  m_toplam_deger: number | string | null;
+  m_son_temas: string | null;
+  yetkililer: YetkiliSatiri[];
+  olaylar: OlaySatiri[];
+  cihazlar: MusteriCihazSatiri[];
 };
 
-const DEMO: Musteri[] = [
-  {
-    id: "volant", ad: "Volant Lenkung Service GmbH", sehir: "Stuttgart", ulke: "Almanya", segment: "servis",
-    plan: "Pro+", lisansBitis: "2027-03-14", toplamDeger: 1_860_000, sonTemas: "Bugün", durum: "Aktif · VIP",
-    yetkililer: [
-      { id: "volant-1", ad: "Jonas Weber", unvan: "Servis müdürü", telefon: "+49 711 555 0142", eposta: "j.weber@volant-service.de" },
-      { id: "volant-2", ad: "Anna Schmidt", unvan: "Satın alma", telefon: "+49 711 555 0150", eposta: "a.schmidt@volant-service.de" },
-    ], vergiNo: "DE 284 117 903", acikTalep: 1,
-    cihazlar: [
-      { seriNo: "EO1-2402-0611", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
-      { seriNo: "EO1-2402-0612", model: "ONE", firmware: "v2.3.0", durum: "Lisans aktif" },
-    ],
-    olaylar: [
-      { metin: "2× ONE + Pro+ lisans siparişi", zaman: "Bugün 11:24 · Sipariş", tur: "siparis" },
-      { metin: "Destek #4821 açıldı · Flash sonrası ECU", zaman: "Bugün 09:02 · E-posta", tur: "destek" },
-      { metin: "Demo: Mercedes kolon EPS simülasyonu", zaman: "28 Eki · Online", tur: "demo" },
-      { metin: "Teklif EMB-2026-311 kabul edildi", zaman: "21 Eki", tur: "teklif" },
-    ],
-  },
-  {
-    id: "akdeniz", ad: "Akdeniz Direksiyon Servisi", sehir: "Antalya", ulke: "Türkiye", segment: "servis",
-    plan: "Pro", lisansBitis: "2026-11-06", toplamDeger: 248_000, sonTemas: "30 Eki", durum: "Yenileme riski",
-    yetkililer: [{ id: "akdeniz-1", ad: "Hakan Yıldız", unvan: "", telefon: "+90 532 410 22 18", eposta: "hakan@akdenizdireksiyon.com" }], vergiNo: "0612 448 2190", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2309-0142", model: "ONE", firmware: "v2.2.4", durum: "Süresi doluyor" }],
-    olaylar: [
-      { metin: "Lisans yenilemesi için arandı", zaman: "30 Eki · Telefon", tur: "arama" },
-      { metin: "Fiyat sorusu: Pro → Pro+ geçiş", zaman: "22 Eki · WhatsApp", tur: "not" },
-      { metin: "Lisans aktivasyonu", zaman: "6 Kas 2025", tur: "siparis" },
-    ],
-  },
-  {
-    id: "kaya", ad: "Kaya Oto Elektronik", sehir: "İzmir", ulke: "Türkiye", segment: "servis",
-    plan: "Pro", lisansBitis: "2027-06-02", toplamDeger: 412_000, sonTemas: "Bugün", durum: "Aktif",
-    yetkililer: [{ id: "kaya-1", ad: "Serkan Kaya", unvan: "", telefon: "+90 533 290 41 77", eposta: "serkan@kayaotoelektronik.com" }], vergiNo: "5310 772 0184", acikTalep: 1,
-    cihazlar: [
-      { seriNo: "EO1-2406-0455", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
-      { seriNo: "EO1-2406-0456", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
-    ],
-    olaylar: [
-      { metin: "Destek #4817 · K-Line bağlantı hatası", zaman: "Bugün 08:40 · Telefon", tur: "destek" },
-      { metin: "Eğitim videosu paylaşıldı: Flash adımları", zaman: "25 Eki", tur: "not" },
-    ],
-  },
-  {
-    id: "polska", ad: "Polska EPS Serwis", sehir: "Poznań", ulke: "Polonya", segment: "bayi",
-    plan: "Pro+", lisansBitis: "2027-01-30", toplamDeger: 2_310_000, sonTemas: "Bugün", durum: "Bayi adayı",
-    yetkililer: [{ id: "polska-1", ad: "Marta Nowak", unvan: "", telefon: "+48 61 555 0198", eposta: "marta@polskaeps.pl" }], vergiNo: "PL 7792 4410 22", acikTalep: 2,
-    cihazlar: [
-      { seriNo: "EO1-2404-0390", model: "ONE", firmware: "v2.4.0", durum: "Lisans aktif" },
-      { seriNo: "EO1-2404-0391", model: "ONE", firmware: "v2.4.0", durum: "Lisans aktif" },
-    ],
-    olaylar: [
-      { metin: "Distribütörlük başvurusu değerlendirmede", zaman: "Bugün · Bayi kaydı", tur: "teklif" },
-      { metin: "Destek #4819 · Aktivasyon kodu", zaman: "Bugün 10:15", tur: "destek" },
-    ],
-  },
-  {
-    id: "ege", ad: "Ege Meslek Yüksekokulu", sehir: "Manisa", ulke: "Türkiye", segment: "egitim",
-    plan: "Pro", lisansBitis: "2026-11-19", toplamDeger: 520_000, sonTemas: "27 Eki", durum: "Yenileme yakın",
-    yetkililer: [{ id: "ege-1", ad: "Dr. Ayşe Demir", unvan: "", telefon: "+90 236 555 08 40", eposta: "ayse.demir@egemyo.edu.tr" }], vergiNo: "", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2311-0322", model: "ONE", firmware: "v2.3.2", durum: "Süresi doluyor" }],
-    olaylar: [{ metin: "Eğitim lisansı teklif talebi (4 cihaz)", zaman: "27 Eki · E-posta", tur: "teklif" }],
-  },
-  {
-    id: "nordic", ad: "Nordic Steering AB", sehir: "Göteborg", ulke: "İsveç", segment: "muhendislik",
-    plan: "Pro+", lisansBitis: "2026-11-28", toplamDeger: 690_000, sonTemas: "19 Eki", durum: "Aktif",
-    yetkililer: [{ id: "nordic-1", ad: "Erik Lindqvist", unvan: "", telefon: "+46 31 555 0170", eposta: "erik@nordicsteering.se" }], vergiNo: "SE 5590 1144 01", acikTalep: 0,
-    cihazlar: [
-      { seriNo: "EO1-2312-0390", model: "ONE", firmware: "v2.4.1", durum: "Lisans aktif" },
-      { seriNo: "EO1-2312-0412", model: "ONE", firmware: "v2.4.1", durum: "Serviste" },
-    ],
-    olaylar: [{ metin: "FlexRay test raporu paylaşıldı", zaman: "19 Eki", tur: "not" }],
-  },
-  {
-    id: "baskent", ad: "Başkent Rot & Direksiyon", sehir: "Ankara", ulke: "Türkiye", segment: "servis",
-    plan: "Basic", lisansBitis: "2027-04-11", toplamDeger: 164_000, sonTemas: "31 Eki", durum: "Yükseltme adayı",
-    yetkililer: [{ id: "baskent-1", ad: "Mustafa Aydın", unvan: "", telefon: "+90 312 555 61 20", eposta: "info@baskentrot.com.tr" }], vergiNo: "1450 228 9031", acikTalep: 1,
-    cihazlar: [{ seriNo: "EO1-2404-0418", model: "ONE Lite", firmware: "v2.4.1", durum: "Lisans aktif" }],
-    olaylar: [{ metin: "Yeni model talebi · Hyundai Tucson", zaman: "31 Eki · Telefon", tur: "destek" }],
-  },
-  {
-    id: "iberia", ad: "Iberia Dirección SL", sehir: "Valencia", ulke: "İspanya", segment: "servis",
-    plan: "Lead", lisansBitis: null, toplamDeger: null, sonTemas: "Bugün", durum: "Demo planlı",
-    yetkililer: [{ id: "iberia-1", ad: "Lucía Martín", unvan: "", telefon: "+34 96 555 0123", eposta: "lucia@iberiadireccion.es" }], vergiNo: "ES B9844 1202", acikTalep: 0,
-    cihazlar: [],
-    olaylar: [{ metin: "Demo tarihi girildi · 5 Kas 14:00", zaman: "Bugün · Satış hattı", tur: "demo" }],
-  },
-  {
-    id: "bursa", ad: "Bursa ECU Lab", sehir: "Bursa", ulke: "Türkiye", segment: "muhendislik",
-    plan: "Pro+", lisansBitis: "2026-11-11", toplamDeger: 356_000, sonTemas: "1 Kas", durum: "Yenileme yakın",
-    yetkililer: [{ id: "bursa-1", ad: "Burak Şen", unvan: "", telefon: "+90 224 555 30 14", eposta: "burak@bursaeculab.com" }], vergiNo: "1880 554 2071", acikTalep: 0,
-    cihazlar: [{ seriNo: "EO1-2310-0218", model: "ONE", firmware: "v2.4.1", durum: "Süresi doluyor" }],
-    olaylar: [{ metin: "Yenileme teklifi gönderildi", zaman: "1 Kas", tur: "teklif" }],
-  },
-];
+// musteri ↔ cihazlar arasında destek_talepleri üzerinden ikinci bir yol olduğu için yabancı anahtar adı açıkça veriliyor
+const MUSTERI_SECIMI = `id, m_ad, m_segment, m_sehir, m_ulke, m_vergino, m_durum, m_toplam_deger, m_son_temas,
+  yetkililer:musteri_yetkilileri!musteri_yetkilileri_musteri_id_fkey(id, y_ad, y_unvan, y_tel, y_eposta, y_sira,
+    izinler:iletisim_izinleri!iletisim_izinleri_yetkili_id_fkey(i_kanal, i_verildi, i_tarih, i_kaynak, i_cekilme)),
+  olaylar:musteri_olaylari!musteri_olaylari_musteri_id_fkey(id, o_tur, o_metin, o_kaynak, created_at),
+  cihazlar:cihazlar!cihazlar_musteri_id_fkey(c_serino, c_model, c_fw, c_durum, c_lisans_bit, plan:lisans_planlari!cihazlar_plan_id_fkey(l_paket))`;
 
-// Demo depo: sunucu belleğinde tutulur, sayfalar arasında paylaşılır (sunucu yeniden başlayınca sıfırlanır).
-// globalThis'te durur ki geliştirmede dosya kaydedilince (HMR) eklenenler kaybolmasın.
-const g = globalThis as { __embedraMusteriler?: Musteri[] };
-const DEPO = (g.__embedraMusteriler ??= [...DEMO]);
-// Model alanı sonradan eklendi: belleğe daha önce alınmış müşteri cihazlarına modeli işle
-// İletişim izinleri sonradan eklendi: demo müşterilerin birincil yetkilisine izin işlenir,
-// eski firma bazlı "duyuruIzni" alanı yetkili + kanal bazına taşınır (sunucu yeniden başlatılmadan)
-const DEMO_IZIN: Record<string, { kanallar: IzinKanali[]; tarih: string; kaynak: string }> = {
-  volant: { kanallar: ["eposta", "whatsapp"], tarih: "2026-03-14", kaynak: "Lisans aktivasyonu" },
-  akdeniz: { kanallar: ["whatsapp", "arama"], tarih: "2025-11-06", kaynak: "Telefon görüşmesi" },
-  kaya: { kanallar: ["eposta", "whatsapp", "sms"], tarih: "2026-06-02", kaynak: "Lisans aktivasyonu" },
-  ege: { kanallar: ["eposta"], tarih: "2025-11-19", kaynak: "Fuar formu" },
-  bursa: { kanallar: ["eposta", "whatsapp"], tarih: "2025-11-11", kaynak: "Web sitesi formu" },
-  baskent: { kanallar: ["whatsapp"], tarih: "2026-04-11", kaynak: "WhatsApp onayı" },
-  nordic: { kanallar: ["eposta"], tarih: "2025-11-28", kaynak: "Sipariş" },
-};
-for (const m of DEPO) {
-  const ilk = m.yetkililer?.[0];
-  if (!ilk || ilk.izinler) continue;
-  const d = DEMO_IZIN[m.id] ?? (m.duyuruIzni ? { kanallar: ["eposta"] as IzinKanali[], tarih: "2026-11-01", kaynak: "Müşteri formu" } : null);
-  ilk.izinler = d ? Object.fromEntries(d.kanallar.map((k) => [k, { verildi: true, tarih: d.tarih, kaynak: d.kaynak, cekilme: null }])) : {};
+const CIHAZ_DURUMU: Record<string, CihazDurumu> = { aktif: "Lisans aktif", bitiyor: "Süresi doluyor", serviste: "Serviste", lisanssiz: "Lisanssız", stokta: "Lisanssız" };
+const LISANS_PLANLARI = ["Basic", "Pro", "Pro+"];
+
+/** En geç bitişli geçerli lisansın planı; geçerli lisans yoksa en son bitenin planı; cihazı yoksa Lead */
+function planVeBitis(cihazlar: MusteriCihazSatiri[]): { plan: Plan; lisansBitis: string | null } {
+  if (!cihazlar.length) return { plan: "Lead", lisansBitis: null };
+  const bugun = bugunIso();
+  const lisansli = cihazlar
+    .filter((c) => c.plan && LISANS_PLANLARI.includes(c.plan.l_paket) && c.c_lisans_bit)
+    .sort((a, b) => (a.c_lisans_bit! < b.c_lisans_bit! ? 1 : -1));
+  const secilen = lisansli.find((c) => c.c_lisans_bit! >= bugun) ?? lisansli[0];
+  if (secilen) return { plan: secilen.plan!.l_paket as Plan, lisansBitis: secilen.c_lisans_bit };
+  const planli = cihazlar.find((c) => c.plan && LISANS_PLANLARI.includes(c.plan.l_paket));
+  return { plan: (planli?.plan?.l_paket as Plan) ?? "Basic", lisansBitis: null };
 }
 
-for (const m of DEPO) {
-  for (const c of m.cihazlar) {
-    if (!c.model) c.model = DEMO.flatMap((d) => d.cihazlar).find((d) => d.seriNo === c.seriNo)?.model ?? "ONE";
-  }
+function satirdanMusteri(r: MusteriSatiri, acikTalep: number): Musteri {
+  const yetkililer = [...(r.yetkililer ?? [])]
+    .sort((a, b) => a.y_sira - b.y_sira || a.id - b.id)
+    .map((y) => ({
+      id: String(y.id),
+      ad: y.y_ad,
+      unvan: y.y_unvan,
+      telefon: y.y_tel,
+      eposta: y.y_eposta,
+      izinler: Object.fromEntries(
+        (y.izinler ?? []).map((i) => [i.i_kanal, { verildi: i.i_verildi, tarih: i.i_tarih, kaynak: i.i_kaynak, cekilme: i.i_cekilme }]),
+      ) as Partial<Record<IzinKanali, IzinKaydi>>,
+    }));
+  const olaylar = [...(r.olaylar ?? [])]
+    .sort((a, b) => (a.created_at === b.created_at ? b.id - a.id : a.created_at < b.created_at ? 1 : -1))
+    .map((o) => ({ metin: o.o_metin, zaman: olayZamani(o.created_at, o.o_kaynak), tur: o.o_tur, _id: o.id }));
+  const cihazlar = [...(r.cihazlar ?? [])]
+    .sort((a, b) => a.c_serino.localeCompare(b.c_serino))
+    .map((c) => ({ seriNo: c.c_serino, model: c.c_model, firmware: c.c_fw ?? "—", durum: CIHAZ_DURUMU[c.c_durum] ?? "Lisanssız" }));
+  return {
+    id: String(r.id),
+    ad: r.m_ad,
+    sehir: r.m_sehir ?? "—",
+    ulke: r.m_ulke ?? "—",
+    segment: r.m_segment ?? "servis",
+    ...planVeBitis(r.cihazlar ?? []),
+    toplamDeger: r.m_toplam_deger == null ? null : Number(r.m_toplam_deger),
+    sonTemas: sonTemasYaz(r.m_son_temas),
+    durum: r.m_durum,
+    yetkililer,
+    vergiNo: r.m_vergino ?? "",
+    acikTalep,
+    cihazlar,
+    olaylar,
+  };
 }
 
-// Bellekte eski yapıyla (tek yetkili / telefon / eposta) kalmış kayıtları yeni yapıya çevirir.
-// Geliştirmede HMR globalThis'i silmediği için gerekli; Supabase'e geçince kaldırabilirsiniz.
-for (const m of DEPO as (Musteri & { yetkili?: string; telefon?: string; eposta?: string })[]) {
-  if (Array.isArray(m.yetkililer)) continue;
-  const dolu = (v?: string) => (v && v !== "—" ? v : "");
-  m.yetkililer = dolu(m.yetkili) || dolu(m.telefon) || dolu(m.eposta)
-    ? [{ id: `${m.id}-1`, ad: dolu(m.yetkili) || m.ad, unvan: "", telefon: dolu(m.telefon), eposta: dolu(m.eposta) }]
-    : [];
-  if (m.vergiNo === "—") m.vergiNo = "";
-  delete m.yetkili;
-  delete m.telefon;
-  delete m.eposta;
+/** musteri_id → çözülmemiş destek talebi sayısı */
+async function acikTalepSayilari(s: SupabaseClient, musteriId?: number): Promise<Map<number, number>> {
+  let q = s.from("destek_talepleri").select("musteri_id").neq("t_durum", "cozuldu").not("musteri_id", "is", null);
+  if (musteriId != null) q = q.eq("musteri_id", musteriId);
+  const rows = sonuc(await q, "Açık destek talepleri okunurken") as { musteri_id: number }[];
+  const say = new Map<number, number>();
+  for (const r of rows) say.set(r.musteri_id, (say.get(r.musteri_id) ?? 0) + 1);
+  return say;
 }
 
-const CIHAZ_DURUMU = { aktif: "Lisans aktif", bitiyor: "Süresi doluyor", serviste: "Serviste", lisanssiz: "Lisanssız", stokta: "Lisanssız" } as const; // stokta: müşteri cihazı olamaz, tip için
+const sayiKimlik = (id: string) => (/^\d+$/.test(id) ? Number(id) : null);
 
-/** Müşterinin cihazları: cihaz kayıtlarındakiler (güncel lisans/model) + yalnızca müşteri kaydında olanlar.
- *  TODO: Supabase'de devices.customer_id ile tek sorguda gelecek. */
-async function cihazlarlaBirlestir(liste: Musteri[]): Promise<Musteri[]> {
-  const kayitlar = await getCihazlar();
-  return liste.map((m) => {
-    const kayittan: Cihaz[] = kayitlar
-      .filter((c) => c.musteriId === m.id)
-      .map((c) => ({ seriNo: c.seriNo, model: c.model, firmware: c.firmware, durum: CIHAZ_DURUMU[c.durum] }));
-    const sadeceMusteride = m.cihazlar.filter((c) => !kayittan.some((k) => k.seriNo === c.seriNo));
-    return { ...m, cihazlar: [...kayittan, ...sadeceMusteride] };
-  });
+async function musteriOku(s: SupabaseClient, id: string): Promise<Musteri | null> {
+  const no = sayiKimlik(id);
+  if (no == null) return null;
+  const [r, talepler] = await Promise.all([
+    s.from("musteri").select(MUSTERI_SECIMI).eq("id", no).maybeSingle(),
+    acikTalepSayilari(s, no),
+  ]);
+  const satir = sonuc(r, "Müşteri okunurken") as unknown as MusteriSatiri | null;
+  return satir ? satirdanMusteri(satir, talepler.get(satir.id) ?? 0) : null;
 }
+
+/* ---------- Okuma ---------- */
 
 export async function getMusteriler(): Promise<Musteri[]> {
-  return cihazlarlaBirlestir(DEPO);
+  const s = await db();
+  const [r, talepler] = await Promise.all([
+    // Yeni eklenen önde; aynı anda eklenenler (seed) id sırasıyla
+    s.from("musteri").select(MUSTERI_SECIMI).order("created_at", { ascending: false }).order("id"),
+    acikTalepSayilari(s),
+  ]);
+  const rows = sonuc(r, "Müşteriler okunurken") as unknown as MusteriSatiri[];
+  return rows.map((m) => satirdanMusteri(m, talepler.get(m.id) ?? 0));
 }
 
 export async function getMusteri(id: string): Promise<Musteri | null> {
-  const m = DEPO.find((x) => x.id === id);
-  return m ? (await cihazlarlaBirlestir([m]))[0] : null;
+  return musteriOku(await db(), id);
 }
 
 /** "Volant Lenkung Service" ile "Volant Lenkung Service GmbH" aynı firma sayılır. */
@@ -212,18 +212,121 @@ export async function musteriBulAdla(ad: string): Promise<Musteri | null> {
   const n = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const aranan = n(ad);
   if (!aranan) return null;
-  return DEPO.find((m) => n(m.ad) === aranan || n(m.ad).startsWith(aranan + " ") || aranan.startsWith(n(m.ad) + " ")) ?? null;
+  const s = await db();
+  const rows = sonuc(await s.from("musteri").select("id, m_ad").order("created_at", { ascending: false }).order("id"), "Müşteri adları okunurken") as { id: number; m_ad: string }[];
+  const bulunan = rows.find((m) => n(m.m_ad) === aranan || n(m.m_ad).startsWith(aranan + " ") || aranan.startsWith(n(m.m_ad) + " "));
+  return bulunan ? musteriOku(s, String(bulunan.id)) : null;
 }
 
-/** Kaydı yerinde günceller (getMusteri kopya döndürür). Yalnızca actions dosyalarından çağrılır. */
+/* ---------- Yazma (yalnızca actions / sunucu kodundan çağrılır) ---------- */
+
+const yetkiliSatiri = (y: Yetkili, musteriId: number, sira: number) => ({
+  musteri_id: musteriId, y_ad: y.ad, y_unvan: y.unvan ?? "", y_tel: y.telefon ?? "", y_eposta: y.eposta ?? "", y_sira: sira,
+});
+
+const izinSatiri = (yetkiliId: number, kanal: string, i: IzinKaydi) => ({
+  yetkili_id: yetkiliId, i_kanal: kanal, i_verildi: i.verildi, i_tarih: i.tarih, i_kaynak: i.kaynak, i_cekilme: i.cekilme,
+});
+
+/** Yeni yetkilileri ekler; gerçek id'yi geçirilen nesnenin üstüne yazar ve izinlerini kaydeder */
+async function yetkiliEkle(s: SupabaseClient, musteriId: number, y: Yetkili, sira: number) {
+  const { id } = sonuc(await s.from("musteri_yetkilileri").insert(yetkiliSatiri(y, musteriId, sira)).select("id").single(), "Yetkili kaydedilirken") as { id: number };
+  y.id = String(id);
+  const izinler = Object.entries(y.izinler ?? {}).filter(([, i]) => i).map(([k, i]) => izinSatiri(id, k, i!));
+  if (izinler.length) sonuc(await s.from("iletisim_izinleri").insert(izinler), "İletişim izinleri kaydedilirken");
+}
+
+/** Kodun eklediği (_id'siz) olayları ekler. Liste yeniden eskiye olduğu için sondan başa eklenir. */
+async function olaylariEkle(s: SupabaseClient, musteriId: number, olaylar: Olay[]) {
+  const yeni = olaylar.filter((o) => o._id == null).reverse();
+  for (const o of yeni) {
+    const satir = { musteri_id: musteriId, o_tur: o.tur, o_metin: o.metin, ...olayZamaniCoz(o.zaman) };
+    const r = await s.from("musteri_olaylari").insert(satir).select("id").single();
+    // Bayi oturumu olayı yazabilir ama okuyamaz (RLS): returning'li insert reddedilir, id'siz yeniden yazılır
+    if (r.error?.code === "42501") sonuc(await s.from("musteri_olaylari").insert(satir), "Müşteri olayı kaydedilirken");
+    else o._id = (sonuc(r, "Müşteri olayı kaydedilirken") as { id: number }).id;
+  }
+}
+
+/** Kaydı okur, geri çağırmayla değiştirir, farkı yazar ve güncel nesneyi döner.
+ *  Yazılanlar: ad, şehir, ülke, segment, durum, vergi no, toplam değer, son temas; yetkililer (ekleme / silme / sıra /
+ *  bilgi), iletişim izinleri, yeni olaylar. Türetilen alanlar (plan, lisansBitis, acikTalep, cihazlar) yazılmaz:
+ *  onlar cihaz ve destek kayıtlarından gelir. */
 export async function musteriyiGuncelle(id: string, degisiklik: (m: Musteri) => void): Promise<Musteri | null> {
-  const m = DEPO.find((x) => x.id === id);
-  if (m) degisiklik(m);
-  return m ?? null;
+  const s = await db();
+  const m = await musteriOku(s, id);
+  if (!m) return null;
+  const once = structuredClone(m);
+  degisiklik(m);
+  const no = Number(once.id);
+
+  const d: Record<string, unknown> = {};
+  if (m.ad !== once.ad) d.m_ad = m.ad;
+  if (m.sehir !== once.sehir) d.m_sehir = m.sehir;
+  if (m.ulke !== once.ulke) d.m_ulke = m.ulke;
+  if (m.segment !== once.segment) d.m_segment = m.segment;
+  if (m.durum !== once.durum) d.m_durum = m.durum;
+  if (m.vergiNo !== once.vergiNo) d.m_vergino = m.vergiNo || null;
+  if (m.toplamDeger !== once.toplamDeger) d.m_toplam_deger = m.toplamDeger;
+  const sonTemas = sonTemasCoz(m.sonTemas); // "Bugün" → bugünün tarihi
+  if (sonTemas && sonTemasYaz(sonTemas) !== once.sonTemas) d.m_son_temas = sonTemas;
+  if (Object.keys(d).length) sonuc(await s.from("musteri").update(d).eq("id", no), "Müşteri güncellenirken");
+
+  // Yetkililer
+  const eskiler = new Map(once.yetkililer.map((y) => [y.id, y]));
+  const kalanlar = new Set(m.yetkililer.map((y) => y.id));
+  const silinen = once.yetkililer.filter((y) => !kalanlar.has(y.id)).map((y) => Number(y.id));
+  if (silinen.length) sonuc(await s.from("musteri_yetkilileri").delete().in("id", silinen), "Yetkili silinirken");
+  for (const [sira, y] of m.yetkililer.entries()) {
+    const eski = eskiler.get(y.id);
+    if (!eski) {
+      await yetkiliEkle(s, no, y, sira);
+      continue;
+    }
+    const eskiSira = once.yetkililer.indexOf(eski);
+    if (eski.ad !== y.ad || eski.unvan !== y.unvan || eski.telefon !== y.telefon || eski.eposta !== y.eposta || eskiSira !== sira) {
+      sonuc(await s.from("musteri_yetkilileri").update(yetkiliSatiri(y, no, sira)).eq("id", Number(y.id)), "Yetkili güncellenirken");
+    }
+    // İzinler: değişen kanallar upsert (yetkili + kanal unique); kayıt silinmez, geri çekilme tarihiyle kalır
+    const degisen = Object.entries(y.izinler ?? {})
+      .filter(([k, i]) => i && JSON.stringify(i) !== JSON.stringify(eski.izinler?.[k as IzinKanali]))
+      .map(([k, i]) => izinSatiri(Number(y.id), k, i!));
+    if (degisen.length) sonuc(await s.from("iletisim_izinleri").upsert(degisen, { onConflict: "yetkili_id,i_kanal" }), "İletişim izinleri kaydedilirken");
+  }
+
+  // Olaylar: yeniler eklenir, listeden çıkarılanlar silinir
+  const kalanOlay = new Set(m.olaylar.map((o) => o._id).filter((x) => x != null));
+  const silinenOlay = once.olaylar.map((o) => o._id!).filter((x) => !kalanOlay.has(x));
+  if (silinenOlay.length) sonuc(await s.from("musteri_olaylari").delete().in("id", silinenOlay), "Müşteri olayı silinirken");
+  await olaylariEkle(s, no, m.olaylar);
+
+  m.id = once.id;
+  if (d.m_son_temas) m.sonTemas = sonTemasYaz(d.m_son_temas as string);
+  return m;
 }
 
-/** Yalnızca sunucu tarafındaki actions dosyalarından çağrılır. */
+/** Yeni müşteri: kayıt + yetkililer + izinler + olaylar. Veritabanının verdiği id'ler geçirilen nesnenin üstüne yazılır.
+ *  Not: plan / lisansBitis / cihazlar saklanmaz; müşterinin cihazı olunca cihaz kayıtlarından türetilir. */
 export async function musteriEkle(m: Musteri) {
-  DEPO.unshift(m);
-  // TODO: Supabase bağlanınca: await supabase.from("customers").insert({ ... });
+  const s = await db();
+  const { id } = sonuc(
+    await s
+      .from("musteri")
+      .insert({
+        m_ad: m.ad,
+        m_segment: m.segment,
+        m_sehir: m.sehir,
+        m_ulke: m.ulke,
+        m_vergino: m.vergiNo || null,
+        m_durum: m.durum,
+        m_toplam_deger: m.toplamDeger,
+        m_son_temas: sonTemasCoz(m.sonTemas) ?? null,
+      })
+      .select("id")
+      .single(),
+    "Müşteri kaydedilirken",
+  ) as { id: number };
+  m.id = String(id);
+  for (const [sira, y] of (m.yetkililer ?? []).entries()) await yetkiliEkle(s, id, y, sira);
+  await olaylariEkle(s, id, m.olaylar ?? []);
 }

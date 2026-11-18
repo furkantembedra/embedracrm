@@ -2,7 +2,8 @@
 import Card from "@/components/ui/card";
 import Chip from "@/components/ui/chip";
 import { sayi } from "@/lib/format";
-import { PLAN_ACIKLAMASI, type LisansPlani } from "./queries";
+import { PLAN_ACIKLAMASI } from "./ortak";
+import type { LisansPlani } from "./queries";
 import { PLAN_TONU } from "./ortak";
 
 export default function LisansPlanlari({ planlar }: { planlar: Record<LisansPlani, number> }) {

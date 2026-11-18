@@ -4,7 +4,8 @@
 import { Search } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { useBugun } from "@/lib/use-bugun";
-import { DURUM_ADI, type Talep, type TalepDurumu } from "./queries";
+import { type Talep, type TalepDurumu } from "./queries";
+import { DURUM_ADI } from "./sabitler";
 import { ONCELIK_TONU, zamanYaz } from "./ortak";
 
 const FILTRELER: TalepDurumu[] = ["yeni", "islemde", "beklemede", "cozuldu"];

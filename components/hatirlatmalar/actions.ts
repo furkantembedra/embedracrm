@@ -1,10 +1,11 @@
 "use server";
 // Hatırlatmalar (Server Actions). Sayfalar bunları tarayıcıdan çağırır: "şimdi" sunucu saatinden alınır,
 // böylece otomatik kurallar her açılışta güncel veriyle hesaplanır.
+import { oturumGerekli } from "@/lib/oturum";
 import { getEkip, type Kullanici } from "@/components/operasyon/queries";
 import { otomatikHatirlatmalar } from "./kurallar";
 import {
-  AKTIF_KULLANICI_ID, elleGuncelle, getElleHatirlatmalar, getOkunanlar, getOtoDurumlar, hatirlatmaEkleDepo, okunduIsaretle, otoDurumKaydet,
+  aktifKullaniciId, elleGuncelle, getElleHatirlatmalar, getOkunanlar, getOtoDurumlar, hatirlatmaEkleDepo, okunduIsaretle, otoDurumKaydet,
   type Hatirlatma, type KayitTuru,
 } from "./queries";
 
@@ -21,13 +22,14 @@ export type HatirlatmaVerisi = {
 };
 
 async function aktifKullanici() {
-  const ekip = await getEkip();
-  const k = ekip.find((x) => x.id === AKTIF_KULLANICI_ID) ?? ekip[0];
+  const [ekip, aktifId] = await Promise.all([getEkip(), aktifKullaniciId()]);
+  const k = ekip.find((x) => x.id === aktifId) ?? ekip[0];
   return { ekip, aktif: k };
 }
 
 /** Aktif kullanıcının görebildiği hatırlatmalar. Yönetici herkesinkini görür. */
 export async function hatirlatmalariGetir(): Promise<HatirlatmaVerisi> {
+  await oturumGerekli();
   const simdi = simdiYerel();
   const bugun = simdi.slice(0, 10);
   const { ekip, aktif } = await aktifKullanici();
@@ -51,6 +53,7 @@ export type HatirlatmaFormDurumu = { hatalar?: Record<string, string>; hatirlatm
 const KAYIT_TURLERI: KayitTuru[] = ["firsat", "teklif", "siparis", "musteri", "bayi", "rma", "stok", "cihaz", "destek"];
 
 export async function hatirlatmaEkle(_o: HatirlatmaFormDurumu, form: FormData): Promise<HatirlatmaFormDurumu> {
+  await oturumGerekli();
   const metin = (ad: string) => String(form.get(ad) ?? "").trim();
   const baslik = metin("baslik");
   const tarih = metin("tarih");
@@ -66,7 +69,7 @@ export async function hatirlatmaEkle(_o: HatirlatmaFormDurumu, form: FormData): 
 
   const kayitTuru = metin("kayitTuru") as KayitTuru;
   const h: Hatirlatma = {
-    id: crypto.randomUUID(),
+    id: "", // veritabanı verir (hatirlatmaEkleDepo nesneye yazar)
     baslik: baslik.slice(0, 140),
     aciklama: metin("aciklama").slice(0, 500),
     kayit: KAYIT_TURLERI.includes(kayitTuru) && metin("kayitId")
@@ -83,6 +86,7 @@ export async function hatirlatmaEkle(_o: HatirlatmaFormDurumu, form: FormData): 
 }
 
 export async function hatirlatmaTamamla(id: string, tamam = true) {
+  await oturumGerekli();
   const zaman = simdiYerel();
   if (id.startsWith("oto:")) {
     const d = (await getOtoDurumlar())[id];
@@ -96,6 +100,7 @@ export async function hatirlatmaTamamla(id: string, tamam = true) {
 }
 
 export async function hatirlatmaErtele(id: string, sure: "1s" | "yarin" | "hafta") {
+  await oturumGerekli();
   const d = new Date();
   if (sure === "1s") d.setHours(d.getHours() + 1);
   else {
@@ -110,5 +115,6 @@ export async function hatirlatmaErtele(id: string, sure: "1s" | "yarin" | "hafta
 
 /** Zildeki bildirimleri okundu sayar (hatırlatma zamanıyla birlikte: ertelenen tekrar bildirilir) */
 export async function bildirimleriOkundu(anahtarlar: string[]) {
+  await oturumGerekli();
   await okunduIsaretle(anahtarlar.slice(0, 200));
 }

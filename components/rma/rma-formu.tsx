@@ -6,7 +6,8 @@ import { useFormGonder } from "@/lib/use-form-gonder";
 import Chip from "@/components/ui/chip";
 import { garantiUzat, garantiUzatmaKaldir, rmaAc, seriSorgula, type GarantiUzatSonucu, type RmaFormDurumu } from "./actions";
 import type { GarantiBilgisi } from "./garanti";
-import { ARIZA_TIPLERI, ONCELIKLER, UZATMA_AYLARI, type RmaKaydi } from "./queries";
+import { type RmaKaydi } from "./queries";
+import { ARIZA_TIPLERI, ONCELIKLER, UZATMA_AYLARI } from "./sabitler";
 import { tarihYaz } from "./ortak";
 
 const ALAN = "flex flex-col gap-1.5 text-[13px] font-bold";

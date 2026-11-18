@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { abonelikCoz } from "@/lib/abonelik";
 import { abonelikIptal } from "@/components/pazarlama/gonderim";
+import { gizliAnahtarVar } from "@/lib/supabase/admin";
+import { sistemOlarak } from "@/lib/supabase/db";
 
 const sayfa = (baslik: string, govde: string, status = 200) =>
   new Response(
@@ -34,7 +36,11 @@ export async function GET(istek: NextRequest) {
 export async function POST(istek: NextRequest) {
   const b = abonelikCoz(istek.nextUrl.searchParams.get("t") ?? "");
   if (!b) return gecersiz();
-  await abonelikIptal(b);
+  // Bağlantı e-postadan açılır, oturum yoktur: gizli anahtarlı istemciyle çalışır
+  if (!gizliAnahtarVar()) {
+    return sayfa("Şu an işlenemiyor", "<h1>Şu an işlenemiyor</h1><p>İsteğiniz şu anda kaydedilemedi. Lütfen biraz sonra yeniden deneyin.</p>", 503);
+  }
+  await sistemOlarak(() => abonelikIptal(b));
   revalidatePath("/pazarlama");
   revalidatePath("/musteriler");
   return sayfa("Abonelikten çıktınız", "<h1>Abonelikten çıktınız</h1><p>Bundan sonra kampanya mesajı göndermeyeceğiz. Fikrinizi değiştirirseniz bize yazmanız yeterli.</p>");

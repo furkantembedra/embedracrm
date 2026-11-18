@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { CalendarClock } from "lucide-react";
 import Chip from "@/components/ui/chip";
-import { ASAMA_BILGI, type Basvuru, type SozlesmeDetayi } from "./queries";
+import { type Basvuru, type SozlesmeDetayi } from "./queries";
+import { ASAMA_BILGI } from "./sabitler";
 import SozlesmeKontrolleri from "./sozlesme-kontrolleri";
 import { ASAMA_TONU, gorusmeYaz, sonrakiAsama } from "./ortak";
 

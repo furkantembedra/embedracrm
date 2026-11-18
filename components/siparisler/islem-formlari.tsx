@@ -8,7 +8,8 @@ import {
   faturaKes, iadeKaydet, kargoyaVer, lisansTeslim, seriAta, stokGirisi, teslimEdildi, yeniStokKalemi,
   type IadeSonucu, type IslemSonucu,
 } from "./actions";
-import { IADE_NEDENLERI, type IadeTuru, type Siparis, type StokKalemi } from "./queries";
+import { type IadeTuru, type Siparis, type StokKalemi } from "./queries";
+import { IADE_NEDENLERI } from "./sabitler";
 import { SERI_NO, cihazAdedi, iadeSecenekleri, icerikOzeti, seriListesi, yurtDisi } from "./ortak";
 import type { CihazModeli } from "@/lib/urunler";
 
