@@ -56,6 +56,8 @@ Test dosyası	Kapsam
 `test/isle.test.ts`	Gelen WhatsApp mesajı kuralları: açık fırsata ekleme, yeni lead, müşteri yetkilisi eşleşmesi, aynı mesajın iki kez (sırayla / aynı anda) gelmesi, hata olursa geri alma
 `test/telefon.test.ts`	Telefon normalizasyonu
 `test/veritabani.test.ts`	`supabase/migrations` + `supabase/seed.sql` boş Postgres 17'de (PGlite) sıfırdan kurulur; SQL telefon normalizasyonu TS ile aynı mı, tekillik kuralları, RLS (anon, ekip dışı, ekip, bayi), auth bağlama tetikleyicisi, kimlik sayaçları
+`test/erisim.test.ts`	CRM oturumu ve roller (`lib/oturum.ts`), rol kısıtlı Server Action'lar, bayinin yalnızca kendi adına satış bildirmesi, API route'larının oturumsuz isteğe 401 dönmesi, her Server Action'ın oturum kontrolüyle başladığı (statik tarama)
+`test/proxy.test.ts`	Oturumsuz isteğin giriş sayfasına yönlenmesi, korumalı API'nin 401 dönmesi, açık yolların geçmesi
 `test/sahte-sunucular.test.ts`	Ağ koruması, WhatsApp şablon gönderiminin sahte Meta'ya attığı istek, sahte Anthropic'in Messages API biçimi
 
 Sahte sunucular: `META_GRAPH_URL` sahte Meta'ya (`test/sahte/meta.ts`), `ANTHROPIC_BASE_URL` sahte Anthropic'e

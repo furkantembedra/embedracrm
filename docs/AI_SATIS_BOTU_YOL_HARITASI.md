@@ -17,31 +17,29 @@ Her komutu yeni bir Claude Code oturumunda, embedracrm reposu açıkken yapışt
 7. P4.1 → P4.2
 8. P5.2 → P5.3
 
-## Mevcut durum (17 Kasım 2026)
+## Mevcut durum (18 Kasım 2026, Faz 0'ın ilk üç adımı bitti)
 
 Hazır olanlar:
-- `app/api/whatsapp/webhook`: Meta webhook'u ve imza doğrulaması
-- `components/whatsapp/isle.ts`: gelen mesajı satış hattına işler, gerekirse "Yeni lead" fırsatı açar
-- `lib/ileti-gonder.ts`: WhatsApp Cloud API ve Resend ile gönderim (anahtar yoksa demo modu)
-- `components/teklifler`: teklif ve teklif kalemi modeli
-- `lib/urunler.ts`: fiyat listesi (ONE, ONE Lite; Basic, Pro, Pro+, Premium, Enterprise)
-- `components/otomasyon`: kural tabanlı hatırlatma ve takip
-- Satış hattında "WhatsApp mesajı simüle et"
+- **Veri:** Tüm modüller Supabase'de (Frankfurt, `wglfzzbzifszwkugamjj`), RLS her tabloda açık. Şema `supabase/migrations/`, demo veri `supabase/seed.sql`; boş veritabanına sıfırdan kurulabiliyor.
+- **Konuşma modeli:** `konusmalar` + `konusma_mesajlari` (kanaldan bağımsız, `dis_mesaj_id` tekil), erişim `components/konusma/queries.ts`. Normalize telefon sütunları indeksli (`f_telefon_normal`, `y_tel_normal`).
+- **WhatsApp:** `app/api/whatsapp/webhook` (imza doğrulaması), `components/whatsapp/isle.ts` (mesajı önce yazar, açık fırsata ekler ya da "Yeni lead" açar, yetkiliyle eşleştirir, hata olursa geri alır), `lib/ileti-gonder.ts` (WhatsApp Cloud API ve Resend; anahtar yoksa demo modu).
+- **Giriş ve roller:** Supabase Auth, `proxy.ts`; her Server Action `oturumGerekli` / `rolEksik` ile başlar (testle denetleniyor).
+- **Testler:** Vitest (`npm test`), sahte Meta ve Anthropic sunucuları, PGlite'ta migration + RLS testleri. Ayrıntı README'de.
+- Teklif modeli (`components/teklifler`), fiyat listesi (`lib/urunler.ts`), kural tabanlı otomasyon (`components/otomasyon`), satış hattında "WhatsApp mesajı simüle et".
 
 Eksik olanlar:
-- Veriler sunucu belleğinde (`globalThis`), `lib/supabase/client.ts` boş. Sunucu yeniden başlayınca konuşmalar kaybolur.
-- Test altyapısı yok; package.json'da sadece `lint` ve `build` var.
+- Kurulum rehberi (P0.4).
+- **Planların hangi özellikleri kapsadığı hiçbir yerde tanımlı değil.** `lib/urunler.ts` yalnızca fiyat ve cihaz sayısı tutuyor; bot bu bilgi olmadan "size Basic yeter" diyemez (P0.5).
+- Aynı yeni numaradan aynı anda gelen iki *farklı* mesaj iki lead açabilir; konuşma kilidi P1.1'de.
 - Bot katmanı, CRM'den cevap yazma ve Instagram kanalı yok.
-- **CRM'de giriş yok** (`components/giris/giris-formu.tsx` boş, middleware/proxy yok); panel ve Server Action'lar herkese açık. Bot konuşmaları buraya düşmeden önce kapatılmalı.
-- **Planların hangi özellikleri kapsadığı hiçbir yerde tanımlı değil.** `lib/urunler.ts` yalnızca fiyat ve cihaz sayısı tutuyor; bot bu bilgi olmadan "size Basic yeter" diyemez.
-- Müşteriler ve bayi verileri de bellekte; `isle.ts` müşteri zaman çizelgesine yazdığı için yalnızca fırsatları taşımak veriyi böler.
+- Testleri her push'ta çalıştıran CI yok.
 
 ## Senin yapman gerekenler (kod dışı)
 
 - [ ] Meta Business işletme doğrulaması
 - [ ] WhatsApp Business numarası: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`
 - [ ] Anthropic API anahtarı (`ANTHROPIC_API_KEY`) ve aylık harcama limiti
-- [ ] Supabase projesi (hangi proje kullanılacak)
+- [x] Supabase projesi: `wglfzzbzifszwkugamjj` (Frankfurt). Canlıya çıkarken Auth Site/Redirect URL'ine gerçek alan adı eklenecek
 - [ ] En iyi satışçının 10–20 gerçek WhatsApp konuşması (kişisel bilgiler temizlenmiş) ve sık duyulan itirazlarla cevapları
 - [ ] Botun söyleyebileceği/söyleyemeyeceği konular: fiyat verebilir mi, iskonto yok, hangi durumlarda insana devreder
 - [ ] Faz 4 için: Instagram Professional hesap, bağlı Facebook sayfası, Meta App Review (başvuruyu Faz 1 sırasında başlat)
@@ -221,9 +219,9 @@ GÖREV: Botun ilk mesajına aydınlatma metni bağlantısı ekle; /aydinlatma/me
 | Komut | Durum | Not |
 |---|---|---|
 | P0.1 | Tamam (18 Kas) | Tüm modüller Supabase'de (Frankfurt), RLS hepsinde açık. Kanaldan bağımsız model: `konusmalar` (= conversations: kanal whatsapp/instagram, dış kullanıcı kimliği tekil, `bot_aktif`, `son_musteri_mesaji_zamani`) ve `konusma_mesajlari` (= messages: yön, gönderen musteri/bot/temsilci, `dis_mesaj_id` UNIQUE); erişim `components/konusma/queries.ts`; eski `whatsapp_mesajlari` taşındı ve kaldırıldı. Normalize telefon: `private.telefon_normal()` (TS ile 13 girdide aynı) + indeksli `y_tel_normal`, `f_telefon_normal`. `isle.ts` önce mesajı yazar (tekil kimlik, ilk yazan kazanır), hata olursa geri alır; tekillik SQL ile, akış tarayıcıda simülasyonla denendi. `supabase/migrations` (7 dosya) + `supabase/seed.sql` boş Postgres 17'de (PGlite, Supabase rol/auth/storage taklitleriyle) sıfırdan kuruldu: 70 tablo, 1191 satır, sayaçlar ve RLS doğru. Aynı yeni numaradan eşzamanlı iki *farklı* mesajın iki lead açmasını önleyen konuşma kilidi P1.1'de. |
-| P0.2 | Tamam (18 Kas) | Supabase Auth e-posta/şifre, proxy.ts, kullanicilar + rol. `oturumGerekli(roller?)` tüm CRM Server Action'larında; form döndüren rol kısıtlı işlemler `rolEksik()` ile hata ekranı yerine mesaj gösterir. Roller: portal paneli / bayi gibi görüntüle → Yönetici, Satış; kullanıcı kaydetme → Yönetici; bayi doküman/duyuru → Yönetici, Pazarlama. Tarayıcıda Destek rolüyle denendi (portal kutuları kilitli mesajı, kullanıcı kaydı ve doküman yükleme reddedildi, sayfa çökmedi), Yönetici ile "Bayi gibi görüntüle" ve 8 portal sayfası denendi. Tüm CRM sayfaları, liste→detay ve /yeni geçişleri anlık (her sayfa klasöründe loading.tsx), uyarı yok. RLS üç kimlikle denendi. Auth: Site URL `http://localhost:3000`, Redirect `http://localhost:3000/**`, şifre en az 8 karakter + harf ve rakam. Sızdırılmış şifre koruması free planda yok (Pro). `sonraki_belge_no` uyarısı bilinçli, açıklaması veritabanında. Canlıya çıkarken Site/Redirect URL'e gerçek alan adı eklenmeli. |
-| Altyapı | Tamam (18 Kas) | Supabase Singapur'dan Frankfurt'a taşındı (`eu-central-1`, proje `wglfzzbzifszwkugamjj`; eskisi `ejjlyhqelcajpsrdgvxv` yedek olarak duruyor). Şema katalogdan birebir çıkarıldı, `supabase/migrations/` artık baştan kurulum yapan 4 `temel_sema_*` dosyası (eskiler `supabase/arsiv/`). Veri (1166 satır) ve auth kullanıcısı aktarıldı, içerik özetleri eşleşti; RLS üç kimlikle yeniden denendi. Sorgu başına gecikme ~300 → ~155 ms. Zamanlayıcıda ortaya çıkan iki eski hata düzeltildi (`getAktifBayiler` connection(), `gunFarki` istemci dosyasında). Yeni projede geçici `public.gecici_veri_aktar` fonksiyonu yetkisiz bırakıldı, silinmesi onay bekliyor. |
-| P0.3 | Tamam (18 Kas) | Vitest 4.1.12 (`npm test` = `vitest run`, `npm run test:izle`), ortam node, `@/` yolları Vite'ın yerleşik `resolve.tsconfigPaths` ile (rehberdeki vite-tsconfig-paths eklentisi gerekmedi). `test/kurulum.ts` localhost dışına her fetch'i durdurur; testler `.env.local`'i okumaz. Sahte sunucular: `test/sahte/meta.ts` (Graph API, `META_GRAPH_URL`), `test/sahte/anthropic.ts` (Messages API: metin, tool_use, refusal, HTTP hataları; `ANTHROPIC_BASE_URL`). 80 test: webhook imzası (geçerli / yanlış anahtar / değiştirilmiş gövde / bozuk / eksik / production'da secret yok) + Meta doğrulaması; `isle.ts` kuralları (açık fırsata ekleme, kapalı fırsatta yeni lead, yeni lead, yetkili eşleşmesi, aynı mesaj sırayla ve aynı anda, hata sonrası geri alma) bellek içi depoyla; telefon normalizasyonu TS + SQL eşitliği; migration + seed + RLS (anon / ekip dışı / ekip / bayi) + auth bağlama tetikleyicisi PGlite'ta. Kodu bilerek bozunca ilgili testlerin düştüğü görüldü. README'ye test komutları eklendi. |
+| P0.2 | Tamam (18 Kas) | Supabase Auth e-posta/şifre, proxy.ts, kullanicilar + rol. `oturumGerekli(roller?)` tüm CRM Server Action'larında; form döndüren rol kısıtlı işlemler `rolEksik()` ile hata ekranı yerine mesaj gösterir. Roller: portal paneli / bayi gibi görüntüle → Yönetici, Satış; kullanıcı kaydetme → Yönetici; bayi doküman/duyuru → Yönetici, Pazarlama. `test/erisim.test.ts` + `test/proxy.test.ts` (36 test): oturum/rol kuralları, rol kısıtlı aksiyonlar, API 401'leri, proxy yönlendirmeleri ve her Server Action'ın oturum kontrolüyle başladığını tarayan test. Bayi satış bildirimindeki (`satisBildir`) bayi kontrolü yanlışlıkla `cihazSevkEt`'e yazılmıştı, yerine taşındı. Tarayıcıda Destek rolüyle denendi (portal kutuları kilitli mesajı, kullanıcı kaydı ve doküman yükleme reddedildi, sayfa çökmedi), Yönetici ile "Bayi gibi görüntüle" ve 8 portal sayfası denendi. Tüm CRM sayfaları, liste→detay ve /yeni geçişleri anlık (her sayfa klasöründe loading.tsx), uyarı yok. RLS üç kimlikle denendi. Auth: Site URL `http://localhost:3000`, Redirect `http://localhost:3000/**`, şifre en az 8 karakter + harf ve rakam. Sızdırılmış şifre koruması free planda yok (Pro). `sonraki_belge_no` uyarısı bilinçli, açıklaması veritabanında. Canlıya çıkarken Site/Redirect URL'e gerçek alan adı eklenmeli. |
+| Altyapı | Tamam (18 Kas) | Supabase Singapur'dan Frankfurt'a taşındı (`eu-central-1`, proje `wglfzzbzifszwkugamjj`; eskisi `ejjlyhqelcajpsrdgvxv` yedek olarak duruyor). Şema katalogdan birebir çıkarıldı, `supabase/migrations/` artık baştan kurulum yapan 4 `temel_sema_*` dosyası (eskiler `supabase/arsiv/`). Veri (1166 satır) ve auth kullanıcısı aktarıldı, içerik özetleri eşleşti; RLS üç kimlikle yeniden denendi. Sorgu başına gecikme ~300 → ~155 ms. Zamanlayıcıda ortaya çıkan iki eski hata düzeltildi (`getAktifBayiler` connection(), `gunFarki` istemci dosyasında). Aktarım için açılan geçici `public.gecici_veri_aktar` fonksiyonu kaldırıldı. |
+| P0.3 | Tamam (18 Kas) | Vitest 4.1.12 (`npm test` = `vitest run`, `npm run test:izle`), ortam node, `@/` yolları Vite'ın yerleşik `resolve.tsconfigPaths` ile (rehberdeki vite-tsconfig-paths eklentisi gerekmedi). `test/kurulum.ts` localhost dışına her fetch'i durdurur; testler `.env.local`'i okumaz. Sahte sunucular: `test/sahte/meta.ts` (Graph API, `META_GRAPH_URL`), `test/sahte/anthropic.ts` (Messages API: metin, tool_use, refusal, HTTP hataları; `ANTHROPIC_BASE_URL`). 80 test: webhook imzası (geçerli / yanlış anahtar / değiştirilmiş gövde / bozuk / eksik / production'da secret yok) + Meta doğrulaması; `isle.ts` kuralları (açık fırsata ekleme, kapalı fırsatta yeni lead, yeni lead, yetkili eşleşmesi, aynı mesaj sırayla ve aynı anda, hata sonrası geri alma) bellek içi depoyla; telefon normalizasyonu TS + SQL eşitliği; migration + seed + RLS (anon / ekip dışı / ekip / bayi) + auth bağlama tetikleyicisi PGlite'ta. Kodu bilerek bozunca ilgili testlerin düştüğü görüldü. README'ye test komutları eklendi. Sonradan erişim testleri eklendi (`erisim`, `proxy`); toplam 116 test. |
 | P0.4 – P0.5 | Başlanmadı | P0.5 içeriği (özellik tablosu, uyumluluk, SSS) bekleniyor |
 | P1.1 – P1.3 | Başlanmadı | |
 | P2.1 – P2.5 | Başlanmadı | Dil ve bayi bölgesi kararları bekleniyor |

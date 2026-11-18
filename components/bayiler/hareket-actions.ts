@@ -32,13 +32,8 @@ async function bayiBul(id: string) {
 
 /** Embedra'dan bayiye cihaz sevki: stok ve MOQ'nun gerçekleşen kısmı artar. */
 export async function cihazSevkEt(_o: HareketDurumu, form: FormData): Promise<HareketDurumu> {
-  await oturumGerekli();
+  await oturumGerekli(); // yalnızca CRM ekibi: Embedra'dan bayiye sevk
   const metin = metinAl(form);
-  // CRM ekibi ve bayi portalı (portalTopluSatis) çağırır; bayi yalnızca kendi adına bildirebilir
-  if (!sistemdeMi() && !(await crmKullanicisi())) {
-    const p = await portalOturumu();
-    if (!p || p.bayi.id !== metin("bayiId")) throw new Error("Oturum gerekli: lütfen tekrar giriş yapın.");
-  }
   const bayi = await bayiBul(metin("bayiId"));
   const tarih = metin("tarih");
   const model = metin("model") as CihazModeli;
@@ -82,6 +77,11 @@ export async function cihazSevkEt(_o: HareketDurumu, form: FormData): Promise<Ha
 /** Bayinin bildirdiği müşteriye satış: cihaz müşteriye geçer, stok düşer. Müşteri yoksa oluşturulur. */
 export async function satisBildir(_o: HareketDurumu, form: FormData): Promise<HareketDurumu> {
   const metin = metinAl(form);
+  // CRM ekibi ve bayi portalı (portalTopluSatis) çağırır; bayi yalnızca kendi adına bildirebilir
+  if (!sistemdeMi() && !(await crmKullanicisi())) {
+    const p = await portalOturumu();
+    if (!p || p.bayi.id !== metin("bayiId")) throw new Error("Oturum gerekli: lütfen tekrar giriş yapın.");
+  }
   const bayi = await bayiBul(metin("bayiId"));
   const tarih = metin("tarih");
   const model = metin("model") as CihazModeli;
