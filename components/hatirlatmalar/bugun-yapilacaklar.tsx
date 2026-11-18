@@ -4,9 +4,10 @@
 import Card from "@/components/ui/card";
 import HatirlatmaSatiri from "./hatirlatma-satiri";
 import { useHatirlatmalar } from "./use-hatirlatmalar";
+import type { HatirlatmaVerisi } from "./actions";
 
-export default function BugunYapilacaklar() {
-  const { veri, tamamla, ertele } = useHatirlatmalar();
+export default function BugunYapilacaklar({ ilk }: { ilk?: HatirlatmaVerisi }) {
+  const { veri, tamamla, ertele } = useHatirlatmalar(undefined, ilk);
   const bugun = veri?.simdi.slice(0, 10) ?? "";
   const liste = (veri?.liste ?? []).filter((h) => h.sorumluId === veri?.aktif.id && h.durum === "bekliyor" && h.zaman.slice(0, 10) <= bugun);
   return (

@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import PortalYukleniyor from "./loading";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { DURUM_ADI, DURUM_TONU, acikSiparis } from "@/components/siparisler/ortak";
@@ -20,7 +22,17 @@ const YAPILACAK_ETIKET: Record<Yapilacak["tur"], { ad: string; renk: string }> =
 };
 const OLAY_RENK: Record<Olay["tur"], string> = { sevkiyat: "bg-info", satis: "bg-[#1F8A4C]", lisans: "bg-[#7A5AF8]", iade: "bg-[#D93F3F]", degisim: "bg-muted", rma: "bg-[#E58A2B]", siparis: "bg-ink" };
 
-export default async function PortalOzetPage() {
+// Portal içindeki bir sayfadan buraya geçişte ortak kabuk portal/layout olduğu için oradaki iskelet görünmez;
+// veri okuyan içerik sayfanın kendi Suspense sınırında.
+export default function PortalOzetPage() {
+  return (
+    <Suspense fallback={<PortalYukleniyor />}>
+      <PortalOzeti />
+    </Suspense>
+  );
+}
+
+async function PortalOzeti() {
   const [o, satisVeri] = await Promise.all([portalOzeti(), satisFormVerisi()]);
   const { v, lisans, stok, tempo } = o;
   const b = v.bayi;

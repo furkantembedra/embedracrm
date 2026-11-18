@@ -8,7 +8,7 @@ import { getSiparisler } from "@/components/siparisler/queries";
 import { getTalepler } from "@/components/destek/queries";
 import { getFirsatlar, KAPALI_ASAMALAR } from "@/components/satis-hatti/queries";
 import { getBilesenler, getEkip } from "@/components/operasyon/queries";
-import { getMusteri, musteriBulAdla } from "@/components/musteriler/queries";
+import { getMusteri, musteriIdBulAdla } from "@/components/musteriler/queries";
 import { getAktifBayiler } from "@/components/bayiler/queries";
 import { izinVar } from "@/components/musteriler/ortak";
 import { hatirlatmaEkleDepo } from "@/components/hatirlatmalar/queries";
@@ -18,7 +18,7 @@ import { abonelikJetonu } from "@/lib/abonelik";
 import { sistemOlarak } from "@/lib/supabase/db";
 import { epostaGonder, saglayicilar } from "@/lib/ileti-gonder";
 import { EPOSTA_TUR_LIMITI, FILTRE_ALANLARI, gunYaz } from "./ortak";
-import { getKurallar, islendiIsaretle, islendiMi, kayitEkle, kilitAl, kilitBirak, kuralGuncelle, type CalismaKaydi, type EylemSonucu, type Kural, type KuralFiltresi, type TetikleyiciId } from "./queries";
+import { getKurallar, islendiIsaretle, islenmisAnahtarlar, kayitEkle, kilitAl, kilitBirak, kuralGuncelle, type CalismaKaydi, type EylemSonucu, type Kural, type KuralFiltresi, type TetikleyiciId } from "./queries";
 
 export type Eslesme = {
   anahtar: string;
@@ -52,8 +52,8 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
   switch (t) {
     case "lisans-bitiyor": {
       const son = gunEkle(bugun, gun);
-      const bayiler = await bayiAdlari();
-      return (await getCihazlar())
+      const [bayiler, cihazlar] = await Promise.all([bayiAdlari(), getCihazlar()]);
+      return cihazlar
         .filter((c) => c.musteriId && c.lisansBitis && c.lisansBitis >= bugun && c.lisansBitis <= son)
         .map((c) => ({
           anahtar: `${c.seriNo}:${c.lisansBitis}`, kayitAd: `${c.seriNo} · ${c.musteri}${bayiEki(c.bayiId ? bayiler.get(c.bayiId) : undefined)}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
@@ -66,7 +66,7 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
       const esik = gunEkle(bugun, -gun);
       const l = (await getTeklifler()).filter((x) => x.durum === "gonderildi" && x.gonderim && x.gonderim.slice(0, 10) <= esik);
       return Promise.all(l.map(async (x) => ({
-        anahtar: x.id, kayitAd: `${x.no} · ${x.firma}`, href: `/teklifler/${x.id}`, firma: x.firma, musteriId: (await musteriBulAdla(x.firma))?.id ?? null,
+        anahtar: x.id, kayitAd: `${x.no} · ${x.firma}`, href: `/teklifler/${x.id}`, firma: x.firma, musteriId: await musteriIdBulAdla(x.firma),
         detay: `${x.no} numaralı teklifimiz ${gunYaz(x.gonderim!.slice(0, 10))} tarihinde gönderildi, henüz yanıt alınmadı.`, kayit: { tur: "teklif" as const, id: x.id },
       })));
     }
@@ -97,7 +97,7 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
       const esik = gunEkle(bugun, -gun);
       const l = (await getFirsatlar()).filter((f) => !KAPALI_ASAMALAR.includes(f.asama) && f.sonHareket && f.sonHareket <= esik);
       return Promise.all(l.map(async (f) => ({
-        anahtar: `${f.id}:${f.sonHareket}`, kayitAd: f.firma, href: "/satis-hatti", firma: f.firma, musteriId: (await musteriBulAdla(f.firma))?.id ?? null,
+        anahtar: `${f.id}:${f.sonHareket}`, kayitAd: f.firma, href: "/satis-hatti", firma: f.firma, musteriId: await musteriIdBulAdla(f.firma),
         detay: `${f.firma} fırsatında ${gunYaz(f.sonHareket!)} tarihinden beri değişiklik yok (${f.sonrakiAdim}).`, kayit: { tur: "firsat" as const, id: f.id },
       })));
     }
@@ -113,8 +113,8 @@ export async function eslesmeler(t: TetikleyiciId, gun: number, bugun = bugunYer
     }
     case "cihaz-sessiz": {
       const esik = gunEkle(bugun, -gun);
-      const bayiler = await bayiAdlari();
-      return (await getCihazlar())
+      const [bayiler, cihazlar] = await Promise.all([bayiAdlari(), getCihazlar()]);
+      return cihazlar
         .filter((c) => c.musteriId && c.durum !== "stokta" && c.sonGorulme && c.sonGorulme.slice(0, 10) <= esik)
         .map((c) => ({
           anahtar: `${c.seriNo}:${c.sonGorulme!.slice(0, 10)}`, kayitAd: `${c.seriNo} · ${c.musteri}${bayiEki(c.bayiId ? bayiler.get(c.bayiId) : undefined)}`, href: `/cihaz-lisans/${c.seriNo}`, firma: c.musteri, musteriId: c.musteriId,
@@ -206,8 +206,8 @@ export async function otomasyonCalistir(taban: string, yalnizKuralId?: string): 
       ozet.kural++;
       const liste = (await oku(k.tetikleyici, k.gun)).filter((e) => filtreUyar(e, k.tetikleyici, k.filtre ?? {}));
       ozet.eslesme += liste.length;
-      const yeniler: Eslesme[] = [];
-      for (const e of liste) if (!(await islendiMi(k.id, e.anahtar))) yeniler.push(e);
+      const islenmis = await islenmisAnahtarlar(k.id, liste.map((e) => e.anahtar));
+      const yeniler = liste.filter((e) => !islenmis.has(e.anahtar));
 
       // Güvenlik sınırı: otomatik turda tek kuralın e-posta sayısı sınırı aşarsa hiçbir şey gönderme, yöneticiden onay iste
       if (k.eposta && !yalnizKuralId && yeniler.length > EPOSTA_TUR_LIMITI) {

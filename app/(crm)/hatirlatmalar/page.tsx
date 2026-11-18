@@ -1,6 +1,7 @@
 import HatirlatmaGorunumu from "@/components/hatirlatmalar/hatirlatma-gorunumu";
+import { hatirlatmalariGetir } from "@/components/hatirlatmalar/actions";
 
-// Liste tarayıcıda sunucu saatine göre yüklenir (otomatik kurallar "şimdi"ye bağlı)
-export default function HatirlatmalarPage() {
-  return <HatirlatmaGorunumu />;
+// İlk liste sunucuda hazırlanır (sayfa geçişinde iskelet gösterilir); sonraki yenilemeler tarayıcıdan Server Action ile
+export default async function HatirlatmalarPage() {
+  return <HatirlatmaGorunumu ilk={await hatirlatmalariGetir()} />;
 }

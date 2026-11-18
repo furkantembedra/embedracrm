@@ -1,11 +1,13 @@
 "use client";
 
 // Hatırlatma verisini sunucudan çeker ve tamamla / ertele işlemlerini iyimser uygular.
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hatirlatmaErtele, hatirlatmalariGetir, hatirlatmaTamamla, type HatirlatmaVerisi } from "./actions";
 
-export function useHatirlatmalar(tetik?: unknown) {
-  const [veri, setVeri] = useState<HatirlatmaVerisi | null>(null);
+/** ilk: sunucuda yüklenmiş veri (varsa ilk açılışta ayrıca istek atılmaz) */
+export function useHatirlatmalar(tetik?: unknown, ilk?: HatirlatmaVerisi) {
+  const [veri, setVeri] = useState<HatirlatmaVerisi | null>(ilk ?? null);
+  const ilkAcilis = useRef(!!ilk);
   const [, baslat] = useTransition();
 
   const yenile = useCallback(() => {
@@ -13,6 +15,10 @@ export function useHatirlatmalar(tetik?: unknown) {
   }, []);
 
   useEffect(() => {
+    if (ilkAcilis.current) {
+      ilkAcilis.current = false;
+      return;
+    }
     let iptal = false;
     hatirlatmalariGetir().then((v) => !iptal && setVeri(v)).catch(() => {});
     return () => void (iptal = true);

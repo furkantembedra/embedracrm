@@ -9,6 +9,7 @@ import SonIslemler from "@/components/genel-bakis/son-islemler";
 import LeadKaynaklari from "@/components/genel-bakis/lead-kaynaklari";
 import BugunYapilacaklar from "@/components/hatirlatmalar/bugun-yapilacaklar";
 import { getGenelBakis } from "@/components/genel-bakis/queries";
+import { hatirlatmalariGetir } from "@/components/hatirlatmalar/actions";
 
 // Satır düzeni: geniş ekranda yan yana, dar ekranda alt alta
 const SATIR = "flex flex-wrap items-stretch gap-4";
@@ -17,7 +18,7 @@ const DAR = "flex min-w-0 flex-[1_1_300px]";
 const YARIM = "flex min-w-0 flex-[1_1_420px]";
 
 export default async function GenelBakisPage() {
-  const v = await getGenelBakis();
+  const [v, hatirlatmalar] = await Promise.all([getGenelBakis(), hatirlatmalariGetir()]);
   return (
     <>
       <PageHeader title="Genel Bakış" description="Satış, lisans ve destek durumunun özeti">
@@ -25,7 +26,7 @@ export default async function GenelBakisPage() {
 
       <OzetKartlari veri={v.ozet} />
 
-      <BugunYapilacaklar />
+      <BugunYapilacaklar ilk={hatirlatmalar} />
 
       <div className={SATIR}>
         <div className={GENIS}><GelirGrafigi veri={v.gelirAylari} /></div>

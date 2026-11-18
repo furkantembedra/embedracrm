@@ -29,11 +29,13 @@ async function aktifKullanici() {
 
 /** Aktif kullanıcının görebildiği hatırlatmalar. Yönetici herkesinkini görür. */
 export async function hatirlatmalariGetir(): Promise<HatirlatmaVerisi> {
-  await oturumGerekli();
+  await oturumGerekli(); // io() de buradan geçer: aşağıdaki "şimdi" prerender'da okunmaz
   const simdi = simdiYerel();
   const bugun = simdi.slice(0, 10);
-  const { ekip, aktif } = await aktifKullanici();
-  const [elle, oto, durumlar, okunan] = await Promise.all([getElleHatirlatmalar(), otomatikHatirlatmalar(bugun), getOtoDurumlar(), getOkunanlar()]);
+  // Hepsi tek seferde: kullanıcı (önbellekli oturumdan) ve listeler birbirini beklemez
+  const [{ ekip, aktif }, elle, oto, durumlar, okunan] = await Promise.all([
+    aktifKullanici(), getElleHatirlatmalar(), otomatikHatirlatmalar(bugun), getOtoDurumlar(), getOkunanlar(),
+  ]);
   const otomatik = oto.flatMap((h) => {
     const d = durumlar[h.id];
     if (d?.tamam) return [{ ...h, durum: "tamam" as const, tamamlanma: d.tamam }];

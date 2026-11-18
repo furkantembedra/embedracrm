@@ -1,9 +1,9 @@
 "use client";
 
-// Menüdeki bildirim zili: zamanı gelmiş hatırlatmalar. Sayfa değiştikçe ve 2 dakikada bir yenilenir.
+// Menüdeki bildirim zili: zamanı gelmiş hatırlatmalar. Açılışta, 2 dakikada bir ve sekmeye dönünce yenilenir.
+// Sayfa değişiminde yenilenmez: Server Action'lar sırayla çalıştığı için her geçişte sayfanın kendi isteklerini bekletiyordu.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import { bildirimleriOkundu } from "./actions";
@@ -11,14 +11,19 @@ import HatirlatmaSatiri from "./hatirlatma-satiri";
 import { okumaAnahtari, zamaniGeldi } from "./ortak";
 import { useHatirlatmalar } from "./use-hatirlatmalar";
 
-function Zil({ yol }: { yol: string }) {
-  const { veri, setVeri, yenile, tamamla, ertele } = useHatirlatmalar(yol);
+function Zil() {
+  const { veri, setVeri, yenile, tamamla, ertele } = useHatirlatmalar();
   const [acik, setAcik] = useState(false);
   const kapat = useCallback(() => setAcik(false), []);
 
   useEffect(() => {
-    const t = setInterval(yenile, 120_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === "visible" && yenile(), 120_000);
+    const odak = () => document.visibilityState === "visible" && yenile();
+    document.addEventListener("visibilitychange", odak);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", odak);
+    };
   }, [yenile]);
 
   const gelen = veri ? veri.liste.filter((h) => zamaniGeldi(h, veri.simdi)) : [];
@@ -77,5 +82,5 @@ function Zil({ yol }: { yol: string }) {
 }
 
 export default function BildirimZili() {
-  return <Zil yol={usePathname() ?? ""} />;
+  return <Zil />;
 }

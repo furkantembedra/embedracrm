@@ -9,12 +9,13 @@ import HatirlatmaFormu from "./hatirlatma-formu";
 import HatirlatmaSatiri from "./hatirlatma-satiri";
 import { useHatirlatmalar } from "./use-hatirlatmalar";
 import type { Hatirlatma } from "./queries";
+import type { HatirlatmaVerisi } from "./actions";
 
 type Kapsam = "benim" | "tumu" | string; // string: kullanıcı id
 
-export default function HatirlatmaGorunumu() {
+export default function HatirlatmaGorunumu({ ilk }: { ilk?: HatirlatmaVerisi }) {
   const [sayac, setSayac] = useState(0);
-  const { veri, tamamla, ertele } = useHatirlatmalar(sayac);
+  const { veri, tamamla, ertele } = useHatirlatmalar(sayac, ilk);
   const [kapsam, setKapsam] = useState<Kapsam>("tumu");
   const [ekle, setEkle] = useState(false);
   const kapat = useCallback(() => setEkle(false), []);

@@ -1,7 +1,8 @@
 // Hatırlatmalar: elle eklenenler (fırsat, müşteri, bayi… detayından) + kurallardan otomatik üretilenler.
 // Otomatik olanlar saklanmaz, her okumada güncel veriden hesaplanır; yalnızca "tamam / ertelendi" durumları tutulur.
 // Veri Supabase'de: hatirlatmalar (elle eklenenler), hatirlatma_durumlari (otomatiklerin durumu), hatirlatma_okunanlar.
-import { db, kullaniciKimligi, kullaniciNo, sonuc, yerelZaman } from "@/lib/supabase/db";
+import { crmKullanicisi } from "@/lib/oturum";
+import { db, sistemdeMi, kullaniciKimligi, kullaniciNo, sonuc, yerelZaman } from "@/lib/supabase/db";
 
 /** sonuc() + boş olmayan veri (select / insert…select sonuçları; maybeSingle için sonuc kullanılır) */
 const kesin = <T,>(r: { data: T; error: { message: string; code?: string } | null }, ne?: string) => sonuc(r, ne) as NonNullable<T>;
@@ -25,14 +26,12 @@ export type OtoDurum = { tamam?: string; ertelendi?: string }; // ertelendi: yen
 /** Oturumdan kullanıcı bulunamazsa (ör. ekip kaydı auth hesabına bağlı değil) varsayılan: Operasyon › Ekip'teki ilk yönetici (u1). */
 export const AKTIF_KULLANICI_ID = "u1";
 
-/** Oturumdaki auth kullanıcısının ekip kaydı ("u" + kullanicilar.id); bulunamazsa AKTIF_KULLANICI_ID */
+/** Oturumdaki auth kullanıcısının ekip kaydı ("u" + kullanicilar.id); bulunamazsa (ör. zamanlayıcı) AKTIF_KULLANICI_ID.
+ *  crmKullanicisi önbellekli ve yerel JWT doğrulamalı: Auth sunucusuna (getUser) ayrıca gidilmez. */
 export async function aktifKullaniciId(): Promise<string> {
+  if (sistemdeMi()) return AKTIF_KULLANICI_ID;
   try {
-    const s = await db();
-    const { data } = await s.auth.getUser();
-    if (!data.user) return AKTIF_KULLANICI_ID;
-    const r = sonuc(await s.from("kullanicilar").select("id").eq("auth_id", data.user.id).maybeSingle(), "Oturumdaki kullanıcı aranıyor");
-    return r ? kullaniciKimligi(r.id) : AKTIF_KULLANICI_ID;
+    return (await crmKullanicisi())?.id ?? AKTIF_KULLANICI_ID;
   } catch {
     return AKTIF_KULLANICI_ID;
   }

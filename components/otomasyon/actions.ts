@@ -7,7 +7,7 @@ import { saglayicilar } from "@/lib/ileti-gonder";
 import { eslesmeler, filtreUyar, otomasyonCalistir, type CalismaOzeti } from "./motor";
 import { FILTRE_ALANLARI, KURAL_ADI_MAX, TETIKLEYICILER } from "./ortak";
 import {
-  getCalismaKayitlari, getKurallar, islendiMi, kuralGuncelle, kuralKaydet, kuralSil,
+  getCalismaKayitlari, getKurallar, islenmisAnahtarlar, kuralGuncelle, kuralKaydet, kuralSil,
   type CalismaKaydi, type Kural, type KuralFiltresi, type TetikleyiciId,
 } from "./queries";
 
@@ -19,18 +19,25 @@ export type OtomasyonVerisi = {
   epostaSaglayici: string | null;
 };
 
-async function onizle(k: Pick<Kural, "id" | "tetikleyici" | "gun" | "filtre">): Promise<KuralOnizleme> {
-  const l = (await eslesmeler(k.tetikleyici, k.gun)).filter((e) => filtreUyar(e, k.tetikleyici, k.filtre ?? {}));
-  const yeniler: string[] = [];
-  for (const e of l) if (!(await islendiMi(k.id, e.anahtar))) yeniler.push(e.kayitAd);
+/** oku: aynı tetikleyici + eşik için eşleşmeleri bir kez okuyan önbellek (birden çok kural önizlenirken) */
+async function onizle(k: Pick<Kural, "id" | "tetikleyici" | "gun" | "filtre">, oku = eslesmeler): Promise<KuralOnizleme> {
+  const l = (await oku(k.tetikleyici, k.gun)).filter((e) => filtreUyar(e, k.tetikleyici, k.filtre ?? {}));
+  const islenmis = await islenmisAnahtarlar(k.id, l.map((e) => e.anahtar));
+  const yeniler = l.filter((e) => !islenmis.has(e.anahtar)).map((e) => e.kayitAd);
   return { toplam: l.length, yeni: yeniler.length, ornekler: yeniler.slice(0, 3) };
 }
 
 export async function otomasyonVerisi(): Promise<OtomasyonVerisi> {
-  await oturumGerekli();
-  const [kurallar, kayitlar, ekip] = await Promise.all([getKurallar(), getCalismaKayitlari(), getEkip()]);
+  // Oturum kontrolü okumalarla paralel: okumaları RLS zaten sınırlar, kontrol başarısızsa hata yine fırlatılır
+  const [, kurallar, kayitlar, ekip] = await Promise.all([oturumGerekli(), getKurallar(), getCalismaKayitlari(), getEkip()]);
+  const onbellek = new Map<string, ReturnType<typeof eslesmeler>>();
+  const oku: typeof eslesmeler = (t, gun) => {
+    const a = `${t}|${gun}`;
+    if (!onbellek.has(a)) onbellek.set(a, eslesmeler(t, gun));
+    return onbellek.get(a)!;
+  };
   return {
-    kurallar: await Promise.all(kurallar.map(async (k) => ({ ...k, onizleme: await onizle(k) }))),
+    kurallar: await Promise.all(kurallar.map(async (k) => ({ ...k, onizleme: await onizle(k, oku) }))),
     kayitlar: kayitlar.slice(0, 50),
     ekip: ekip.filter((u) => u.aktif).map(({ id, ad, rol }) => ({ id, ad, rol })),
     epostaSaglayici: saglayicilar().eposta,

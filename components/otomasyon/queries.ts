@@ -109,6 +109,18 @@ export async function islendiMi(kuralId: string, anahtar: string) {
   return !!r;
 }
 
+/** Verilen anahtarlardan bu kural için daha önce işlenmiş olanlar (tek sorgu; kayıt başına sorgu atmamak için) */
+export async function islenmisAnahtarlar(kuralId: string, anahtarlar: string[]): Promise<Set<string>> {
+  const no = kuralNo(kuralId);
+  if (no === null || !anahtarlar.length) return new Set();
+  const s = await db();
+  const satirlar = sonuc(
+    await s.from("otomasyon_islenenler").select("anahtar").eq("kural_id", no).in("anahtar", anahtarlar),
+    "İşlenen kayıtlar okunuyor",
+  ) as { anahtar: string }[];
+  return new Set(satirlar.map((r) => r.anahtar));
+}
+
 /* ---------- Yazma (yalnızca actions.ts ve motor.ts'ten çağrılır) ---------- */
 
 /** Var olan kuralı günceller; yoksa ekler ve veritabanının verdiği id / oluşturma zamanını nesnenin üstüne yazar */

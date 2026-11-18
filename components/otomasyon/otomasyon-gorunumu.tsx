@@ -1,7 +1,7 @@
 "use client";
 
 // Otomasyon sayfası: kural listesi (aç/kapat, düzenle, şimdi çalıştır, sil) + çalışma geçmişi
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Play, Plus, Trash2 } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
@@ -18,8 +18,9 @@ const EYLEM_ADI = { hatirlatma: "Hatırlatma", eposta: "E-posta" } as const;
 
 const zamanYaz = (iso: string) => new Date(iso).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-export default function OtomasyonGorunumu() {
-  const [veri, setVeri] = useState<OtomasyonVerisi | null>(null);
+export default function OtomasyonGorunumu({ ilk }: { ilk?: OtomasyonVerisi }) {
+  const [veri, setVeri] = useState<OtomasyonVerisi | null>(ilk ?? null);
+  const sunucudanGeldi = useRef(!!ilk); // ilk veri sunucuda yüklendiyse açılışta tekrar istenmez
   const [form, setForm] = useState<{ kural?: Kural } | null>(null);
   const [silinecek, setSilinecek] = useState<Kural | null>(null);
   const [mesaj, setMesaj] = useState<string | null>(null);
@@ -30,8 +31,8 @@ export default function OtomasyonGorunumu() {
   }, []);
 
   useEffect(() => {
-    yenile();
-    const t = setInterval(yenile, 30_000); // zamanlayıcı arka planda çalıştırdıkça geçmiş kendiliğinden güncellenir
+    if (!sunucudanGeldi.current) yenile();
+    const t = setInterval(() => document.visibilityState === "visible" && yenile(), 30_000); // zamanlayıcı arka planda çalıştırdıkça geçmiş kendiliğinden güncellenir
     return () => clearInterval(t);
   }, [yenile]);
 

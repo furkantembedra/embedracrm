@@ -2,6 +2,7 @@
 // Tablolar: musteri, musteri_yetkilileri (y_sira 0 = birincil), iletisim_izinleri (yetkili + kanal),
 // musteri_olaylari (zaman çizelgesi). Plan / lisans bitişi / cihazlar cihazlar tablosundan, açık talep sayısı
 // destek_talepleri'nden türetilir.
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CihazModeli } from "@/lib/urunler";
 import { db, sonuc, yerelZaman } from "@/lib/supabase/db";
@@ -208,14 +209,29 @@ export async function getMusteri(id: string): Promise<Musteri | null> {
 }
 
 /** "Volant Lenkung Service" ile "Volant Lenkung Service GmbH" aynı firma sayılır. */
-export async function musteriBulAdla(ad: string): Promise<Musteri | null> {
-  const n = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-  const aranan = n(ad);
-  if (!aranan) return null;
+const adNormal = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/** Müşteri adları (en yeni önce). Bir render içinde tek kez okunur. */
+const musteriAdlari = cache(async () => {
   const s = await db();
-  const rows = sonuc(await s.from("musteri").select("id, m_ad").order("created_at", { ascending: false }).order("id"), "Müşteri adları okunurken") as { id: number; m_ad: string }[];
-  const bulunan = rows.find((m) => n(m.m_ad) === aranan || n(m.m_ad).startsWith(aranan + " ") || aranan.startsWith(n(m.m_ad) + " "));
-  return bulunan ? musteriOku(s, String(bulunan.id)) : null;
+  return sonuc(await s.from("musteri").select("id, m_ad").order("created_at", { ascending: false }).order("id"), "Müşteri adları okunurken") as { id: number; m_ad: string }[];
+});
+
+async function adlaEslesen(ad: string) {
+  const aranan = adNormal(ad);
+  if (!aranan) return null;
+  return (await musteriAdlari()).find((m) => adNormal(m.m_ad) === aranan || adNormal(m.m_ad).startsWith(aranan + " ") || aranan.startsWith(adNormal(m.m_ad) + " ")) ?? null;
+}
+
+export async function musteriBulAdla(ad: string): Promise<Musteri | null> {
+  const bulunan = await adlaEslesen(ad);
+  return bulunan ? musteriOku(await db(), String(bulunan.id)) : null;
+}
+
+/** Yalnızca kimlik gerekiyorsa: müşterinin tamamını okumadan (tek sorgu, render içinde paylaşılır) */
+export async function musteriIdBulAdla(ad: string): Promise<string | null> {
+  const bulunan = await adlaEslesen(ad);
+  return bulunan ? String(bulunan.id) : null;
 }
 
 /* ---------- Yazma (yalnızca actions / sunucu kodundan çağrılır) ---------- */
