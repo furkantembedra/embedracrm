@@ -9,5 +9,5 @@ eski veritabanının kataloğundan birebir çıkarılıp `supabase/migrations/` 
 (sütun, kısıt, indeks, politika, fonksiyon izni ve tablo yetkisi özetleri iki projede eşleşti). Yeni değişiklikler
 `supabase/migrations/` altına eklenmeli.
 
-Bekleyen: `20261118100900_eski_sutunlari_kaldir.sql` hiçbir projede uygulanmadı (sütun silme onay gerektiriyor). Eski
-sütunlar yeni projede de duruyor; uygulanacaksa yeni bir tarihle `supabase/migrations/` altına kopyalanmalı.
+`20261118100900_eski_sutunlari_kaldir.sql`'in sildiği sütunlar (`musteri.m_yk/m_tel/m_eposta`, `bayi_basvurulari.b_*`)
+taşıma sırasında eski veritabanında zaten yoktu, yani bu adım daha önce elle uygulanmış; yeni şemada da yoklar.

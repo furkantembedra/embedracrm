@@ -5,8 +5,9 @@
 // Değilse "Yeni lead" aşamasına kaynak "WhatsApp" olan fırsat açılır. Numara bir müşteri
 // yetkilisine aitse firma adı müşteriden alınır ve mesaj müşterinin zaman çizelgesine de düşer.
 import { revalidatePath } from "next/cache";
-import { firsatEkleDepo, firsatiGuncelle, getFirsatlar, KAPALI_ASAMALAR, type Firsat, type WhatsappMesaji } from "@/components/satis-hatti/queries";
+import { firsatEkleDepo, firsatiGuncelle, getFirsat, KAPALI_ASAMALAR, type Firsat } from "@/components/satis-hatti/queries";
 import { getMusteri, musteriyiGuncelle } from "@/components/musteriler/queries";
+import { konusmaGetirVeyaAc, mesajiBagla, mesajiGeriAl, mesajKaydet } from "@/components/konusma/queries";
 import { db, sonuc as veri } from "@/lib/supabase/db";
 import { telefonGoster, telefonNormalize } from "./telefon";
 
@@ -27,60 +28,77 @@ const TUR_METNI: Record<string, string> = {
 export async function whatsappMesajiIsle(m: GelenMesaj): Promise<{ firsat: Firsat; yeni: boolean } | null> {
   const telefon = telefonNormalize(`+${m.waId.replace(/^\+/, "")}`);
   if (!telefon) return null;
-  // Aynı wamid daha önce işlendiyse (Meta tekrar gönderdi) atlanır: whatsapp_mesajlari.w_mesaj_id unique
-  const s = await db();
-  const islenmis = veri(await s.from("whatsapp_mesajlari").select("id").eq("w_mesaj_id", m.mesajId).maybeSingle(), "WhatsApp mesajı aranırken");
-  if (islenmis) return null;
-
   const metin = m.metin.trim() || TUR_METNI[m.tur] || `[${m.tur}]`;
-  const mesaj: WhatsappMesaji = { id: m.mesajId, metin: metin.slice(0, 2000), zaman: m.zaman, yon: "gelen", tur: m.tur };
-  // Sonraki adım tarihi sunucunun bugünü (mesaj zamanı gecikmeli gelebilir)
-  const d = new Date();
-  const bugun = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  // 1) Aynı numaralı açık fırsat
-  const firsatlar = await getFirsatlar();
-  const acik = firsatlar.filter((f) => f.telefon && telefonNormalize(f.telefon) === telefon && !KAPALI_ASAMALAR.includes(f.asama)).at(-1);
+  // 1) Önce mesajı yaz: konusma_mesajlari.dis_mesaj_id tekil. Meta aynı mesajı tekrar gönderirse ya da iki webhook
+  //    aynı anda gelirse yalnızca ilk yazan devam eder (kontrol-sonra-yaz yarışı yok).
+  const konusma = await konusmaGetirVeyaAc("whatsapp", telefon);
+  const mesajNo = await mesajKaydet({
+    konusmaId: konusma.id, yon: "gelen", gonderen: "musteri", disMesajId: m.mesajId,
+    metin: metin.slice(0, 2000), tur: m.tur || "text", zaman: m.zaman,
+  });
+  if (mesajNo === null) return null;
 
-  // 2) Numara bir müşteri yetkilisine ait mi?
-  const yetkililer = veri(await s.from("musteri_yetkilileri").select("musteri_id, y_tel").neq("y_tel", ""), "Yetkili telefonları okunurken") as { musteri_id: number; y_tel: string }[];
-  const sahibi = yetkililer.find((y) => telefonNormalize(y.y_tel) === telefon);
-  const musteri = sahibi ? await getMusteri(String(sahibi.musteri_id)) : null;
-  if (musteri) {
-    await musteriyiGuncelle(musteri.id, (x) => {
-      x.olaylar.unshift({ metin: `WhatsApp: “${metin.slice(0, 120)}”`, zaman: "Bugün · WhatsApp", tur: "arama" });
-      x.sonTemas = "Bugün";
+  try {
+    // Sonraki adım tarihi sunucunun bugünü (mesaj zamanı gecikmeli gelebilir)
+    const d = new Date();
+    const bugun = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const s = await db();
+
+    // 2) Aynı numaralı açık fırsat ve numaranın sahibi müşteri yetkilisi: normalize telefon sütunları üzerinden (indeksli)
+    const [acikSatir, yetkili] = await Promise.all([
+      s.from("satis_hatti").select("id, asama:asama!satis_hatti_asama_id_fkey!inner(kod)")
+        .eq("f_telefon_normal", telefon).not("asama.kod", "in", `(${KAPALI_ASAMALAR.join(",")})`)
+        .order("id", { ascending: false }).limit(1).maybeSingle(),
+      s.from("musteri_yetkilileri").select("musteri_id").eq("y_tel_normal", telefon).order("y_sira").limit(1).maybeSingle(),
+    ]);
+    const acikId = (veri(acikSatir, "Açık fırsat aranırken") as { id: number } | null)?.id ?? null;
+    const sahibi = veri(yetkili, "Müşteri yetkilisi aranırken") as { musteri_id: number } | null;
+    const musteri = sahibi ? await getMusteri(String(sahibi.musteri_id)) : null;
+    if (musteri) {
+      await musteriyiGuncelle(musteri.id, (x) => {
+        x.olaylar.unshift({ metin: `WhatsApp: “${metin.slice(0, 120)}”`, zaman: "Bugün · WhatsApp", tur: "arama" });
+        x.sonTemas = "Bugün";
+      });
+      revalidatePath("/musteriler");
+    }
+
+    // 3) Açık fırsat varsa ona eklenir, yoksa "Yeni lead" açılır
+    let firsatId: string;
+    const yeni = acikId === null;
+    if (!yeni) {
+      const f = await firsatiGuncelle(String(acikId), (x) => {
+        x.sonrakiAdim = "WhatsApp'tan dönüş yap";
+        x.sonrakiTarih = bugun;
+      });
+      firsatId = f!.id;
+    } else {
+      const f: Firsat = {
+        id: "",
+        firma: musteri?.ad ?? (m.ad.trim() || telefonGoster(telefon)),
+        konum: musteri ? `${musteri.sehir}, ${musteri.ulke}` : telefon.startsWith("+90") ? "Türkiye" : "—",
+        kaynak: "WhatsApp",
+        icerik: "Ürün belirlenmedi",
+        tutar: 0,
+        asama: "yeni",
+        sonrakiAdim: "WhatsApp'tan dönüş yap",
+        sonrakiTarih: bugun,
+        kampanyaId: null,
+        telefon,
+      };
+      await firsatEkleDepo(f);
+      firsatId = f.id;
+    }
+
+    // 4) Mesajı fırsata, konuşmayı fırsat / müşteriye bağla (24 saat penceresi için son müşteri mesajı zamanı)
+    await mesajiBagla(konusma.id, mesajNo, {
+      satisHattiId: Number(firsatId), musteriId: musteri ? Number(musteri.id) : null, sonMusteriMesaji: m.zaman,
     });
-    revalidatePath("/musteriler");
+    revalidatePath("/satis-hatti");
+    revalidatePath("/genel-bakis");
+    return { firsat: (await getFirsat(firsatId))!, yeni };
+  } catch (e) {
+    await mesajiGeriAl(mesajNo).catch(() => {}); // Meta yeniden gönderdiğinde tekrar işlenebilsin
+    throw e;
   }
-
-  let sonuc: { firsat: Firsat; yeni: boolean };
-  if (acik) {
-    const f = await firsatiGuncelle(acik.id, (x) => {
-      x.mesajlar = [...(x.mesajlar ?? []), mesaj];
-      x.sonrakiAdim = "WhatsApp'tan dönüş yap";
-      x.sonrakiTarih = bugun;
-    });
-    sonuc = { firsat: f!, yeni: false };
-  } else {
-    const f: Firsat = {
-      id: crypto.randomUUID(),
-      firma: musteri?.ad ?? (m.ad.trim() || telefonGoster(telefon)),
-      konum: musteri ? `${musteri.sehir}, ${musteri.ulke}` : telefon.startsWith("+90") ? "Türkiye" : "—",
-      kaynak: "WhatsApp",
-      icerik: "Ürün belirlenmedi",
-      tutar: 0,
-      asama: "yeni",
-      sonrakiAdim: "WhatsApp'tan dönüş yap",
-      sonrakiTarih: bugun,
-      kampanyaId: null,
-      telefon,
-      mesajlar: [mesaj],
-    };
-    await firsatEkleDepo(f);
-    sonuc = { firsat: f, yeni: true };
-  }
-  revalidatePath("/satis-hatti");
-  revalidatePath("/genel-bakis");
-  return sonuc;
 }

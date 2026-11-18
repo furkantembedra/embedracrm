@@ -1,5 +1,5 @@
 // Satış Hattı: veri okuma ve yazma (Supabase).
-// Tablolar: satis_hatti (aşama: asama.kod, kaynak: kaynak.f_kaynak, sıra: f_sira), whatsapp_mesajlari (yazışma).
+// Tablolar: satis_hatti (aşama: asama.kod, kaynak: kaynak.f_kaynak, sıra: f_sira), konusma_mesajlari (yazışma; yalnızca components/konusma üzerinden yazılır).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, sonuc } from "@/lib/supabase/db";
 import { ASAMALAR, KAYNAKLAR, type Asama, type KayipBilgisi, type KayipNedeni, type Kaynak } from "./sabitler";
@@ -23,14 +23,14 @@ export type Firsat = {
   kayipAciklama?: string; // "Diğer" seçilince yazılan sebep
   kampanyaId?: string | null; // lead hangi pazarlama kampanyasından geldi
   telefon?: string; // "+905321234567" (WhatsApp lead'lerinde otomatik dolar)
-  mesajlar?: WhatsappMesaji[]; // eskiden yeniye
+  mesajlar?: WhatsappMesaji[]; // eskiden yeniye; salt okunur (konusma_mesajlari, components/konusma yazar)
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
 };
 
 
 /* ---------- Satır ↔ domain ---------- */
 
-type MesajSatiri = { id: number; w_mesaj_id: string; w_metin: string; w_yon: "gelen" | "giden"; w_tur: string; w_zaman: string };
+type MesajSatiri = { id: number; dis_mesaj_id: string | null; metin: string; yon: "gelen" | "giden"; tur: string; zaman: string };
 type FirsatSatiri = {
   id: number;
   f_firma: string;
@@ -54,12 +54,12 @@ const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, 
   kampanya_id, f_telefon, f_son_hareket, f_sira,
   asama:asama!satis_hatti_asama_id_fkey(kod),
   kaynak:kaynak!satis_hatti_kaynak_id_fkey(f_kaynak),
-  mesajlar:whatsapp_mesajlari!whatsapp_mesajlari_satis_hatti_id_fkey(id, w_mesaj_id, w_metin, w_yon, w_tur, w_zaman)`;
+  mesajlar:konusma_mesajlari!konusma_mesajlari_satis_hatti_id_fkey(id, dis_mesaj_id, metin, yon, tur, zaman)`;
 
 function satirdanFirsat(r: FirsatSatiri): Firsat {
   const mesajlar = [...(r.mesajlar ?? [])]
-    .sort((a, b) => (a.w_zaman === b.w_zaman ? a.id - b.id : a.w_zaman < b.w_zaman ? -1 : 1))
-    .map((m) => ({ id: m.w_mesaj_id, metin: m.w_metin, zaman: new Date(m.w_zaman).toISOString(), yon: m.w_yon, tur: m.w_tur }));
+    .sort((a, b) => (a.zaman === b.zaman ? a.id - b.id : a.zaman < b.zaman ? -1 : 1))
+    .map((m) => ({ id: m.dis_mesaj_id ?? String(m.id), metin: m.metin, zaman: new Date(m.zaman).toISOString(), yon: m.yon, tur: m.tur }));
   return {
     id: String(r.id),
     firma: r.f_firma,
@@ -106,18 +106,6 @@ async function sonrakiSira(s: SupabaseClient, asamaId: number): Promise<number> 
   return (r?.f_sira ?? -1) + 1;
 }
 
-/** WhatsApp mesajlarını ekler; aynı wamid zaten kayıtlıysa atlanır (w_mesaj_id unique) */
-async function mesajlariEkle(s: SupabaseClient, firsatId: number, mesajlar: WhatsappMesaji[]) {
-  if (!mesajlar.length) return;
-  sonuc(
-    await s.from("whatsapp_mesajlari").upsert(
-      mesajlar.map((m) => ({ satis_hatti_id: firsatId, w_mesaj_id: m.id, w_metin: m.metin, w_yon: m.yon, w_tur: m.tur || "text", w_zaman: m.zaman })),
-      { onConflict: "w_mesaj_id", ignoreDuplicates: true },
-    ),
-    "WhatsApp mesajı kaydedilirken",
-  );
-}
-
 async function firsatOku(s: SupabaseClient, id: string): Promise<Firsat | null> {
   const no = sayiKimlik(id);
   if (no == null) return null;
@@ -153,7 +141,6 @@ async function firsatYaz(s: SupabaseClient, f: Firsat, sonHareket: string) {
   ) as { id: number };
   f.id = String(id);
   f.sonHareket = sonHareket;
-  await mesajlariEkle(s, id, f.mesajlar ?? []);
 }
 
 /* ---------- Okuma ---------- */
@@ -246,8 +233,6 @@ export async function firsatiGuncelle(id: string, f: (x: Firsat) => void): Promi
   if (x.telefon !== once.telefon) d.f_telefon = x.telefon ?? null;
   sonuc(await s.from("satis_hatti").update(d).eq("id", Number(once.id)), "Fırsat güncellenirken");
 
-  const eskiMesajlar = new Set((once.mesajlar ?? []).map((m) => m.id));
-  await mesajlariEkle(s, Number(once.id), (x.mesajlar ?? []).filter((m) => !eskiMesajlar.has(m.id)));
   x.id = once.id;
   return x;
 }
