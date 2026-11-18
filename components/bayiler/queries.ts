@@ -4,7 +4,7 @@
 import { connection } from "next/server";
 import { ASAMALAR, ASAMA_BILGI, KONTROL_LISTESI, ULKELER, HEDEF_ULKELER, DESTEK_KALEMLERI, HAREKET_ADI } from "./sabitler";
 export { ASAMALAR, ASAMA_BILGI, KONTROL_LISTESI, ULKELER, HEDEF_ULKELER, DESTEK_KALEMLERI, HAREKET_ADI };
-import { db, sonuc, kullaniciKimligi, kullaniciNo, yerelZaman } from "@/lib/supabase/db";
+import { db, sonuc, kullaniciKimligi, kullaniciNo, yerelZaman, sistemdeMi } from "@/lib/supabase/db";
 import type { CihazModeli } from "@/lib/urunler";
 import type { LisansPlani } from "@/components/cihaz-lisans/queries";
 
@@ -305,7 +305,9 @@ function sayaclar(bayiId: string, bugun: string, hareketler: BayiHareketi[]) {
 }
 
 export async function getAktifBayiler(): Promise<AktifBayi[]> {
-  await connection(); // sayaçlar bugünün çeyreğine göre: istek anında hesaplanır (cacheComponents)
+  // Sayaçlar bugünün çeyreğine göre: istek anında hesaplanır (cacheComponents). Zamanlayıcıda (sistemOlarak) istek yoktur,
+  // connection() orada "outside a request scope" hatası verir; prerender da olmadığı için atlanır.
+  if (!sistemdeMi()) await connection();
   const bugun = new Date().toISOString().slice(0, 10);
   const s = await db();
   const [satirlar, hareketler] = await Promise.all([

@@ -12,8 +12,5 @@ export function useBugun(): number | null {
   return useSyncExternalStore(abone, gunBasi, () => null);
 }
 
-/** Bugüne göre gün farkı: 0 bugün, 1 yarın, -2 iki gün önce. bugun null ise null. */
-export function gunFarki(tarih: string, bugun: number | null) {
-  if (bugun === null) return null;
-  return Math.round((new Date(tarih + "T00:00:00").getTime() - bugun) / 86_400_000);
-}
+// gunFarki saf bir hesap: sunucu kodu da kullandığı için "use client" olmayan lib/gun-farki.ts'te (buradan da dışa açılır)
+export { gunFarki } from "./gun-farki";

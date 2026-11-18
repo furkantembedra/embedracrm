@@ -1,6 +1,6 @@
 // Pazarlama bileşenlerinin paylaştığı yardımcılar: kanal renkleri, hafta hesabı ve hedef liste üyeleri
 import type { ChipTon } from "@/components/ui/chip";
-import { gunFarki } from "@/lib/use-bugun";
+import { gunFarki } from "@/lib/gun-farki";
 import { IZIN_KANAL_ADI, type IzinKanali } from "@/components/musteriler/izin";
 import { HAZIR_LISTELER } from "./sabitler";
 import type { IcerikKanali, KampanyaDurumu, KampanyaKanali, ListeFiltresi, OzelListe } from "./queries";

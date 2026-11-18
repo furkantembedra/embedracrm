@@ -1,6 +1,6 @@
 // Satış hattı bileşenlerinin paylaştığı yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
-import { gunFarki } from "@/lib/use-bugun";
+import { gunFarki } from "@/lib/gun-farki";
 import type { Kaynak } from "./queries";
 
 export const KAYNAK_TONU: Record<Kaynak, ChipTon> = {
