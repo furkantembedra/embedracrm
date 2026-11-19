@@ -1,4 +1,4 @@
-// Gelen WhatsApp mesajını satış hattına işler. Webhook (app/api/whatsapp/webhook) ve
+// Gelen WhatsApp mesajını satış hattına işler. Ortak Meta webhook'u (components/konusma/meta-webhook.ts) ve
 // satış hattındaki "WhatsApp mesajı simüle et" aynı fonksiyonu kullanır.
 //
 // Kural: numarası açık bir fırsatta kayıtlıysa mesaj o fırsatın geçmişine eklenir (yeni lead açılmaz).
@@ -7,18 +7,28 @@
 import { revalidatePath } from "next/cache";
 import { firsatEkleDepo, firsatiGuncelle, getFirsat, KAPALI_ASAMALAR, type Firsat } from "@/components/satis-hatti/queries";
 import { getMusteri, musteriyiGuncelle } from "@/components/musteriler/queries";
-import { konusmaGetirVeyaAc, mesajiBagla, mesajiGeriAl, mesajKaydet } from "@/components/konusma/queries";
+import { konusmaGetirVeyaAc, mesajiBagla, mesajiGeriAl, mesajKaydet, VARSAYILAN_KANAL_HESABI, type MesajEki } from "@/components/konusma/queries";
 import { db, sonuc as veri } from "@/lib/supabase/db";
 import { telefonGoster, telefonNormalize } from "./telefon";
+import { whatsappTuru } from "./turler";
 
 export type GelenMesaj = {
   waId: string; // "905321234567" (Meta'nın gönderdiği, + işaretsiz)
   ad: string; // WhatsApp profil adı (boş olabilir)
   metin: string;
-  tur: string; // text | image | document | location | audio …
+  tur: string; // WhatsApp türü: text | image | document | location | audio … (ortak türe whatsappTuru çevirir)
   mesajId: string; // wamid… (aynı mesaj iki kez gelirse tekrar işlenmez)
   zaman: string; // ISO
+  /** İşletme numarasının phone_number_id'si (webhook metadata); yoksa WHATSAPP_PHONE_ID, o da yoksa "varsayilan" */
+  kanalHesapId?: string;
+  /** Yönlendirme, yanıtlanan mesaj, dosya türü (kişisel veri içermez) */
+  ek?: MesajEki;
 };
+
+/** Gelen WhatsApp mesajının hangi işletme numarasına geldiği */
+export function whatsappHesabi(phoneNumberId?: string | null) {
+  return phoneNumberId?.trim() || process.env.WHATSAPP_PHONE_ID?.trim() || VARSAYILAN_KANAL_HESABI;
+}
 
 const TUR_METNI: Record<string, string> = {
   image: "📷 Fotoğraf", document: "📄 Belge", location: "📍 Konum", audio: "🎤 Sesli mesaj", video: "🎬 Video", sticker: "Çıkartma", contacts: "👤 Kişi kartı",
@@ -32,10 +42,11 @@ export async function whatsappMesajiIsle(m: GelenMesaj): Promise<{ firsat: Firsa
 
   // 1) Önce mesajı yaz: konusma_mesajlari.dis_mesaj_id tekil. Meta aynı mesajı tekrar gönderirse ya da iki webhook
   //    aynı anda gelirse yalnızca ilk yazan devam eder (kontrol-sonra-yaz yarışı yok).
-  const konusma = await konusmaGetirVeyaAc("whatsapp", telefon);
+  const konusma = await konusmaGetirVeyaAc("whatsapp", whatsappHesabi(m.kanalHesapId), telefon);
+  const tur = whatsappTuru(m.tur);
   const mesajNo = await mesajKaydet({
     konusmaId: konusma.id, yon: "gelen", gonderen: "musteri", disMesajId: m.mesajId,
-    metin: metin.slice(0, 2000), tur: m.tur || "text", zaman: m.zaman,
+    metin: metin.slice(0, 2000), tur: tur.tur, ek: { ...m.ek, ...tur.ek }, zaman: m.zaman,
   });
   if (mesajNo === null) return null;
 

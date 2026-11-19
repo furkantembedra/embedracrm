@@ -10,6 +10,7 @@ const ACIK_YOLLAR = [
   "/portal/giris",
   "/auth/",
   "/api/cihaz-bildirimi",
+  "/api/meta/webhook",
   "/api/whatsapp/",
   "/api/abonelik",
   "/api/kampanya-zamanlayici",

@@ -67,7 +67,7 @@ describe("private.telefon_normal (SQL) = telefonNormalize (TS)", () => {
 describe("tekillik", () => {
   it("aynı dış mesaj kimliği ikinci kez yazılamaz", async () => {
     await db.transaction(async (tx) => {
-      const k = (await tx.query<{ id: number }>(`insert into public.konusmalar (kanal, dis_kullanici_id) values ('whatsapp', '+905550000001') returning id`)).rows[0].id;
+      const k = (await tx.query<{ id: number }>(`insert into public.konusmalar (kanal, kanal_hesap_id, dis_kullanici_id) values ('whatsapp', '111', '+905550000001') returning id`)).rows[0].id;
       const yaz = () => tx.query(`insert into public.konusma_mesajlari (konusma_id, yon, gonderen, dis_mesaj_id, metin, zaman) values ($1, 'gelen', 'musteri', 'wamid.AYNI', 'x', now())`, [k]);
       await yaz();
       await tx.exec("savepoint ikinci");
@@ -76,19 +76,22 @@ describe("tekillik", () => {
     });
   });
 
-  it("kanal + dış kullanıcı kimliği başına tek konuşma olur", async () => {
+  it("kanal + kanal hesabı + dış kullanıcı kimliği başına tek konuşma olur", async () => {
     await db.transaction(async (tx) => {
-      const ac = () => tx.query(`insert into public.konusmalar (kanal, dis_kullanici_id) values ('instagram', 'igsid-1')`);
-      await ac();
+      const ac = (hesap: string) => tx.query(`insert into public.konusmalar (kanal, kanal_hesap_id, dis_kullanici_id) values ('instagram', $1, 'igsid-1')`, [hesap]);
+      await ac("ig-hesap-1");
       await tx.exec("savepoint ikinci");
-      await expect(ac()).rejects.toMatchObject({ code: "23505" });
+      await expect(ac("ig-hesap-1")).rejects.toMatchObject({ code: "23505" });
+      await tx.exec("rollback to savepoint ikinci");
+      // IGSID / PSID hesaba özgüdür: aynı kimlik başka hesapta başka bir kişi, ayrı konuşma
+      await ac("ig-hesap-2");
       await tx.rollback();
     });
   });
 
   it("gelen mesajın göndereni müşteri olmak zorundadır", async () => {
     await db.transaction(async (tx) => {
-      const k = (await tx.query<{ id: number }>(`insert into public.konusmalar (kanal, dis_kullanici_id) values ('whatsapp', '+905550000002') returning id`)).rows[0].id;
+      const k = (await tx.query<{ id: number }>(`insert into public.konusmalar (kanal, kanal_hesap_id, dis_kullanici_id) values ('whatsapp', '111', '+905550000002') returning id`)).rows[0].id;
       await expect(tx.query(`insert into public.konusma_mesajlari (konusma_id, yon, gonderen, metin, zaman) values ($1, 'gelen', 'bot', 'x', now())`, [k]))
         .rejects.toMatchObject({ code: "23514" });
       await tx.rollback();

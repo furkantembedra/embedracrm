@@ -1,12 +1,13 @@
 // Satış hattı bileşenlerinin paylaştığı yardımcılar
 import type { ChipTon } from "@/components/ui/chip";
 import { gunFarki } from "@/lib/gun-farki";
-import type { Kaynak } from "./queries";
+import type { Firsat, Kaynak } from "./queries";
 
 export const KAYNAK_TONU: Record<Kaynak, ChipTon> = {
   "Web sitesi": "gray",
   WhatsApp: "ok",
   Instagram: "info",
+  Messenger: "info",
   Bayi: "lime",
   Fuar: "warn",
   "Mevcut müşteri": "gray",
@@ -36,4 +37,12 @@ export function yerlestir<T extends { id: string }>(liste: T[], eleman: T, konum
   if (i < 0) return [...kalan, eleman];
   const yer = konum.once ? i : i + 1;
   return [...kalan.slice(0, yer), eleman, ...kalan.slice(yer)];
+}
+
+/**
+ * Fırsatı listede varsa yerinde günceller, yoksa sona ekler. Yeni fırsatın eklenmesiyle sunucudan gelen yenilenmiş liste
+ * (revalidatePath) yarışabilir: liste önce gelirse fırsat zaten oradadır ve ikinci kez eklenmemelidir (çift kart / aynı key).
+ */
+export function ekleVeyaGuncelle(liste: Firsat[], f: Firsat): Firsat[] {
+  return liste.some((x) => x.id === f.id) ? liste.map((x) => (x.id === f.id ? f : x)) : [...liste, f];
 }

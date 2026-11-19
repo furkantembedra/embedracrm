@@ -10,7 +10,7 @@ import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import OzetKartlari from "./ozet-kartlari";
 import Kanban from "./kanban";
-import { yerlestir, type BirakmaKonumu } from "./ortak";
+import { ekleVeyaGuncelle, yerlestir, type BirakmaKonumu } from "./ortak";
 import FirsatFormu from "./firsat-formu";
 import { firsatAsamasiGuncelle, firsatSirasiKaydet, type AsamaSonucu } from "./actions";
 import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type KayipBilgisi, type KayipNedeni } from "./sabitler";
@@ -169,7 +169,7 @@ export default function SatisHattiGorunumu({
   }, []);
   const whatsappIslendi = useCallback((f: Firsat, yeni: boolean) => {
     setSimulasyon(false);
-    setFirsatlar((l) => (yeni ? [...l, f] : l.map((x) => (x.id === f.id ? f : x))));
+    setFirsatlar((l) => ekleVeyaGuncelle(l, f));
     setDuyuru(yeni ? `WhatsApp'tan yeni lead: ${f.firma}` : `${f.firma} fırsatına WhatsApp mesajı eklendi.`);
   }, []);
   useEffect(() => {
@@ -236,7 +236,7 @@ export default function SatisHattiGorunumu({
   const kapat = useCallback(() => setEkleAsama(null), []);
   const bildirimiKapat = useCallback(() => setBildirim(null), []);
   const eklendi = useCallback((f: Firsat, musteri?: AsamaSonucu["musteri"]) => {
-    setFirsatlar((l) => [...l, f]); // yeni fırsat sütunun en altına eklenir
+    setFirsatlar((l) => ekleVeyaGuncelle(l, f)); // yeni fırsat sütunun en altına eklenir
     setEkleAsama(null);
     if (musteri) setBildirim(musteri);
   }, []);

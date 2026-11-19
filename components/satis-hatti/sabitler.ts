@@ -20,5 +20,5 @@ export const KAYIP_NEDENLERI = ["Fiyat yüksek bulundu", "Rakibi seçti", "Büt�
 export type KayipNedeni = (typeof KAYIP_NEDENLERI)[number];
 export type KayipBilgisi = { neden: KayipNedeni; aciklama?: string };
 
-export const KAYNAKLAR = ["Web sitesi", "WhatsApp", "Instagram", "Bayi", "Fuar", "Mevcut müşteri"] as const;
-export type Kaynak = (typeof KAYNAKLAR)[number];
+// Lead kaynakları tek listedir: lib/constants.ts › LEAD_KAYNAKLARI (burada eski adıyla dışa açılır)
+export { LEAD_KAYNAKLARI as KAYNAKLAR, type LeadKaynagi as Kaynak } from "@/lib/constants";

@@ -18,7 +18,8 @@ insert into public.kaynak (id, f_kaynak) overriding system value values
 ('3', 'Instagram'),
 ('4', 'Bayi'),
 ('5', 'Fuar'),
-('6', 'Mevcut müşteri');
+('6', 'Mevcut müşteri'),
+('7', 'Messenger');
 
 insert into public.lisans_planlari (id, l_paket) overriding system value values
 ('1', 'Basic'),
@@ -173,11 +174,11 @@ insert into public.satis_hatti (id, f_konum, f_icerik, f_tutar, f_sonraki_adim, 
 ('3', 'Konya, TR', '2× ONE + Pro+', '356000.00', 'İhtiyaç analizi', '2026-11-04', 'Konya Direksiyon Merkezi', '2', '1', NULL, '2026-11-18 07:51:07.79876+00', NULL, NULL, '2', '+905321112233', '2026-11-06', '2', 'false'),
 ('12', 'Konya, TR', '1× ONE + Pro', '178000.00', '6 ay sonra tekrar ara', '2027-04-15', 'Rota Servis Konya', '1', '5', '15', '2026-11-18 07:51:07.79876+00', NULL, NULL, '4', NULL, '2026-11-18', '2', 'true');
 
-insert into public.konusmalar (id, kanal, dis_kullanici_id, satis_hatti_id, musteri_id, bot_aktif, son_musteri_mesaji_zamani, created_at) overriding system value values
-('1', 'whatsapp', '+905321112233', '3', NULL, 'false', '2026-11-03 10:12:00+00', '2026-11-18 12:36:43.437359+00');
+insert into public.konusmalar (id, kanal, kanal_hesap_id, dis_kullanici_id, satis_hatti_id, musteri_id, bot_aktif, son_musteri_mesaji_zamani, created_at) overriding system value values
+('1', 'whatsapp', 'varsayilan', '+905321112233', '3', NULL, 'false', '2026-11-03 10:12:00+00', '2026-11-18 12:36:43.437359+00');
 
 insert into public.konusma_mesajlari (id, konusma_id, satis_hatti_id, yon, gonderen, dis_mesaj_id, metin, tur, zaman, created_at) overriding system value values
-('1', '1', '3', 'gelen', 'musteri', 'demo-wa-1', 'Merhaba, 2 adet ONE ve Pro+ lisans için fiyat alabilir miyim?', 'text', '2026-11-03 10:12:00+00', '2026-11-18 07:51:07.79876+00');
+('1', '1', '3', 'gelen', 'musteri', 'demo-wa-1', 'Merhaba, 2 adet ONE ve Pro+ lisans için fiyat alabilir miyim?', 'metin', '2026-11-03 10:12:00+00', '2026-11-18 07:51:07.79876+00');
 
 insert into public.teklifler (id, tk_no, tk_gorunen_no, tk_kok, tk_versiyon, satis_hatti_id, tk_firma, tk_konum, tk_iskonto, tk_kdv, tk_gecerlilik, tk_odeme_sartlari, tk_teslim_sartlari, tk_not, tk_durum, tk_olusturma, tk_gonderim, tk_sonuc, tk_siparis_no, created_at) overriding system value values
 ('1', 'TKL-2026-0001', 'TKL-2026-0001', 'TKL-2026-0001', '1', '7', 'Başkent Rot & Direksiyon', 'Ankara, TR', '5.00', '0.200', '2026-11-12', '%50 peşin, %50 teslimde · Havale/EFT', 'Siparişten itibaren 5 iş günü · Kargo dahil', 'Mevcut Basic lisans Pro''ya yükseltilir.', 'gonderildi', '2026-11-02', '2026-11-02', NULL, NULL, '2026-11-18 07:51:07.79876+00'),

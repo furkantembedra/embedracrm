@@ -1,7 +1,9 @@
 // Sahte Meta / Anthropic sunucuları ve ağ koruması: testlerin gerçek API'ye çıkmadığını ve
 // gönderim kodunun Meta'ya doğru isteği attığını doğrular.
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { sahteMetaBaslat, type SahteMeta } from "./sahte/meta";
+import {
+  echoOlayi, hikayeYanitiOlayi, instagramGovdesi, messengerGovdesi, sahteMetaBaslat, VARSAYILAN_TOKENLAR, whatsappGovdesi, type SahteMeta,
+} from "./sahte/meta";
 import { sahteAnthropicBaslat, type SahteAnthropic } from "./sahte/anthropic";
 import { whatsappGonder } from "@/lib/ileti-gonder";
 
@@ -61,6 +63,57 @@ describe("whatsappGonder → sahte Meta Graph API", () => {
     const once = meta.istekler.length;
     expect(await whatsappGonder({ telefon: "+90 532", sablon: "x", parametreler: [] })).toMatchObject({ ok: false });
     expect(meta.istekler.length).toBe(once);
+  });
+});
+
+describe("sahte Meta: Messenger ve Instagram Send API", () => {
+  let meta: SahteMeta;
+  beforeAll(async () => {
+    meta = await sahteMetaBaslat();
+  });
+  afterAll(() => meta.kapat());
+
+  const gonder = (yol: string, token: string, govde: unknown, sorguda = false) =>
+    fetch(`${meta.adres}${yol}${sorguda ? `?access_token=${token}` : ""}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(sorguda ? {} : { Authorization: `Bearer ${token}` }) },
+      body: JSON.stringify(govde),
+    });
+  const mesaj = { recipient: { id: "PSID-1" }, messaging_type: "RESPONSE", message: { text: "Merhaba" } };
+
+  it("Messenger: sayfa token'ıyla { recipient_id, message_id } döner (token sorgu parametresinde de olabilir)", async () => {
+    const r = await gonder("/v21.0/SAYFA-1/messages", VARSAYILAN_TOKENLAR.messenger, mesaj, true);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ recipient_id: "PSID-1", message_id: expect.stringMatching(/^m_SAHTE/) });
+    expect(meta.gonderimler().at(-1)).toMatchObject({ kanal: "messenger", hesap: "SAYFA-1" });
+  });
+
+  it("Instagram: Instagram token'ıyla { recipient_id, message_id } döner", async () => {
+    const r = await gonder("/v21.0/me/messages", VARSAYILAN_TOKENLAR.instagram, { ...mesaj, recipient: { id: "IGSID-1" } });
+    expect(await r.json()).toEqual({ recipient_id: "IGSID-1", message_id: expect.stringMatching(/^aWdf/) });
+    expect(meta.gonderimler().at(-1)).toMatchObject({ kanal: "instagram", hesap: "me" });
+  });
+
+  it("alıcısız istek 400, tanınmayan token 401, hata() sonraki yanıtı Meta hata gövdesine çevirir", async () => {
+    expect((await gonder("/v21.0/SAYFA-1/messages", VARSAYILAN_TOKENLAR.messenger, { message: { text: "x" } })).status).toBe(400);
+    expect((await gonder("/v21.0/SAYFA-1/messages", "yanlis", mesaj)).status).toBe(401);
+    meta.hata(400, "(#10) This message is sent outside of allowed window.", 10);
+    const r = await gonder("/v21.0/SAYFA-1/messages", VARSAYILAN_TOKENLAR.messenger, mesaj);
+    expect(r.status).toBe(400);
+    expect(await r.json()).toMatchObject({ error: { code: 10, message: expect.stringContaining("allowed window") } });
+  });
+});
+
+describe("sahte Meta webhook gövdeleri", () => {
+  it("üç kanalın object ve entry kimliği doğru", () => {
+    expect(whatsappGovdesi({ phoneNumberId: "P" })).toMatchObject({ object: "whatsapp_business_account", entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "P" } } }] }] });
+    expect(instagramGovdesi({ hesap: "IG" })).toMatchObject({ object: "instagram", entry: [{ id: "IG", messaging: [{ recipient: { id: "IG" }, message: { text: "Merhaba" } }] }] });
+    expect(messengerGovdesi({ sayfa: "S" })).toMatchObject({ object: "page", entry: [{ id: "S", messaging: [{ recipient: { id: "S" } }] }] });
+  });
+
+  it("echo'da gönderen işletme hesabıdır; hikâye yanıtı reply_to.story taşır", () => {
+    expect(echoOlayi({ hesap: "IG", kullanici: "U", appId: "263902037430900" })).toMatchObject({ sender: { id: "IG" }, recipient: { id: "U" }, message: { is_echo: true, app_id: "263902037430900" } });
+    expect(hikayeYanitiOlayi({ hikayeId: "H1" })).toMatchObject({ message: { reply_to: { story: { id: "H1" } } } });
   });
 });
 

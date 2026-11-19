@@ -1,13 +1,13 @@
 // isle.ts testleri için bellek içi depo. isle.ts'in kullandığı modüllerin (konuşma, satış hattı, müşteri,
 // supabase db) yerine geçer ve veritabanının bu testler için önemli kuralını taşır:
-// konusma_mesajlari.dis_mesaj_id tekil (aynı kimlikle ikinci yazma reddedilir; eşzamanlı yazmada ilk gelen kazanır).
+// konuşma (kanal, kanal_hesap_id, dis_kullanici_id) ve konusma_mesajlari.dis_mesaj_id tekil (aynı kimlikle ikinci yazma reddedilir; eşzamanlı yazmada ilk gelen kazanır).
 import type { Firsat, WhatsappMesaji } from "@/components/satis-hatti/queries";
 import type { Musteri } from "@/components/musteriler/queries";
 import { KAPALI_ASAMALAR } from "@/components/satis-hatti/sabitler";
 import { telefonNormalize } from "@/components/whatsapp/telefon";
 import type { YeniMesaj } from "@/components/konusma/queries";
 
-type Konusma = { id: number; kanal: string; disKullaniciId: string; satisHattiId: number | null; musteriId: number | null; sonMusteriMesaji: string | null };
+type Konusma = { id: number; kanal: string; kanalHesapId: string; disKullaniciId: string; satisHattiId: number | null; musteriId: number | null; sonMusteriMesaji: string | null };
 type Mesaj = YeniMesaj & { id: number };
 type Yetkili = { musteri_id: number; y_tel: string; y_sira: number };
 
@@ -53,11 +53,12 @@ export function musteriEkle(m: Partial<Musteri> & { id: string; ad: string }, te
 
 /* ---------- @/components/konusma/queries ---------- */
 export const konusmaModulu = {
-  async konusmaGetirVeyaAc(kanal: string, disKullaniciId: string) {
+  VARSAYILAN_KANAL_HESABI: "varsayilan",
+  async konusmaGetirVeyaAc(kanal: string, kanalHesapId: string, disKullaniciId: string) {
     await tur();
-    let k = depo.konusmalar.find((x) => x.kanal === kanal && x.disKullaniciId === disKullaniciId);
+    let k = depo.konusmalar.find((x) => x.kanal === kanal && x.kanalHesapId === kanalHesapId && x.disKullaniciId === disKullaniciId);
     if (!k) {
-      k = { id: ++depo.sayac, kanal, disKullaniciId, satisHattiId: null, musteriId: null, sonMusteriMesaji: null };
+      k = { id: ++depo.sayac, kanal, kanalHesapId, disKullaniciId, satisHattiId: null, musteriId: null, sonMusteriMesaji: null };
       depo.konusmalar.push(k);
     }
     return { id: k.id, satisHattiId: k.satisHattiId };

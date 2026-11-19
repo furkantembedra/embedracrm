@@ -28,11 +28,15 @@ grant usage on schema public to anon, authenticated, service_role;
 
 export const MIGRATIONLAR = readdirSync(path.join(KOK, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
 
-/** Migration'ları sırayla, ardından (isteğe bağlı) seed'i uygular */
-export async function bosVeritabani({ seed = true } = {}): Promise<PGlite> {
+/**
+ * Migration'ları sırayla, ardından (isteğe bağlı) seed'i uygular.
+ * `oncesi` verilirse yalnızca adı ondan küçük migration'lar uygulanır (veri taşıyan migration'ı eski veriyle sınamak için;
+ * kalanlar migrationUygula ile sonradan uygulanır).
+ */
+export async function bosVeritabani({ seed = true, oncesi }: { seed?: boolean; oncesi?: string } = {}): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(SUPABASE_TAKLIDI);
-  for (const dosya of MIGRATIONLAR) {
+  for (const dosya of MIGRATIONLAR.filter((f) => !oncesi || f < oncesi)) {
     try {
       await db.exec(readFileSync(path.join(KOK, "supabase/migrations", dosya), "utf8"));
     } catch (e) {
@@ -41,6 +45,11 @@ export async function bosVeritabani({ seed = true } = {}): Promise<PGlite> {
   }
   if (seed) await db.exec(readFileSync(path.join(KOK, "supabase/seed.sql"), "utf8"));
   return db;
+}
+
+/** Tek bir migration dosyasını uygular */
+export async function migrationUygula(db: PGlite, dosya: string) {
+  await db.exec(readFileSync(path.join(KOK, "supabase/migrations", dosya), "utf8"));
 }
 
 /** Sorguyu verilen rol ve (varsa) oturum kullanıcısıyla, ayrı bir işlemde çalıştırıp geri alır */

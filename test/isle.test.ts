@@ -1,7 +1,7 @@
 // components/whatsapp/isle.ts kuralları: açık fırsata ekleme, yeni lead açma, müşteri yetkilisi eşleşmesi,
 // aynı mesajın iki kez (sırayla ve aynı anda) gelmesi, hata olursa mesajın geri alınması.
 // Veritabanı yerine bellek içi depo kullanılır (test/sahte/depo.ts); dis_mesaj_id tekilliğini depo uygular.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { depo, depoyuSifirla, firsatEkle, musteriEkle } from "./sahte/depo";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -138,5 +138,38 @@ describe("hata olursa", () => {
     const s = await whatsappMesajiIsle(m);
     expect(s?.yeni).toBe(true);
     expect(depo.mesajlar).toHaveLength(1);
+  });
+});
+
+describe("çok kanal: hesap, tür ve ek bilgi (P1.0)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("konuşma webhook'taki phone_number_id hesabında açılır; aynı telefon başka numaraya yazarsa ayrı konuşmadır", async () => {
+    await whatsappMesajiIsle(mesaj("905339998877", "Merhaba", { kanalHesapId: "PNID-1" }));
+    await whatsappMesajiIsle(mesaj("905339998877", "Merhaba", { kanalHesapId: "PNID-2" }));
+    expect(depo.konusmalar.map((k) => k.kanalHesapId)).toEqual(["PNID-1", "PNID-2"]);
+    // Fırsat telefonla eşleştiği için ikinci mesaj aynı açık fırsata eklenir
+    expect(depo.firsatlar).toHaveLength(1);
+  });
+
+  it("hesap bilinmiyorsa WHATSAPP_PHONE_ID, o da yoksa 'varsayilan' kullanılır", async () => {
+    vi.stubEnv("WHATSAPP_PHONE_ID", "");
+    await whatsappMesajiIsle(mesaj("905339998877"));
+    vi.stubEnv("WHATSAPP_PHONE_ID", "ENV-PNID");
+    await whatsappMesajiIsle(mesaj("905339998877"));
+    expect(depo.konusmalar.map((k) => k.kanalHesapId)).toEqual(["varsayilan", "ENV-PNID"]);
+  });
+
+  it("WhatsApp türü ortak türe çevrilir, birebir olmayanın aslı ve webhook eki birlikte yazılır", async () => {
+    await whatsappMesajiIsle(mesaj("905339998877", "Merhaba"));
+    await whatsappMesajiIsle(mesaj("905339998877", "", { tur: "sticker", ek: { ek_dosya_turu: "image/webp" } }));
+    await whatsappMesajiIsle(mesaj("905339998877", "📍 Konya", { tur: "location" }));
+    await whatsappMesajiIsle(mesaj("905339998877", "Evet", { tur: "interactive", ek: { yanitlanan_mesaj_id: "wamid.BIZIM" } }));
+    expect(depo.mesajlar.map((m) => [m.tur, m.ek])).toEqual([
+      ["metin", {}],
+      ["gorsel", { ek_dosya_turu: "image/webp", kaynak_tur: "sticker" }],
+      ["diger", { kaynak_tur: "location" }],
+      ["metin", { yanitlanan_mesaj_id: "wamid.BIZIM", kaynak_tur: "interactive" }],
+    ]);
   });
 });

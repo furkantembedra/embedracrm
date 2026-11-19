@@ -1,21 +1,62 @@
 // Kanaldan bağımsız konuşmalar ve mesajlar (Supabase: konusmalar, konusma_mesajlari).
-// Konuşma kanal + dış kullanıcı kimliğiyle tekildir (WhatsApp: normalize telefon "+90…", Instagram: IGSID).
-// Mesajın dış kimliği (Meta wamid / IG mid) tekildir: aynı mesaj iki kez gelirse ikinci yazma reddedilir,
-// böylece eşzamanlı iki webhook'tan yalnızca biri mesajı işler.
+// Konuşma kanal + kanal hesabı + dış kullanıcı kimliğiyle tekildir:
+//   WhatsApp:  hesap = phone_number_id,          kullanıcı = normalize telefon "+90…"
+//   Instagram: hesap = Instagram hesap kimliği,  kullanıcı = IGSID (hesaba özgü)
+//   Messenger: hesap = Facebook sayfa kimliği,   kullanıcı = PSID (sayfaya özgü)
+// Mesajın dış kimliği (Meta wamid / mid) tüm kanallarda tekildir: aynı mesaj iki kez gelirse ikinci yazma reddedilir,
+// böylece eşzamanlı iki webhook'tan yalnızca biri mesajı işler (karar ve gerekçe: 20261119090656_cok_kanal_hazirlik.sql).
 import { db, sonuc } from "@/lib/supabase/db";
 
-export type Kanal = "whatsapp" | "instagram";
+export const KONUSMA_KANALLARI = ["whatsapp", "instagram", "messenger"] as const;
+export type Kanal = (typeof KONUSMA_KANALLARI)[number];
 export type Gonderen = "musteri" | "bot" | "temsilci";
 
+/** WhatsApp phone_number_id bilinmiyorsa (simülasyon, metadata'sız gövde) kullanılan hesap; mevcut satırlar da bununla dolduruldu */
+export const VARSAYILAN_KANAL_HESABI = "varsayilan";
+
+/**
+ * Kanaldan bağımsız mesaj türleri (konusma_mesajlari.tur kısıtıyla aynı liste):
+ * metin · gorsel · ses · video · dosya (belge) · hikaye_yaniti (Instagram hikâyesine yanıt) · hikaye_bahsetme (hikâyede
+ * işletmeden bahsedilmesi) · paylasim (gönderi / reels / bağlantı paylaşımı) · tepki (emoji tepkisi) · yorum (gönderi
+ * yorumu, P4.3) · diger (konum, kişi kartı, desteklenmeyen…; aslı ek.kaynak_tur'da).
+ */
+export const MESAJ_TURLERI = ["metin", "gorsel", "ses", "video", "dosya", "hikaye_yaniti", "hikaye_bahsetme", "paylasim", "tepki", "yorum", "diger"] as const;
+export type MesajTuru = (typeof MESAJ_TURLERI)[number];
+
+/**
+ * konusma_mesajlari.ek (jsonb) alanları. Hepsi isteğe bağlı. Kişisel veri (telefon, ad, e-posta, konum) ve token YAZILMAZ;
+ * medya bağlantıları da yazılmaz (Meta'nın imzalı, süreli adresleridir).
+ */
+export type MesajEki = {
+  /** Kanalın kendi tür adı, ortak türe birebir karşılık gelmiyorsa (ör. WhatsApp "sticker", "location") */
+  kaynak_tur?: string;
+  /** Ek dosyanın MIME türü (ör. "image/jpeg", "application/pdf") */
+  ek_dosya_turu?: string;
+  /** Müşterinin yanıtladığı mesajın dış kimliği (WhatsApp context.id, Instagram / Messenger reply_to.mid) */
+  yanitlanan_mesaj_id?: string;
+  /** Instagram hikâye yanıtı / bahsetmesi: hikâyenin kimliği */
+  hikaye?: { id?: string };
+  /** Reklam / yönlendirme (Click-to-WhatsApp / Messenger / Instagram reklamı, m.me bağlantısı…) */
+  yonlendirme?: { kaynak_turu?: string; kaynak_id?: string; reklam_id?: string; baslik?: string; govde?: string; medya_turu?: string; ref?: string; kaynak_url?: string };
+};
+
 /** Konuşmayı bulur, yoksa açar. Aynı anda iki istek açmaya çalışsa da tek kayıt kalır (unique + ignoreDuplicates). */
-export async function konusmaGetirVeyaAc(kanal: Kanal, disKullaniciId: string): Promise<{ id: number; satisHattiId: number | null }> {
+export async function konusmaGetirVeyaAc(
+  kanal: Kanal,
+  kanalHesapId: string,
+  disKullaniciId: string,
+): Promise<{ id: number; satisHattiId: number | null }> {
   const s = await db();
   sonuc(
-    await s.from("konusmalar").upsert({ kanal, dis_kullanici_id: disKullaniciId }, { onConflict: "kanal,dis_kullanici_id", ignoreDuplicates: true }),
+    await s.from("konusmalar").upsert(
+      { kanal, kanal_hesap_id: kanalHesapId, dis_kullanici_id: disKullaniciId },
+      { onConflict: "kanal,kanal_hesap_id,dis_kullanici_id", ignoreDuplicates: true },
+    ),
     "Konuşma açılırken",
   );
   const r = sonuc(
-    await s.from("konusmalar").select("id, satis_hatti_id").eq("kanal", kanal).eq("dis_kullanici_id", disKullaniciId).single(),
+    await s.from("konusmalar").select("id, satis_hatti_id")
+      .eq("kanal", kanal).eq("kanal_hesap_id", kanalHesapId).eq("dis_kullanici_id", disKullaniciId).single(),
     "Konuşma okunurken",
   ) as { id: number; satis_hatti_id: number | null };
   return { id: r.id, satisHattiId: r.satis_hatti_id };
@@ -27,7 +68,8 @@ export type YeniMesaj = {
   gonderen: Gonderen;
   disMesajId: string | null;
   metin: string;
-  tur: string;
+  tur: MesajTuru;
+  ek?: MesajEki;
   zaman: string; // ISO
   satisHattiId?: number | null;
 };
@@ -47,7 +89,8 @@ export async function mesajKaydet(m: YeniMesaj): Promise<number | null> {
       gonderen: m.gonderen,
       dis_mesaj_id: m.disMesajId,
       metin: m.metin,
-      tur: m.tur || "text",
+      tur: m.tur,
+      ek: m.ek ?? {},
       zaman: m.zaman,
     })
     .select("id")
