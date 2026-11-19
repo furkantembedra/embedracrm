@@ -84,7 +84,7 @@ CRM'de Meta ve diğer sistemlerden gelen çağrılar için açık adresler vard�
 | Adres | Kim çağırır | Nasıl doğrulanır |
 |---|---|---|
 | `GET /api/meta/webhook` | Meta (kurulumda bir kez, her ürün için) | `hub.verify_token` değeri `META_VERIFY_TOKEN` (yoksa `WHATSAPP_VERIFY_TOKEN`) ile aynıysa `hub.challenge` geri döner, değilse 403. |
-| `POST /api/meta/webhook` | Meta (WhatsApp, Instagram, Messenger olayları) | `X-Hub-Signature-256` imzası `META_APP_SECRET` (yoksa `WHATSAPP_APP_SECRET`; tanımlıysa `INSTAGRAM_APP_SECRET` de) ile kontrol edilir; geçersizse 401. |
+| `POST /api/meta/webhook` | Meta (WhatsApp, Instagram, Messenger olayları) | `X-Hub-Signature-256` imzası `META_APP_SECRET` (yoksa `WHATSAPP_APP_SECRET`; Instagram bildirimlerinde tanımlıysa `INSTAGRAM_APP_SECRET` de) ile kontrol edilir; geçersizse 401. |
 | `GET/POST /api/whatsapp/webhook` | Eski WhatsApp kurulumu | Geriye uyumluluk: `/api/meta/webhook` ile birebir aynı işleyici. Yeni kurulumda kullanma. |
 | `GET/POST /api/abonelik?t=…` | Kampanya e-postasındaki "abonelikten çık" bağlantısı | Jeton `ABONELIK_SIRRI` ile imzalanmıştır, başkası adına uydurulamaz. |
 | `POST /api/cihaz-bildirimi` | ONESuite (cihaz) | Seri numarasından `CIHAZ_BILDIRIM_SIRRI` ile üretilen cihaz anahtarı. `GET` isteği ise oturum ister. |
@@ -295,7 +295,7 @@ Bu değerler derleme sırasında tarayıcı paketine gömülür, yani gizli değ
 | `META_APP_SECRET` | `components/konusma/meta-webhook.ts` | Webhook imza kontrolü (Meta uygulamasının App Secret'ı) | `WHATSAPP_APP_SECRET`'e düşer; hiçbiri yoksa geliştirmede imzasız kabul, **production'da her istek 401** |
 | `WHATSAPP_VERIFY_TOKEN` | `components/konusma/meta-webhook.ts` | Eski ad, geriye uyumluluk | `META_VERIFY_TOKEN` tanımlıysa kullanılmaz |
 | `WHATSAPP_APP_SECRET` | `components/konusma/meta-webhook.ts` | Eski ad, geriye uyumluluk | `META_APP_SECRET` tanımlıysa kullanılmaz |
-| `INSTAGRAM_APP_SECRET` | `components/konusma/meta-webhook.ts` | İsteğe bağlı ikinci imza anahtarı (Instagram Login, Bölüm 5.2) | Yalnızca uygulama secret'ı denenir |
+| `INSTAGRAM_APP_SECRET` | `components/konusma/meta-webhook.ts` | İsteğe bağlı ikinci imza anahtarı (Instagram Login, Bölüm 5.2); yalnızca `object: instagram` gövdelerinde kabul edilir, WhatsApp / Messenger bildirimini imzalayamaz | Yalnızca uygulama secret'ı denenir |
 | `META_SAYFA_ID`, `META_SAYFA_TOKEN` | (P4.1 / P4.2) | Messenger ve Facebook Login yolunda Instagram gönderimi | Kanal demo / kapalı |
 | `INSTAGRAM_HESAP_ID`, `INSTAGRAM_TOKEN` | (P4.1) | Instagram hesabı; token yalnızca Instagram Login yolunda | Kanal demo / kapalı |
 | `WHATSAPP_TOKEN` | `lib/ileti-gonder.ts` | WhatsApp Cloud API ile gönderim | Demo modu (gönderilmez) |

@@ -6,7 +6,8 @@
 // GET  → Meta doğrulaması: hub.mode=subscribe & hub.verify_token = META_VERIFY_TOKEN (yoksa WHATSAPP_VERIFY_TOKEN)
 //        ise hub.challenge düz metin olarak döner.
 // POST → X-Hub-Signature-256 (ham gövdenin HMAC-SHA256'sı) META_APP_SECRET ile (yoksa WHATSAPP_APP_SECRET) doğrulanır.
-//        INSTAGRAM_APP_SECRET tanımlıysa onunla atılmış imza da kabul edilir (Instagram Login, aşağıda imzaAnahtarlari).
+//        INSTAGRAM_APP_SECRET tanımlıysa yalnızca object: instagram gövdelerinde onunla atılmış imza da kabul edilir
+//        (Instagram Login, aşağıda imzaAnahtarlari).
 //        Secret tanımsızsa geliştirmede imzasız istek kabul edilir, production'da her istek reddedilir.
 //        Gövdedeki `object` alanına göre kanal seçilir:
 //          whatsapp_business_account → WhatsApp: mesajlar satış hattına işlenir (components/whatsapp/isle.ts)
@@ -45,12 +46,15 @@ function esit(a: string, b: string) {
 /**
  * İmzayı doğrulayan anahtarlar. INSTAGRAM_APP_SECRET isteğe bağlıdır: "Instagram API with Instagram Login" ürününde
  * panelde ayrı bir "Instagram app secret" görünür ve resmi doküman webhook imzasının hangisiyle atıldığını açıkça
- * yazmıyor (docs/BOT_KURULUM.md). Tanımlıysa onunla atılmış imza da kabul edilir.
+ * yazmıyor (docs/BOT_KURULUM.md). Tanımlıysa yalnızca Instagram gövdelerinde kabul edilir: o anahtar sızsa bile
+ * onunla WhatsApp / Messenger bildirimi (ör. sahte lead) uydurulamaz.
  */
-const imzaAnahtarlari = () => [metaUygulamaSirri(), process.env.INSTAGRAM_APP_SECRET || ""].filter(Boolean);
+const imzaAnahtarlari = (object: unknown) =>
+  [metaUygulamaSirri(), object === "instagram" ? process.env.INSTAGRAM_APP_SECRET || "" : ""].filter(Boolean);
 
-export function imzaGecerli(govde: string, imza: string | null) {
-  const anahtarlar = imzaAnahtarlari();
+/** `object`, gövde doğrulanmadan önce yalnızca hangi anahtarların deneneceğini seçmek için okunur */
+export function imzaGecerli(govde: string, imza: string | null, object?: unknown) {
+  const anahtarlar = imzaAnahtarlari(object);
   if (!anahtarlar.length) return process.env.NODE_ENV !== "production";
   if (!imza?.startsWith("sha256=")) return false;
   const gelen = imza.slice(7);
@@ -61,15 +65,17 @@ type MetaGovdesi = { object?: unknown; entry?: unknown };
 
 export async function metaWebhookAl(istek: NextRequest) {
   const govde = await istek.text();
-  if (!imzaGecerli(govde, istek.headers.get("x-hub-signature-256"))) {
-    return NextResponse.json({ ok: false, hata: "İmza doğrulanamadı." }, { status: 401 });
-  }
-  let veri: MetaGovdesi;
+  let veri: MetaGovdesi | null = null;
   try {
     veri = JSON.parse(govde);
   } catch {
-    return NextResponse.json({ ok: false, hata: "Gövde JSON olmalı." }, { status: 400 });
+    /* imza kontrolünden sonra 400 */
   }
+  // İmza her zaman ham gövde üzerinden; ayrıştırılan gövde imza geçmeden hiçbir işte kullanılmaz
+  if (!imzaGecerli(govde, istek.headers.get("x-hub-signature-256"), veri?.object)) {
+    return NextResponse.json({ ok: false, hata: "İmza doğrulanamadı." }, { status: 401 });
+  }
+  if (!veri) return NextResponse.json({ ok: false, hata: "Gövde JSON olmalı." }, { status: 400 });
   const girdiler = Array.isArray(veri?.entry) ? (veri.entry as MetaGirdi[]) : [];
 
   switch (veri?.object) {

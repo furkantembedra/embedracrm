@@ -93,12 +93,23 @@ describe.each([
       expect(islenen).toHaveLength(1);
     });
 
-    it("INSTAGRAM_APP_SECRET tanımlıysa onunla atılmış imza da kabul edilir, uygulama secret'ı da geçerli kalır", async () => {
+    it("INSTAGRAM_APP_SECRET yalnızca Instagram gövdesinde kabul edilir; uygulama secret'ı da geçerli kalır", async () => {
       vi.stubEnv("INSTAGRAM_APP_SECRET", "ig-secret");
-      const govde = metaGovdesi();
-      expect((await gonder(govde, imzala(govde, "ig-secret"))).status).toBe(200);
-      expect((await gonder(govde, imzala(govde, SECRET))).status).toBe(200);
-      expect((await gonder(govde, imzala(govde, "baska"))).status).toBe(401);
+      vi.spyOn(console, "info").mockImplementation(() => {});
+      const ig = JSON.stringify(instagramGovdesi());
+      expect((await gonder(ig, imzala(ig, "ig-secret"))).status).toBe(200);
+      expect((await gonder(ig, imzala(ig, SECRET))).status).toBe(200);
+      expect((await gonder(ig, imzala(ig, "baska"))).status).toBe(401);
+      // Instagram anahtarıyla WhatsApp ya da Messenger bildirimi uydurulamaz
+      const wa = metaGovdesi();
+      expect((await gonder(wa, imzala(wa, "ig-secret"))).status).toBe(401);
+      const ms = JSON.stringify(messengerGovdesi());
+      expect((await gonder(ms, imzala(ms, "ig-secret"))).status).toBe(401);
+      expect(islenen).toHaveLength(0);
+    });
+
+    it("imzasız bozuk gövdeye 400 değil 401 döner (gövde imzadan önce kullanılmaz)", async () => {
+      expect((await gonder("{bozuk", imzala("{bozuk", "baska"))).status).toBe(401);
     });
 
     it("META_APP_SECRET tanımsızsa WHATSAPP_APP_SECRET'e düşer", async () => {
