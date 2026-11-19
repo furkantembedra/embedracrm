@@ -26,26 +26,38 @@ export function KanalSimgesi({ kanal, boyut = 16 }: { kanal: string; boyut?: num
   );
 }
 
-export type BotDurumu = "bot" | "bekliyor" | "temsilci";
+export type BotDurumu = "bot" | "devretti" | "bekliyor" | "temsilci";
 
 /**
- * bot: bot açık (konuşmayı bot yürütüyor) · bekliyor: bot kapalı ve son mesaj müşteriden (ekipten cevap bekleniyor)
- * · temsilci: bot kapalı, son sözü ekip söylemiş. (P1.3 devral / devretti durumlarını ekler.)
+ * bot: bot açık (konuşmayı bot yürütüyor) · devretti: bot insana devretti, ekipten henüz kimse devralmadı / yazmadı
+ * · bekliyor: bot kapalı ve son mesaj müşteriden (ekipten cevap bekleniyor) · temsilci: bot kapalı, son sözü ekip söylemiş.
  */
-export function botDurumu(botAktif: boolean, sonYon: "gelen" | "giden" | null | undefined): BotDurumu {
+export function botDurumu(botAktif: boolean, sonYon: "gelen" | "giden" | null | undefined, devirSebebi?: string | null): BotDurumu {
   if (botAktif) return "bot";
+  if (devirSebebi) return "devretti";
   return sonYon === "gelen" ? "bekliyor" : "temsilci";
 }
 
-const ROZET: Record<BotDurumu, { metin: string; ton: "lime" | "warn" | "gray" }> = {
+/** "Cevap bekliyor" filtresi: bot devretti ya da bot kapalıyken son söz müşteride */
+export const cevapBekliyor = (d: BotDurumu) => d === "devretti" || d === "bekliyor";
+
+const ROZET: Record<BotDurumu, { metin: string; ton: "lime" | "warn" | "gray" | "err" }> = {
   bot: { metin: "Bot konuşuyor", ton: "lime" },
+  devretti: { metin: "Bot devretti", ton: "err" },
   bekliyor: { metin: "Cevap bekliyor", ton: "warn" },
   temsilci: { metin: "Temsilcide", ton: "gray" },
 };
 
-export function BotRozeti({ durum }: { durum: BotDurumu }) {
+/** sebep: devretti durumunda gösterilecek sebep adı (ör. "Fiyat pazarlığı") */
+export function BotRozeti({ durum, sebep }: { durum: BotDurumu; sebep?: string | null }) {
   const r = ROZET[durum];
-  return <Chip ton={r.ton}>{r.metin}</Chip>;
+  return (
+    <Chip ton={r.ton} className="max-w-full overflow-hidden">
+      <span className="min-w-0 truncate" title={durum === "devretti" && sebep ? `Bot devretti: ${sebep}` : undefined}>
+        {r.metin}{durum === "devretti" && sebep ? `: ${sebep}` : ""}
+      </span>
+    </Chip>
+  );
 }
 
 /** "14:05" (bugün), "Dün", "12 Kas" */

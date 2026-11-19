@@ -1,6 +1,7 @@
 // Cevap kutusunun hangi hâlde görüneceği (saf işlev; arayüz ve test aynı kuralı kullanır). Kanal adına göre dal yok:
 // karar adaptörün pencere durumu ve kapaliPencereYolu'na göre verilir. Asıl kontrol sunucuda (components/konusma/gonder.ts).
 import type { KapaliPencereYolu, PencereDurumu } from "@/components/konusma/kanallar/tur";
+import { botDurumu, cevapBekliyor } from "./kanal-gorunumu";
 
 export type CevapModu =
   /** Serbest metin */
@@ -26,14 +27,14 @@ export type Filtre = "bot" | "bekliyor" | "bana" | "kapali";
 /** Liste filtresi ve arama (isim, firma, telefon / kimlik) */
 export function listeyiSuz<T extends {
   kanal: string; ad: string; kimlik: string; disKullaniciId: string; firma: string | null; botAktif: boolean;
-  sorumluId: string | null; son: { yon: "gelen" | "giden" }; pencere: PencereDurumu;
+  devirSebebi?: string | null; sorumluId: string | null; son: { yon: "gelen" | "giden" }; pencere: PencereDurumu;
 }>(liste: T[], o: { kanal: string | null; filtre: Filtre | null; arama: string; ben: string | null }): T[] {
   const q = o.arama.trim().toLocaleLowerCase("tr");
   const rakam = q.replace(/\D/g, "").replace(/^0+/, ""); // "0532…" yerel yazım da "+90532…" ile eşleşsin
   return liste.filter((x) => {
     if (o.kanal && x.kanal !== o.kanal) return false;
     if (o.filtre === "bot" && !x.botAktif) return false;
-    if (o.filtre === "bekliyor" && (x.botAktif || x.son.yon !== "gelen")) return false;
+    if (o.filtre === "bekliyor" && !cevapBekliyor(botDurumu(x.botAktif, x.son.yon, x.devirSebebi))) return false;
     if (o.filtre === "bana" && (!o.ben || x.sorumluId !== o.ben)) return false;
     if (o.filtre === "kapali" && x.pencere.durum === "acik") return false;
     if (!q) return true;

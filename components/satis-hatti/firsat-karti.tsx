@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { Bell, ChevronDown, ChevronUp, FileText, Pencil } from "lucide-react";
 import { BotRozeti, KanalSimgesi, botDurumu, kanalAdi, kisaZaman } from "@/components/bot/kanal-gorunumu";
+import { devirSebebiAdi } from "@/components/konusma/devir-sebepleri";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama } from "./sabitler";
@@ -79,9 +80,9 @@ export default function FirsatKarti({
 
       {f.konusma && (
         <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line px-2.5 py-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <KanalSimgesi kanal={f.konusma.kanal} boyut={12} />
-            <BotRozeti durum={botDurumu(f.konusma.botAktif, f.konusma.sonMesaj?.yon)} />
+            <BotRozeti durum={botDurumu(f.konusma.botAktif, f.konusma.sonMesaj?.yon, f.konusma.devirSebebi)} sebep={f.konusma.devirSebebi ? devirSebebiAdi(f.konusma.devirSebebi) : null} />
             {f.konusma.sonMesaj && (
               <time dateTime={f.konusma.sonMesaj.zaman} className="ml-auto text-[11px] font-semibold text-muted" suppressHydrationWarning>
                 {kisaZaman(f.konusma.sonMesaj.zaman)}

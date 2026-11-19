@@ -54,7 +54,7 @@ export async function isiIsle(k: KuyrukKonusmasi, is: KuyrukIsi): Promise<IsSonu
     if (k.satisHattiId != null && is.mesaj.satisHattiId == null) {
       await mesajiBagla(k.id, is.mesaj.id, { satisHattiId: k.satisHattiId, musteriId: null });
     }
-    await temsilciYazdi(k.id);
+    await temsilciYazdi(k.id, "kanal_disi");
     yenile("/satis-hatti");
     return { isId: is.id, mesajId: is.mesaj.id, firsatId: k.satisHattiId == null ? null : String(k.satisHattiId), yeni: false };
   }

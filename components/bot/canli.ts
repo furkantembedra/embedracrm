@@ -6,7 +6,7 @@
 //  • Yeni mesaj saniyeler içinde görünür (bot konuşurken ekip canlı izler); kısa aralıklı yenileme her açık sekmede
 //    sürekli sorgu demek (5 sn'de bir × kullanıcı × sekme), üstelik yine birkaç saniye geç kalır.
 //  • RLS ile uyumlu: Realtime her değişikliği abonenin kendi JWT'siyle tablonun SELECT politikasından geçirir
-//    (konusmalar / konusma_mesajlari: yalnızca aktif CRM ekibi). Tarayıcı istemcisi oturum çerezindeki token'ı kullanır;
+//    (konusmalar / konusma_mesajlari / konusma_olaylari: yalnızca aktif CRM ekibi). Tarayıcı istemcisi oturum çerezindeki token'ı kullanır;
 //    bayi ya da oturumsuz biri olay alamaz.
 //  • Olayın içeriği kullanılmaz, yalnızca "değişti" sinyalidir: veri her zaman Server Action'la (rol kontrolüyle,
 //    tek okuma yolundan) yeniden okunur. Böylece ekran ile sunucu aynı kuralı kullanır, istemcide birleştirme hatası olmaz.
@@ -44,6 +44,7 @@ export function useCanliYenileme(yenile: () => void): CanliDurum {
         .channel("bot-gelen-kutusu")
         .on("postgres_changes", { event: "*", schema: "public", table: "konusma_mesajlari" }, tetikle)
         .on("postgres_changes", { event: "*", schema: "public", table: "konusmalar" }, tetikle)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "konusma_olaylari" }, tetikle)
         .subscribe((s) => {
           if (bitti) return;
           const once = bagli;

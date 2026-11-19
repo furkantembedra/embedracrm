@@ -12,6 +12,8 @@ export type FirsatKonusmasi = {
   id: number;
   kanal: string;
   botAktif: boolean;
+  /** Bot devretti, ekipten henüz kimse devralmadı / yazmadı ("Bot devretti, cevap bekliyor"): sebep kodu */
+  devirSebebi: string | null;
   sonMesaj: { metin: string; zaman: string; yon: "gelen" | "giden"; gonderen: "musteri" | "bot" | "temsilci" } | null; // zaman: ISO
 };
 
@@ -33,13 +35,16 @@ export type Firsat = {
   sorumluId?: string | null; // "u2"; konuşmanın atanmış kişisi
   sorumluAd?: string | null;
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
+  notlar?: FirsatNotu[]; // salt okunur, en yeni önce (ör. "Bot devretti: Fiyat pazarlığı")
 };
+
+export type FirsatNotu = { id: number; tur: "not" | "bot_devretti"; metin: string; zaman: string }; // zaman: ISO
 
 
 /* ---------- Satır ↔ domain ---------- */
 
 type KonusmaSatiri = {
-  id: number; kanal: string; bot_aktif: boolean;
+  id: number; kanal: string; bot_aktif: boolean; devir_sebebi: string | null;
   son: { metin: string; zaman: string; yon: "gelen" | "giden"; gonderen: "musteri" | "bot" | "temsilci" }[];
 };
 type FirsatSatiri = {
@@ -61,6 +66,7 @@ type FirsatSatiri = {
   sorumlu_id: number | null;
   sorumlu: { k_ad: string } | null;
   konusmalar: KonusmaSatiri[];
+  notlar: { id: number; tur: FirsatNotu["tur"]; metin: string; created_at: string }[] | null;
 };
 
 const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, f_sonraki_tarih, f_kayip_nedeni, f_kayip_aciklama,
@@ -68,15 +74,19 @@ const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, 
   asama:asama!satis_hatti_asama_id_fkey(kod),
   kaynak:kaynak!satis_hatti_kaynak_id_fkey(f_kaynak),
   sorumlu:kullanicilar!satis_hatti_sorumlu_id_fkey(k_ad),
-  konusmalar:konusmalar!konusmalar_satis_hatti_id_fkey(id, kanal, bot_aktif,
-    son:konusma_mesajlari!konusma_mesajlari_konusma_id_fkey(metin, zaman, yon, gonderen))`;
+  konusmalar:konusmalar!konusmalar_satis_hatti_id_fkey(id, kanal, bot_aktif, devir_sebebi,
+    son:konusma_mesajlari!konusma_mesajlari_konusma_id_fkey(metin, zaman, yon, gonderen)),
+  notlar:firsat_notlari(id, tur, metin, created_at)`;
 
 /** Her konuşmadan yalnızca son mesaj (gömülü kaynakta sıralama + limit; PostgREST ebeveyn başına uygular) */
 const SON_MESAJ = "konusmalar.son";
+/** Fırsat başına gösterilen en yeni not sayısı */
+const NOTLAR = "notlar";
+const NOT_SINIRI = 5;
 
 function firsatKonusmasi(l: KonusmaSatiri[] | null | undefined): FirsatKonusmasi | null {
   const ozet = (l ?? []).map((k) => ({
-    id: Number(k.id), kanal: k.kanal, botAktif: k.bot_aktif,
+    id: Number(k.id), kanal: k.kanal, botAktif: k.bot_aktif, devirSebebi: k.devir_sebebi ?? null,
     sonMesaj: k.son?.[0] ? { ...k.son[0], metin: k.son[0].metin.slice(0, 160), zaman: new Date(k.son[0].zaman).toISOString() } : null,
   }));
   // Birden çok konuşma bağlıysa (ör. iki kanaldan yazan aynı kişi) en son mesajı olanı
@@ -103,6 +113,7 @@ function satirdanFirsat(r: FirsatSatiri): Firsat {
     sorumluId: r.sorumlu_id != null ? `u${r.sorumlu_id}` : null,
     sorumluAd: r.sorumlu?.k_ad ?? null,
     sonHareket: r.f_son_hareket,
+    notlar: (r.notlar ?? []).map((n) => ({ id: Number(n.id), tur: n.tur, metin: n.metin, zaman: new Date(n.created_at).toISOString() })),
   };
 }
 
@@ -137,7 +148,8 @@ async function firsatOku(s: SupabaseClient, id: string): Promise<Firsat | null> 
   const no = sayiKimlik(id);
   if (no == null) return null;
   const r = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).eq("id", no)
-    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ }).maybeSingle(), "Fırsat okunurken") as unknown as FirsatSatiri | null;
+    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ })
+    .order("created_at", { ascending: false, referencedTable: NOTLAR }).limit(NOT_SINIRI, { referencedTable: NOTLAR }).maybeSingle(), "Fırsat okunurken") as unknown as FirsatSatiri | null;
   return r ? satirdanFirsat(r) : null;
 }
 
@@ -177,7 +189,8 @@ async function firsatYaz(s: SupabaseClient, f: Firsat, sonHareket: string) {
 export async function getFirsatlar(): Promise<Firsat[]> {
   const s = await db();
   const rows = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).order("f_sira").order("id")
-    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ }), "Satış hattı okunurken") as unknown as FirsatSatiri[];
+    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ })
+    .order("created_at", { ascending: false, referencedTable: NOTLAR }).limit(NOT_SINIRI, { referencedTable: NOTLAR }), "Satış hattı okunurken") as unknown as FirsatSatiri[];
   return rows.map(satirdanFirsat);
 }
 
@@ -300,5 +313,14 @@ export async function firsatSirasiDepo(idler: string[]) {
       const no = sayiKimlik(id);
       if (no != null) sonuc(await s.from("satis_hatti").update({ f_sira: sira }).eq("id", no), "Satış hattı sırası kaydedilirken");
     }),
+  );
+}
+
+/** Fırsata not düşer (ör. "Bot devretti: Fiyat pazarlığı"). Kullanıcı yoksa (bot / işleyici) boş. */
+export async function firsatNotuEkle(firsatId: number, metin: string, tur: FirsatNotu["tur"] = "not", kullaniciId: number | null = null) {
+  const s = await db();
+  sonuc(
+    await s.from("firsat_notlari").insert({ satis_hatti_id: firsatId, tur, metin: metin.slice(0, 1000), kullanici_id: kullaniciId }),
+    "Fırsat notu yazılırken",
   );
 }

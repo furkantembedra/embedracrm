@@ -46,3 +46,6 @@ export function yerlestir<T extends { id: string }>(liste: T[], eleman: T, konum
 export function ekleVeyaGuncelle(liste: Firsat[], f: Firsat): Firsat[] {
   return liste.some((x) => x.id === f.id) ? liste.map((x) => (x.id === f.id ? f : x)) : [...liste, f];
 }
+
+/** "Bot devretti, cevap bekliyor" filtresi: bağlı konuşmada bot devretmiş ve ekipten henüz kimse devralmamış / yazmamış */
+export const botDevrettiBekliyor = (f: Pick<Firsat, "konusma">) => !!f.konusma && !f.konusma.botAktif && !!f.konusma.devirSebebi;

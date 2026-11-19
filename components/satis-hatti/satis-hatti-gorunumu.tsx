@@ -5,12 +5,12 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Plus, X } from "lucide-react";
+import { CheckCircle2, Plus, Siren, X } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import OzetKartlari from "./ozet-kartlari";
 import Kanban from "./kanban";
-import { ekleVeyaGuncelle, yerlestir, type BirakmaKonumu } from "./ortak";
+import { botDevrettiBekliyor, ekleVeyaGuncelle, yerlestir, type BirakmaKonumu } from "./ortak";
 import FirsatFormu from "./firsat-formu";
 import { firsatAsamasiGuncelle, firsatSirasiKaydet, type AsamaSonucu } from "./actions";
 import { ASAMA_BILGI, KAYIP_NEDENLERI, type Asama, type KayipBilgisi, type KayipNedeni } from "./sabitler";
@@ -184,6 +184,8 @@ export default function SatisHattiGorunumu({
   const musteriKaydi = musteriler.find((m) => m.id === acikMusteri) ?? null;
   const [, baslat] = useTransition();
   const [kayipId, setKayipId] = useState<string | null>(null);
+  const [devirFiltresi, setDevirFiltresi] = useState(false);
+  const devredilenSayisi = firsatlar.filter(botDevrettiBekliyor).length;
   const kayipFirsat = firsatlar.find((f) => f.id === kayipId) ?? null;
   const kayipKapat = useCallback(() => setKayipId(null), []);
 
@@ -247,8 +249,21 @@ export default function SatisHattiGorunumu({
       </PageHeader>
 
       <OzetKartlari firsatlar={firsatlar} />
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtreler">
+        <button
+          type="button"
+          aria-pressed={devirFiltresi}
+          onClick={() => setDevirFiltresi((x) => !x)}
+          className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors ${devirFiltresi ? "border-ink bg-ink text-white" : "border-line-strong bg-card text-[#474A42] hover:bg-[#F4F5F0]"}`}
+        >
+          <Siren size={14} aria-hidden="true" />
+          Bot devretti, cevap bekliyor
+          <span className={`rounded-full px-1.5 text-[11px] ${devredilenSayisi ? "bg-err text-white" : devirFiltresi ? "bg-white/20" : "bg-bg"}`}>{devredilenSayisi}</span>
+        </button>
+        {devirFiltresi && <span className="text-xs font-semibold text-muted">Yalnızca botun devrettiği ve ekipten henüz kimsenin cevaplamadığı fırsatlar gösteriliyor.</span>}
+      </div>
       <Kanban
-        firsatlar={firsatlar}
+        firsatlar={devirFiltresi ? firsatlar.filter(botDevrettiBekliyor) : firsatlar}
         onTasi={(id, asama, konum) => tasi(id, asama, undefined, konum)}
         onSirala={sirala}
         onEkle={setEkleAsama}

@@ -8,10 +8,15 @@ import { kullaniciNo } from "@/lib/supabase/db";
 import { mesajGonder, sablonGonder } from "@/components/konusma/gonder";
 import { adaptorBul } from "@/components/konusma/kanallar";
 import { kuyrugaYaz, kuyruguIsle } from "@/components/konusma/kuyruk";
+import { KONUSMA_KANALLARI } from "@/components/konusma/queries";
+import { botaGeriVer, botDevretti, devral } from "@/components/konusma/devir";
+import { devirSebebiMi } from "@/components/konusma/devir-sebepleri";
 import { getEkip } from "@/components/operasyon/queries";
 import { getFirsat } from "@/components/satis-hatti/queries";
 import { BOT_ROLLERI, BOT_YONETICI_ROLLERI } from "./erisim";
-import { firsatSorumlusuYaz, gelenKutusu, konusmaDetayi, okunduYaz, type GelenKutusuSatiri, type KonusmaDetayi } from "./queries";
+import {
+  firsatSorumlusuYaz, gelenKutusu, kanalAyariYaz, konusmaDetayi, okunduYaz, type GelenKutusuSatiri, type KonusmaDetayi,
+} from "./queries";
 
 const kimlikMi = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x > 0;
 
@@ -83,6 +88,47 @@ export async function sorumluDegistir(firsatId: string, kullaniciId: string): Pr
   }
   revalidatePath("/satis-hatti");
   return {};
+}
+
+/** Devral: bot susar, konuşma oturumdaki kişide (değişmez kural 4) */
+export async function konusmayiDevral(konusmaId: number): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_ROLLERI);
+  if (!kimlikMi(konusmaId) || !k) return { hata: "Konuşma bulunamadı." };
+  await devral(konusmaId, kullaniciNo(k.id));
+  return {};
+}
+
+/** Bota geri ver: bot sıradaki müşteri mesajından itibaren devam eder; isteğe bağlı not botun bir sonraki turuna gider */
+export async function konusmayiBotaVer(konusmaId: number, not: string): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_ROLLERI);
+  if (!kimlikMi(konusmaId) || !k) return { hata: "Konuşma bulunamadı." };
+  const temiz = typeof not === "string" ? not.trim() : "";
+  if (temiz.length > 1000) return { hata: "Bota not en çok 1000 karakter olabilir." };
+  await botaGeriVer(konusmaId, temiz || null, kullaniciNo(k.id));
+  return {};
+}
+
+/** Bot › Kanallar: yeni konuşmada bot açık mı (yalnızca Yönetici; RLS de yalnızca Yönetici'ye izin verir) */
+export async function yeniKonusmaBotuKaydet(kanal: string, acik: boolean): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (!(KONUSMA_KANALLARI as readonly string[]).includes(kanal)) return { hata: "Kanal bulunamadı." };
+  await kanalAyariYaz(kanal, acik === true, k ? kullaniciNo(k.id) : null);
+  revalidatePath("/bot/kanallar");
+  return {};
+}
+
+/**
+ * Demo (yalnızca geliştirmede, yalnızca Yönetici): botun insana devretmesini simüle eder (insana_devret aracı P2.2'de).
+ * Gerçek yolla aynı: botDevretti → sistem satırı, fırsat notu, bildirim + hatırlatma.
+ */
+export async function botDevretmesiniSimuleEt(konusmaId: number, sebep: string, aciklama: string): Promise<{ hata?: string; duyuru?: string }> {
+  await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (process.env.NODE_ENV === "production") return { hata: "Simülasyon yalnızca geliştirme ortamında çalışır." };
+  if (!kimlikMi(konusmaId)) return { hata: "Konuşma bulunamadı." };
+  if (!devirSebebiMi(sebep)) return { hata: "Sebep seçin." };
+  const r = await botDevretti(konusmaId, sebep, typeof aciklama === "string" ? aciklama : null);
+  if (!r.devredildi) return { hata: "Bot bu konuşmada zaten konuşmuyor; önce bota geri verin." };
+  return { duyuru: `Bot devretti; ${r.alicilar.length} kişiye bildirim ve hatırlatma açıldı.` };
 }
 
 export type SimulasyonDurumu = { hatalar?: Record<string, string>; duyuru?: string; konusmaId?: number; zaman?: number };

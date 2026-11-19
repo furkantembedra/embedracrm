@@ -13,7 +13,10 @@ import type { GelenKayit, Kanal, KuyrukIsi, KuyrukKonusmasi, YeniMesaj } from "@
 
 type Konusma = {
   id: number; kanal: Kanal; kanalHesapId: string; disKullaniciId: string; satisHattiId: number | null; musteriId: number | null;
-  sonMusteriMesaji: string | null; profilAdi: string | null; botAktif: boolean; kilitSahibi: string | null; kilitBitis: number;
+  sonMusteriMesaji: string | null; profilAdi: string | null; botAktif: boolean;
+  /** P1.3 devir durumu (SQL: konusma_devral / konusma_bot_devretti); olaylar: sistem satırları */
+  devirSebebi?: string | null; devralanId?: number | null; olaylar?: { tur: string; kaynak?: string; kullaniciId?: number | null }[];
+  kilitSahibi: string | null; kilitBitis: number;
 };
 type Mesaj = YeniMesaj & { id: number };
 type Is = { id: number; konusmaId: number; mesajId: number; tur: "musteri_mesaji" | "temsilci_mesaji"; durum: "bekliyor" | "tamam" | "hata"; deneme: number; sonrakiDeneme: number; sonHata: string | null };
@@ -157,9 +160,18 @@ export const konusmaModulu = {
       }),
     };
   },
-  async temsilciYazdi(konusmaId: number) {
+  /** SQL konusma_devral'ın kuralı (kaynak cevap / kanal_disi): bot susar, bekleyen devir kapanır, CRM'den yazan devralır */
+  async temsilciYazdi(konusmaId: number, kaynak: "cevap" | "kanal_disi", kullaniciId: number | null = null) {
     await tur();
-    konusmaBul(konusmaId).botAktif = false;
+    const k = konusmaBul(konusmaId);
+    const kullanici = kaynak === "cevap" ? kullaniciId ?? null : null;
+    const devralan = k.devralanId ?? kullanici;
+    if (!k.botAktif && !k.devirSebebi && (k.devralanId ?? null) === devralan) return false;
+    k.botAktif = false;
+    k.devirSebebi = null;
+    k.devralanId = devralan;
+    (k.olaylar ??= []).push({ tur: "devralindi", kaynak, kullaniciId: kullanici });
+    return true;
   },
   async konusmaOku(konusmaId: number) {
     await tur();
@@ -195,7 +207,7 @@ function firsatOku(id: string): Firsat | null {
   const k = depo.konusmalar.find((x) => String(x.satisHattiId) === id);
   const son = k ? depo.mesajlar.filter((m) => m.konusmaId === k.id).sort((a, b) => a.zaman.localeCompare(b.zaman)).at(-1) : undefined;
   const konusma = k
-    ? { id: k.id, kanal: k.kanal, botAktif: k.botAktif, sonMesaj: son ? { metin: son.metin, zaman: son.zaman, yon: son.yon, gonderen: son.gonderen } : null }
+    ? { id: k.id, kanal: k.kanal, botAktif: k.botAktif, devirSebebi: k.devirSebebi ?? null, sonMesaj: son ? { metin: son.metin, zaman: son.zaman, yon: son.yon, gonderen: son.gonderen } : null }
     : null;
   return kopya({ ...f, konusma });
 }

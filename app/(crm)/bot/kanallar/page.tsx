@@ -1,15 +1,22 @@
-import { BosSayfa, RolMesaji, botRolMesaji } from "@/components/bot/sayfa";
+import PageHeader from "@/components/layout/page-header";
+import { crmKullanicisi } from "@/lib/oturum";
+import { RolMesaji, botRolMesaji } from "@/components/bot/sayfa";
+import { BOT_YONETICI_ROLLERI } from "@/components/bot/erisim";
+import { kanalAyarlari, kanalBilgileri } from "@/components/bot/queries";
+import KanalAyarlari from "@/components/bot/kanal-ayarlari";
 
-// İskelet: kanal kartları (bağlantı durumu, son webhook, bot modu) P2.4'te gelir.
+// Bot › Kanallar. P1.3: kanal başına "yeni konuşmada bot". Bağlantı durumu, son webhook, bot modu P2.4'te.
 export default async function BotKanallarPage() {
-  const mesaj = await botRolMesaji();
-  if (mesaj) return <RolMesaji baslik="Kanallar" mesaj={mesaj} />;
+  const [mesaj, k] = await Promise.all([botRolMesaji(), crmKullanicisi()]);
+  if (mesaj || !k) return <RolMesaji baslik="Kanallar" mesaj={mesaj ?? ""} />;
+  const ayarlar = await kanalAyarlari();
+  const kanallar = kanalBilgileri().map((b) => ({
+    kanal: b.kanal, ad: b.ad, bagli: b.bagli, yeniKonusmadaBot: ayarlar.find((a) => a.kanal === b.kanal)?.yeniKonusmadaBot ?? false,
+  }));
   return (
-    <BosSayfa
-      baslik="Kanallar"
-      aciklama="WhatsApp, Messenger ve Instagram bağlantıları"
-      metin="Burada her kanalın bağlantı durumu (ortam değişkeni ve son webhook zamanı), bağlı numara / sayfa / hesap, bot modu (kapalı / gölge / otomatik) ve yeni konuşmada botun açık olup olmayacağı görünecek. Değişikliği yalnızca Yönetici yapar. Şimdilik kurulum adımları docs/BOT_KURULUM.md'de."
-      komut="P2.4 Bot › Kanallar ve Ayarlar"
-    />
+    <>
+      <PageHeader title="Kanallar" description="WhatsApp, Messenger ve Instagram · yeni konuşmada botun açık olup olmayacağı" />
+      <KanalAyarlari kanallar={kanallar} duzenleyebilir={(BOT_YONETICI_ROLLERI as readonly string[]).includes(k.rol)} />
+    </>
   );
 }

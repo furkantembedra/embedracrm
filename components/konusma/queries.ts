@@ -211,13 +211,65 @@ export async function bekleyenIsler(konusmaId: number): Promise<{ konusma: Kuyru
   };
 }
 
+/* ---------------- Devral / bota geri ver / bot devretti: SQL tarafı 20261119160000_devral_devret.sql ---------------- */
+
+/** dugme: Devral düğmesi · cevap: Gelen kutusu'ndan yazdı · kanal_disi: echo (Meta gelen kutusu, telefondaki uygulama) */
+export type DevralmaKaynagi = "dugme" | "cevap" | "kanal_disi";
+
 /**
- * "Temsilci yazdı" kuralı (değişmez kural 4): temsilci CRM'den ya da CRM dışından (echo) yazınca bot susar.
- * P1.3 bu noktaya konuşma notu / devralan bilgisini ekler.
+ * Konuşmayı devralır (bot susar). Durum değiştiyse sistem satırı yazılır ve true döner. Kullanıcı oturumdan okunur;
+ * oturumsuz çağrıda (işleyici) parametreden. kanal_disi'nde kullanıcı yoktur.
  */
-export async function temsilciYazdi(konusmaId: number) {
+export async function konusmaDevral(konusmaId: number, kaynak: DevralmaKaynagi, kullaniciId: number | null): Promise<boolean> {
   const s = await db();
-  sonuc(await s.from("konusmalar").update({ bot_aktif: false }).eq("id", konusmaId), "Bot kapatılırken");
+  return sonuc(
+    await s.rpc("konusma_devral", { p_konusma_id: konusmaId, p_kaynak: kaynak, p_kullanici_id: kullaniciId }),
+    "Konuşma devralınırken",
+  ) as boolean;
+}
+
+/**
+ * "Temsilci yazdı" kuralı (değişmez kural 4): temsilci CRM'den ya da CRM dışından (echo) yazınca bot susar ve
+ * bot devrettiyse "Cevap bekliyor" biter. CRM'den yazan, konuşmayı başkası devralmadıysa devralır.
+ */
+export async function temsilciYazdi(konusmaId: number, kaynak: "cevap" | "kanal_disi", kullaniciId: number | null = null) {
+  return konusmaDevral(konusmaId, kaynak, kaynak === "cevap" ? kullaniciId : null);
+}
+
+/** Bota geri verir; isteğe bağlı not botun bir sonraki turuna gider */
+export async function konusmaBotaVer(konusmaId: number, not: string | null, kullaniciId: number | null): Promise<boolean> {
+  const s = await db();
+  return sonuc(
+    await s.rpc("konusma_bota_ver", { p_konusma_id: konusmaId, p_not: not, p_kullanici_id: kullaniciId }),
+    "Konuşma bota verilirken",
+  ) as boolean;
+}
+
+/** Bot devretti: yalnızca bot konuşuyorsa geçerli; değiştiyse true (bildirim bir kez gitsin) */
+export async function konusmaBotDevretti(konusmaId: number, sebep: string, aciklama: string | null): Promise<boolean> {
+  const s = await db();
+  return sonuc(
+    await s.rpc("konusma_bot_devretti", { p_konusma_id: konusmaId, p_sebep: sebep, p_aciklama: aciklama }),
+    "Bot devri yazılırken",
+  ) as boolean;
+}
+
+/** Bota geri verilirken yazılan not: bot turu alır, alınca silinir (P2.1 bot döngüsü çağırır) */
+export async function botNotunuAl(konusmaId: number): Promise<string | null> {
+  const s = await db();
+  return sonuc(await s.rpc("konusma_bot_notu_al", { p_konusma_id: konusmaId }), "Bota not okunurken") as string | null;
+}
+
+/** Devretme bildirimi için: konuşmanın fırsatı ve sorumlusu */
+export async function devirBilgisi(konusmaId: number): Promise<{ satisHattiId: number | null; firma: string | null; sorumluId: number | null } | null> {
+  const s = await db();
+  const r = sonuc(
+    await s.from("konusmalar")
+      .select("satis_hatti_id, firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(f_firma, sorumlu_id)")
+      .eq("id", konusmaId).maybeSingle(),
+    "Konuşma okunurken",
+  ) as unknown as { satis_hatti_id: number | null; firsat: { f_firma: string; sorumlu_id: number | null } | null } | null;
+  return r && { satisHattiId: r.satis_hatti_id, firma: r.firsat?.f_firma ?? null, sorumluId: r.firsat?.sorumlu_id ?? null };
 }
 
 /** Webhook teslim / okundu bildirimleri: yalnızca giden mesajda ve yalnızca ileri (SQL: teslim_durumlari_isle) */

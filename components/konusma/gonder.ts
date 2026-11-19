@@ -43,7 +43,7 @@ export async function mesajGonder(
   for (const parca of parcalar) {
     const r = await a.gonder({ kanalHesapId: k.kanalHesapId, disKullaniciId: k.disKullaniciId }, { tur: "metin", metin: parca, insanTemsilci });
     if (!r.ok) {
-      if (gonderen === "temsilci" && mesajIdleri.length) await temsilciYazdi(k.id);
+      if (gonderen === "temsilci" && mesajIdleri.length) await temsilciYazdi(k.id, "cevap", gonderenKullaniciId);
       return { ok: false, hata: r.hata, gonderilen: mesajIdleri.length, ...(r.kod ? { kod: r.kod } : {}) };
     }
     demo ||= r.demo;
@@ -55,7 +55,7 @@ export async function mesajGonder(
       ek, zaman: new Date().toISOString(), satisHattiId: k.satisHattiId,
     }));
   }
-  if (gonderen === "temsilci") await temsilciYazdi(k.id);
+  if (gonderen === "temsilci") await temsilciYazdi(k.id, "cevap", gonderenKullaniciId);
   return { ok: true, mesajIdleri, demo };
 }
 
@@ -79,6 +79,6 @@ export async function sablonGonder(konusmaId: number, sablon: SablonIcerigi, gon
     konusmaId: k.id, gonderen: "temsilci", gonderenKullaniciId, disMesajId: r.disMesajId ?? `crm-${crypto.randomUUID()}`,
     metin: ozet.slice(0, 4096), tur: "metin", ek, zaman: new Date().toISOString(), satisHattiId: k.satisHattiId,
   });
-  await temsilciYazdi(k.id);
+  await temsilciYazdi(k.id, "cevap", gonderenKullaniciId);
   return { ok: true, mesajIdleri: [id], demo: r.demo };
 }

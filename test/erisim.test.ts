@@ -50,6 +50,12 @@ vi.mock("@/components/bot/queries", async (asil) => ({
   konusmaDetayi: async () => (botVeri.cagrilar.push("konusmaDetayi"), null),
   okunduYaz: async () => void botVeri.cagrilar.push("okunduYaz"),
   firsatSorumlusuYaz: async () => void botVeri.cagrilar.push("firsatSorumlusuYaz"),
+  kanalAyariYaz: async () => void botVeri.cagrilar.push("kanalAyariYaz"),
+}));
+vi.mock("@/components/konusma/devir", () => ({
+  devral: async (_k: number, kullanici: number) => (botVeri.cagrilar.push(`devral:${kullanici}`), true),
+  botaGeriVer: async (_k: number, not: string | null, kullanici: number) => (botVeri.cagrilar.push(`botaGeriVer:${not}:${kullanici}`), true),
+  botDevretti: async () => (botVeri.cagrilar.push("botDevretti"), { devredildi: true, firsatId: 1, alicilar: ["u2"] }),
 }));
 vi.mock("@/components/konusma/gonder", () => ({
   mesajGonder: async (_k: number, _m: string, g: string, kullanici: number | null) => (botVeri.cagrilar.push(`mesajGonder:${g}:${kullanici}`), { ok: true, mesajIdleri: [1], demo: true }),
@@ -166,6 +172,7 @@ describe("Bot menüsü (P1.2): Yönetici, Satış, Pazarlama", () => {
     const cagir = [
       () => a.gelenKutusuGetir(), () => a.konusmaGetir(1), () => a.okunduIsaretle(1, 2), () => a.cevapGonder(1, "Merhaba"),
       () => a.sablonlaGonder(1, { ad: "takip", dil: "tr", parametreler: [] }), () => a.sorumluDegistir("1", ""),
+      () => a.konusmayiDevral(1), () => a.konusmayiBotaVer(1, "Demo gününü sor"),
     ];
     for (const c of cagir) await expect(c()).rejects.toThrow(/Oturum gerekli/);
     for (const rol of ["Destek", "Operasyon"]) {
@@ -180,6 +187,32 @@ describe("Bot menüsü (P1.2): Yönetici, Satış, Pazarlama", () => {
     expect(botVeri.cagrilar).toContain("gelenKutusu");
     // Giden mesaj gönderen temsilci ve oturumdaki kullanıcıyla yazılır (ekipUyesi: kullanicilar.id = 6)
     expect(botVeri.cagrilar).toContain("mesajGonder:temsilci:6");
+    // Devral / bota geri ver oturumdaki kullanıcıyla (istemciden kullanıcı kimliği alınmaz)
+    expect(botVeri.cagrilar).toContain("devral:6");
+    expect(botVeri.cagrilar).toContain("botaGeriVer:Demo gününü sor:6");
+  });
+
+  it("kanal ayarını (yeni konuşmada bot) ve bot devretme simülasyonunu yalnızca Yönetici yapar; simülasyon yalnızca geliştirmede", async () => {
+    const a = await import("@/components/bot/actions");
+    for (const rol of ["Satış", "Pazarlama", "Destek"]) {
+      ekipUyesi(rol);
+      await expect(a.yeniKonusmaBotuKaydet("whatsapp", true)).rejects.toThrow("yalnızca Yönetici");
+      await expect(a.botDevretmesiniSimuleEt(1, "sikayet", "")).rejects.toThrow("yalnızca Yönetici");
+    }
+    expect(botVeri.cagrilar).toEqual([]);
+    ekipUyesi("Yönetici");
+    expect(await a.yeniKonusmaBotuKaydet("telgraf", true)).toEqual({ hata: "Kanal bulunamadı." });
+    expect(await a.botDevretmesiniSimuleEt(1, "uydurma", "")).toEqual({ hata: "Sebep seçin." });
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(await a.botDevretmesiniSimuleEt(1, "sikayet", "")).toEqual({ hata: "Simülasyon yalnızca geliştirme ortamında çalışır." });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(botVeri.cagrilar).toEqual([]);
+    expect(await a.yeniKonusmaBotuKaydet("whatsapp", true)).toEqual({});
+    expect((await a.botDevretmesiniSimuleEt(1, "sikayet", "")).duyuru).toMatch(/Bot devretti/);
+    expect(botVeri.cagrilar).toEqual(["kanalAyariYaz", "botDevretti"]);
   });
 
   it("simülasyon yalnızca Yönetici ve yalnızca geliştirmede", async () => {

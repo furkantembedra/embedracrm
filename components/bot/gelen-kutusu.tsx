@@ -15,6 +15,8 @@ import { cevapGonder, gelenKutusuGetir, konusmaGetir, okunduIsaretle, sablonlaGo
 import { useCanliYenileme } from "./canli";
 import { cevapModu, listeyiSuz, type Filtre } from "./cevap-modu";
 import { BotRozeti, KanalSimgesi, botDurumu, kisaZaman } from "./kanal-gorunumu";
+import { DevirKontrolleri, SistemSatiriGorunumu } from "./devir-kontrolleri";
+import { devirSebebiAdi } from "@/components/konusma/devir-sebepleri";
 import KonusmaSimulasyonu, { type SimulasyonKanali } from "./simulasyon";
 import type { GelenKutusuSatiri, KanalBilgisi, KonusmaDetayi, SohbetMesaji } from "./queries";
 
@@ -65,7 +67,7 @@ function ListeOgesi({ k, secili, onSec }: { k: GelenKutusuSatiri; secili: boolea
             )}
           </span>
           <span className="flex flex-wrap items-center gap-1.5">
-            <BotRozeti durum={botDurumu(k.botAktif, k.son.yon)} />
+            <BotRozeti durum={botDurumu(k.botAktif, k.son.yon, k.devirSebebi)} sebep={k.devirSebebi ? devirSebebiAdi(k.devirSebebi) : null} />
             {k.pencere.durum !== "acik" && <Chip ton="err">Pencere kapalı</Chip>}
           </span>
         </span>
@@ -108,15 +110,22 @@ function Baloncuk({ m }: { m: SohbetMesaji }) {
 
 function Sohbet({ d }: { d: KonusmaDetayi }) {
   const alt = useRef<HTMLDivElement>(null);
-  const sonId = d.mesajlar.at(-1)?.id;
+  // Mesajlar ve sistem satırları zamana göre tek akışta (eşit zamanda sistem satırı sonra)
+  const akis = useMemo(() => [
+    ...d.mesajlar.map((m) => ({ tur: "mesaj" as const, zaman: Date.parse(m.zaman), sira: 0, m })),
+    ...d.olaylar.map((o) => ({ tur: "olay" as const, zaman: Date.parse(o.zaman), sira: 1, o })),
+  ].sort((a, b) => a.zaman - b.zaman || a.sira - b.sira), [d.mesajlar, d.olaylar]);
+  const sonId = `${d.mesajlar.at(-1)?.id}-${d.olaylar.at(-1)?.id}`;
   useEffect(() => {
     alt.current?.scrollIntoView({ block: "end" });
   }, [d.id, sonId]);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-[#EFEAE2] p-3" aria-live="polite">
-      {d.mesajlar.length ? (
+      {akis.length ? (
         <ol className="flex flex-col gap-2">
-          {d.mesajlar.map((m) => <Baloncuk key={m.id} m={m} />)}
+          {akis.map((x) => x.tur === "mesaj"
+            ? <Baloncuk key={`m${x.m.id}`} m={x.m} />
+            : <SistemSatiriGorunumu key={`o${x.o.id}`} o={x.o} zaman={tarihSaat(x.o.zaman)} />)}
         </ol>
       ) : (
         <p className="p-4 text-center text-sm text-muted">Bu konuşmada henüz mesaj yok.</p>
@@ -243,7 +252,8 @@ function CevapKutusu({ d, onGonderildi }: { d: KonusmaDetayi; onGonderildi: (dem
           Standart 24 saat penceresi kapandı. Mesaj insan temsilci etiketiyle (HUMAN_AGENT) gider{mod.bitis ? `; bu yol ${tarihSaat(mod.bitis)} tarihinde kapanır` : ""}. Bot bu konuşmaya yazamaz.
         </Uyari>
       )}
-      {d.botAktif && <p className="text-xs font-semibold text-muted">Siz yazınca bu konuşmada bot susar.</p>}
+      {d.botAktif && <p className="text-xs font-semibold text-muted">Siz yazınca bu konuşmayı devralırsınız ve bot susar.</p>}
+      {d.devirSebebi && <p className="text-xs font-semibold text-err">Bot bu konuşmayı devretti ({devirSebebiAdi(d.devirSebebi)}); müşteri ekipten cevap bekliyor.</p>}
       <div className="flex items-end gap-2">
         <label className="sr-only" htmlFor={`cevap-${d.id}`}>Cevap</label>
         <textarea
@@ -316,6 +326,19 @@ function FirsatPaneli({ d, ekip, onDegisti }: { d: KonusmaDetayi; ekip: { id: st
             </dd>
           </dl>
           {hata && <Uyari ton="err">{hata}</Uyari>}
+          {f.notlar.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <h4 className="text-xs font-bold text-muted">Notlar</h4>
+              <ul className="flex flex-col gap-1.5">
+                {f.notlar.map((n) => (
+                  <li key={n.id} className={`rounded-lg px-2.5 py-1.5 text-xs ${n.tur === "bot_devretti" ? "bg-err-bg text-err" : "bg-[#F4F5F0] text-[#474A42]"}`}>
+                    <span className="break-words font-semibold">{n.metin}</span>
+                    <time dateTime={n.zaman} className="block text-[11px] opacity-80" suppressHydrationWarning>{tarihSaat(n.zaman)}</time>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Link href={`/satis-hatti#firsat-${f.id}`} className="inline-flex items-center gap-1 text-sm font-bold text-info hover:underline">
             Fırsata git <ExternalLink size={14} aria-hidden="true" />
           </Link>
@@ -326,7 +349,8 @@ function FirsatPaneli({ d, ekip, onDegisti }: { d: KonusmaDetayi; ekip: { id: st
           Müşteri kaydı <ExternalLink size={14} aria-hidden="true" />
         </Link>
       )}
-      <p className="text-xs text-muted">Aşama Satış Hattı&apos;nda değişir. Devral / bota geri ver P1.3&apos;te gelir.</p>
+      {d.botNotu && <Uyari ton="info">Bota not (bot henüz okumadı): {d.botNotu}</Uyari>}
+      <p className="text-xs text-muted">Aşama Satış Hattı&apos;nda değişir. Konuşmayı devralmak fırsatın sorumlusunu değiştirmez.</p>
     </aside>
   );
 }
@@ -503,10 +527,10 @@ export default function GelenKutusu({
                   <h2 className="truncate text-sm font-extrabold">{detay.ad}</h2>
                   <span className="truncate text-xs text-muted">{detay.kanalAd} · {detay.kimlik}</span>
                 </div>
-                <BotRozeti durum={botDurumu(detay.botAktif, detay.mesajlar.at(-1)?.yon)} />
                 <Chip ton={detay.pencere.durum === "acik" ? "ok" : detay.pencere.durum === "yalnizca_temsilci" ? "warn" : "err"}>
                   {detay.pencere.durum === "acik" ? `Pencere açık${detay.pencere.bitis ? ` · kapanış ${tarihSaat(detay.pencere.bitis)}` : ""}` : detay.pencere.durum === "yalnizca_temsilci" ? "Yalnızca temsilci" : "Pencere kapalı"}
                 </Chip>
+                <DevirKontrolleri d={detay} ben={ben} simulasyon={!!simulasyonKanallari} onDegisti={() => void yenile()} onDuyuru={setDuyuru} />
               </header>
               <Sohbet d={detay} />
               <CevapKutusu key={detay.id} d={detay} onGonderildi={(demo) => {
