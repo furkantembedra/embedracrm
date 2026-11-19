@@ -18,7 +18,7 @@ import type { Firsat } from "./queries";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import TeklifFormu from "@/components/teklifler/teklif-formu";
 import HatirlatmaFormu from "@/components/hatirlatmalar/hatirlatma-formu";
-import { MesajGecmisi, WhatsappSimulasyonu } from "./whatsapp-pencereleri";
+import { KonusmaSimulasyonu, MesajGecmisi, type SimulasyonKanali } from "./whatsapp-pencereleri";
 import type { KartEylemi } from "./firsat-karti";
 import type { Musteri } from "@/components/musteriler/queries";
 import type { FiyatListesi } from "@/lib/urunler";
@@ -132,11 +132,13 @@ export default function SatisHattiGorunumu({
   musteriler,
   kampanyalar = [],
   fiyatListesi,
+  simulasyonKanallari = [],
 }: {
   firsatlar: Firsat[];
   musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
   kampanyalar?: { id: string; ad: string; durum: string }[];
   fiyatListesi?: FiyatListesi;
+  simulasyonKanallari?: SimulasyonKanali[];
 }) {
   const router = useRouter();
   const [firsatlar, setFirsatlar] = useState(ilk);
@@ -167,10 +169,10 @@ export default function SatisHattiGorunumu({
     setEylem(null);
     setDuyuru("Hatırlatma eklendi.");
   }, []);
-  const whatsappIslendi = useCallback((f: Firsat, yeni: boolean) => {
+  const simulasyonIslendi = useCallback((f: Firsat | null, metin: string) => {
     setSimulasyon(false);
-    setFirsatlar((l) => ekleVeyaGuncelle(l, f));
-    setDuyuru(yeni ? `WhatsApp'tan yeni lead: ${f.firma}` : `${f.firma} fırsatına WhatsApp mesajı eklendi.`);
+    if (f) setFirsatlar((l) => ekleVeyaGuncelle(l, f));
+    setDuyuru(metin);
   }, []);
   useEffect(() => {
     if (!duyuru) return;
@@ -250,7 +252,7 @@ export default function SatisHattiGorunumu({
           className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0]"
         >
           <MessageCircle size={18} aria-hidden="true" className="text-[#1F8F4E]" />
-          WhatsApp mesajı simüle et
+          Mesaj simüle et
         </button>
         <button
           type="button"
@@ -272,8 +274,8 @@ export default function SatisHattiGorunumu({
         onEylem={(id, tur) => setEylem({ id, tur })}
       />
 
-      <Modal acik={simulasyon} onKapat={simulasyonKapat} baslik="WhatsApp mesajı simüle et" aciklama="Webhook'a gelen mesajla aynı akış">
-        <WhatsappSimulasyonu onIslendi={whatsappIslendi} onVazgec={simulasyonKapat} />
+      <Modal acik={simulasyon} onKapat={simulasyonKapat} baslik="Mesaj simüle et" aciklama="Webhook'a gelen mesajla aynı akış: kuyruk + işleyici">
+        <KonusmaSimulasyonu kanallar={simulasyonKanallari} onIslendi={simulasyonIslendi} onVazgec={simulasyonKapat} />
       </Modal>
 
       <Modal acik={eylem?.tur === "mesajlar" && !!eylemFirsat} onKapat={eylemKapat} baslik="WhatsApp mesajları" aciklama={eylemFirsat?.firma}>

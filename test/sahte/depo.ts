@@ -1,14 +1,22 @@
-// isle.ts testleri için bellek içi depo. isle.ts'in kullandığı modüllerin (konuşma, satış hattı, müşteri,
-// supabase db) yerine geçer ve veritabanının bu testler için önemli kuralını taşır:
-// konuşma (kanal, kanal_hesap_id, dis_kullanici_id) ve konusma_mesajlari.dis_mesaj_id tekil (aynı kimlikle ikinci yazma reddedilir; eşzamanlı yazmada ilk gelen kazanır).
+// Konuşma çekirdeği (components/konusma/isle.ts, kuyruk.ts, gonder.ts) testleri için bellek içi depo. Kullandıkları
+// modüllerin (konuşma sorguları, satış hattı, müşteri, supabase db) yerine geçer ve veritabanının bu testler için önemli
+// kurallarını taşır (SQL karşılıkları 20261119100706_konusma_kuyrugu.sql; aynı kurallar PGlite'ta test/kuyruk-sema.test.ts'te):
+//  • konuşma (kanal, kanal_hesap_id, dis_kullanici_id) ve konusma_mesajlari.dis_mesaj_id tekil (ikinci yazma reddedilir)
+//  • gelen_mesaj_kaydet: konuşma + mesaj + kuyruk işi tek adımda (araya başka istek girmez, SQL'de tek işlem)
+//  • konuşma kilidi: kilitsiz ya da süresi geçmiş, en eski bekleyen işinin zamanı gelmiş konuşma alınır; sahibi bırakır
+// Her çağrı bir olay döngüsü turu bekler, böylece eşzamanlı istekler gerçek veritabanındaki gibi iç içe geçer.
 import type { Firsat, WhatsappMesaji } from "@/components/satis-hatti/queries";
 import type { Musteri } from "@/components/musteriler/queries";
 import { KAPALI_ASAMALAR } from "@/components/satis-hatti/sabitler";
 import { telefonNormalize } from "@/components/whatsapp/telefon";
-import type { YeniMesaj } from "@/components/konusma/queries";
+import type { GelenKayit, Kanal, KuyrukIsi, KuyrukKonusmasi, YeniMesaj } from "@/components/konusma/queries";
 
-type Konusma = { id: number; kanal: string; kanalHesapId: string; disKullaniciId: string; satisHattiId: number | null; musteriId: number | null; sonMusteriMesaji: string | null };
+type Konusma = {
+  id: number; kanal: Kanal; kanalHesapId: string; disKullaniciId: string; satisHattiId: number | null; musteriId: number | null;
+  sonMusteriMesaji: string | null; profilAdi: string | null; botAktif: boolean; kilitSahibi: string | null; kilitBitis: number;
+};
 type Mesaj = YeniMesaj & { id: number };
+type Is = { id: number; konusmaId: number; mesajId: number; tur: "musteri_mesaji" | "temsilci_mesaji"; durum: "bekliyor" | "tamam" | "hata"; deneme: number; sonrakiDeneme: number; sonHata: string | null };
 type Yetkili = { musteri_id: number; y_tel: string; y_sira: number };
 
 export const depo = {
@@ -17,9 +25,15 @@ export const depo = {
   yetkililer: [] as Yetkili[],
   konusmalar: [] as Konusma[],
   mesajlar: [] as Mesaj[],
+  isler: [] as Is[],
   /** Bir sonraki firsatEkleDepo çağrısı bu hatayı fırlatır (hata sonrası geri alma testi) */
   firsatEklemeHatasi: null as Error | null,
   sayac: 100,
+  /** Test için: konuşma kilidini yok sayar (kilit olmasa ne olurdu?) */
+  kilitDevreDisi: false,
+  /** Fırsat yazan işlemlerin (işleyicinin kritik bölümü) aynı anda en çok kaç tane çalıştığı */
+  aktifYazma: 0,
+  enCokAktifYazma: 0,
 };
 
 export function depoyuSifirla() {
@@ -28,8 +42,12 @@ export function depoyuSifirla() {
   depo.yetkililer = [];
   depo.konusmalar = [];
   depo.mesajlar = [];
+  depo.isler = [];
   depo.firsatEklemeHatasi = null;
   depo.sayac = 100;
+  depo.kilitDevreDisi = false;
+  depo.aktifYazma = 0;
+  depo.enCokAktifYazma = 0;
 }
 
 /** Gerçek veritabanı gibi araya başka isteklerin girebilmesi için bir olay döngüsü turu bekler */
@@ -52,35 +70,116 @@ export function musteriEkle(m: Partial<Musteri> & { id: string; ad: string }, te
 }
 
 /* ---------- @/components/konusma/queries ---------- */
+const konusmaBul = (id: number) => depo.konusmalar.find((x) => x.id === id)!;
+const kilitli = (k: Konusma) => !depo.kilitDevreDisi && k.kilitSahibi !== null && k.kilitBitis >= Date.now();
+const bekleyenler = (konusmaId: number) => depo.isler.filter((i) => i.konusmaId === konusmaId && i.durum === "bekliyor").sort((a, b) => a.id - b.id);
+const basZamaniGeldi = (konusmaId: number) => {
+  const bas = bekleyenler(konusmaId)[0];
+  return !!bas && bas.sonrakiDeneme <= Date.now();
+};
+const konusmaGorunumu = (k: Konusma): KuyrukKonusmasi => ({
+  id: k.id, kanal: k.kanal, kanalHesapId: k.kanalHesapId, disKullaniciId: k.disKullaniciId, satisHattiId: k.satisHattiId,
+  musteriId: k.musteriId, profilAdi: k.profilAdi, sonMusteriMesaji: k.sonMusteriMesaji,
+});
+
 export const konusmaModulu = {
   VARSAYILAN_KANAL_HESABI: "varsayilan",
-  async konusmaGetirVeyaAc(kanal: string, kanalHesapId: string, disKullaniciId: string) {
+  async gelenMesajKaydet(m: GelenKayit) {
     await tur();
-    let k = depo.konusmalar.find((x) => x.kanal === kanal && x.kanalHesapId === kanalHesapId && x.disKullaniciId === disKullaniciId);
+    // SQL'de tek işlem: bu blokta await yok, araya başka istek giremez
+    let k = depo.konusmalar.find((x) => x.kanal === m.kanal && x.kanalHesapId === m.kanalHesapId && x.disKullaniciId === m.disKullaniciId);
     if (!k) {
-      k = { id: ++depo.sayac, kanal, kanalHesapId, disKullaniciId, satisHattiId: null, musteriId: null, sonMusteriMesaji: null };
+      k = { id: ++depo.sayac, kanal: m.kanal, kanalHesapId: m.kanalHesapId, disKullaniciId: m.disKullaniciId, satisHattiId: null, musteriId: null,
+        sonMusteriMesaji: null, profilAdi: null, botAktif: true, kilitSahibi: null, kilitBitis: 0 };
       depo.konusmalar.push(k);
     }
-    return { id: k.id, satisHattiId: k.satisHattiId };
+    if (depo.mesajlar.some((x) => x.disMesajId === m.disMesajId)) return null; // unique: on conflict do nothing
+    const musteri = m.gonderen === "musteri";
+    const mesajId = ++depo.sayac;
+    depo.mesajlar.push({ id: mesajId, konusmaId: k.id, yon: musteri ? "gelen" : "giden", gonderen: m.gonderen, disMesajId: m.disMesajId, metin: m.metin, tur: m.tur, ek: m.ek, zaman: m.zaman, satisHattiId: null });
+    depo.isler.push({ id: ++depo.sayac, konusmaId: k.id, mesajId, tur: musteri ? "musteri_mesaji" : "temsilci_mesaji", durum: "bekliyor", deneme: 0, sonrakiDeneme: 0, sonHata: null });
+    if (musteri) {
+      if (!k.sonMusteriMesaji || m.zaman > k.sonMusteriMesaji) k.sonMusteriMesaji = m.zaman;
+      if (m.profilAdi?.trim()) k.profilAdi = m.profilAdi.trim();
+    }
+    return { konusmaId: k.id, mesajId };
   },
-  async mesajKaydet(m: YeniMesaj) {
+  async konusmaKilidiAl(sahip: string, sureSn: number, konusmaId?: number) {
     await tur();
-    if (m.disMesajId && depo.mesajlar.some((x) => x.disMesajId === m.disMesajId)) return null; // unique (23505)
+    const aday = depo.isler
+      .filter((i) => i.durum === "bekliyor" && (konusmaId === undefined || i.konusmaId === konusmaId))
+      .sort((a, b) => a.id - b.id)
+      .find((i) => bekleyenler(i.konusmaId)[0] === i && i.sonrakiDeneme <= Date.now() && !kilitli(konusmaBul(i.konusmaId)));
+    if (!aday) return null;
+    const k = konusmaBul(aday.konusmaId);
+    k.kilitSahibi = sahip;
+    k.kilitBitis = Date.now() + sureSn * 1000;
+    return k.id;
+  },
+  async konusmaIsiBitir(isId: number, sahip: string, hata: string | null, sureSn: number) {
+    await tur();
+    const is = depo.isler.find((i) => i.id === isId)!;
+    const k = konusmaBul(is.konusmaId);
+    if (!depo.kilitDevreDisi && (k.kilitSahibi !== sahip || k.kilitBitis < Date.now())) return false;
+    k.kilitBitis = Date.now() + sureSn * 1000;
+    if (hata === null) is.durum = "tamam";
+    else {
+      is.sonrakiDeneme = Date.now() + 30_000 * 2 ** is.deneme;
+      is.deneme++;
+      is.sonHata = hata;
+      if (is.deneme >= 5) is.durum = "hata";
+    }
+    return true;
+  },
+  async konusmaKilidiBirak(konusmaId: number, sahip: string, sureSn: number) {
+    await tur();
+    const k = konusmaBul(konusmaId);
+    if (!depo.kilitDevreDisi && k.kilitSahibi !== sahip) return "kayip" as const;
+    if (basZamaniGeldi(konusmaId)) {
+      k.kilitBitis = Date.now() + sureSn * 1000;
+      return "devam" as const;
+    }
+    k.kilitSahibi = null;
+    k.kilitBitis = 0;
+    return "birakildi" as const;
+  },
+  async bekleyenIsler(konusmaId: number): Promise<{ konusma: KuyrukKonusmasi; isler: KuyrukIsi[] }> {
+    await tur();
+    return {
+      konusma: konusmaGorunumu(konusmaBul(konusmaId)),
+      isler: bekleyenler(konusmaId).map((i) => {
+        const m = depo.mesajlar.find((x) => x.id === i.mesajId)!;
+        return { id: i.id, tur: i.tur, bekliyor: i.sonrakiDeneme > Date.now(), mesaj: { id: m.id, metin: m.metin, zaman: m.zaman, satisHattiId: m.satisHattiId ?? null } };
+      }),
+    };
+  },
+  async temsilciYazdi(konusmaId: number) {
+    await tur();
+    konusmaBul(konusmaId).botAktif = false;
+  },
+  async konusmaOku(konusmaId: number) {
+    await tur();
+    const k = depo.konusmalar.find((x) => x.id === konusmaId);
+    return k ? konusmaGorunumu(k) : null;
+  },
+  async gidenMesajKaydet(m: Omit<YeniMesaj, "yon"> & { gonderen: "bot" | "temsilci" }) {
+    await tur();
+    const var_ = m.disMesajId ? depo.mesajlar.find((x) => x.disMesajId === m.disMesajId) : undefined;
+    if (var_) {
+      var_.gonderen = m.gonderen;
+      return var_.id;
+    }
     const id = ++depo.sayac;
-    depo.mesajlar.push({ ...m, id });
+    depo.mesajlar.push({ ...m, yon: "giden", id });
     return id;
   },
-  async mesajiGeriAl(mesajId: number) {
-    depo.mesajlar = depo.mesajlar.filter((x) => x.id !== mesajId);
-  },
-  async mesajiBagla(konusmaId: number, mesajId: number, b: { satisHattiId: number; musteriId: number | null; sonMusteriMesaji: string | null }) {
+  async mesajiBagla(konusmaId: number, mesajId: number, b: { satisHattiId: number; musteriId: number | null }) {
     await tur();
     const m = depo.mesajlar.find((x) => x.id === mesajId)!;
     m.satisHattiId = b.satisHattiId;
-    const k = depo.konusmalar.find((x) => x.id === konusmaId)!;
+    const k = konusmaBul(konusmaId);
     k.satisHattiId = b.satisHattiId;
     if (b.musteriId != null) k.musteriId = b.musteriId;
-    if (b.sonMusteriMesaji) k.sonMusteriMesaji = b.sonMusteriMesaji;
   },
 };
 
@@ -94,6 +193,15 @@ function firsatOku(id: string): Firsat | null {
   return kopya({ ...f, mesajlar });
 }
 
+/** Fırsat yazımı birkaç tur sürer; bu sürede aynı anda kaç yazma olduğunu sayar (paralel işleme dedektörü) */
+async function yazmaIzle() {
+  depo.aktifYazma++;
+  depo.enCokAktifYazma = Math.max(depo.enCokAktifYazma, depo.aktifYazma);
+  await tur();
+  await tur();
+  depo.aktifYazma--;
+}
+
 export const satisHattiModulu = {
   KAPALI_ASAMALAR,
   async getFirsat(id: string) {
@@ -101,7 +209,7 @@ export const satisHattiModulu = {
     return firsatOku(id);
   },
   async firsatEkleDepo(f: Firsat) {
-    await tur();
+    await yazmaIzle();
     if (depo.firsatEklemeHatasi) {
       const e = depo.firsatEklemeHatasi;
       depo.firsatEklemeHatasi = null;
@@ -111,7 +219,7 @@ export const satisHattiModulu = {
     depo.firsatlar.push(kopya({ ...f, mesajlar: undefined }));
   },
   async firsatiGuncelle(id: string, degisiklik: (f: Firsat) => void) {
-    await tur();
+    await yazmaIzle();
     const f = depo.firsatlar.find((x) => x.id === id);
     if (!f) return null;
     degisiklik(f);

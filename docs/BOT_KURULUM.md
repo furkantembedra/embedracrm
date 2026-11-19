@@ -51,6 +51,7 @@ Sıra önemli: Meta işletme doğrulaması ve Instagram App Review günler, hatt
 - [ ] Tüm değişkenleri Production ortamına gir. Gizli olanları **Sensitive** olarak işaretle (Bölüm 9).
 - [ ] `SITE_URL` değerini canlı alan adı olarak ayarla.
 - [ ] `CRON_SECRET` tanımlı olsun; Vercel Cron `vercel.json`'dan otomatik kurulur. Dakikalık çalışma gerekiyorsa ek zamanlayıcıyı kur (Bölüm 9.3).
+- [ ] **Konuşma işleyicisi:** Supabase'de `pg_cron` + `pg_net` ile `/api/konusma/isleyici`'yi 10 saniyede bir çağıran işi kur (Bölüm 9.4). Bu olmadan canlıda webhook mesajları yalnızca kaydedilir, satış hattına işlenmez (webhook'un `after()` dürtmesi yardımcıdır, garanti değildir).
 
 ---
 
@@ -90,6 +91,7 @@ CRM'de Meta ve diğer sistemlerden gelen çağrılar için açık adresler vard�
 | `POST /api/cihaz-bildirimi` | ONESuite (cihaz) | Seri numarasından `CIHAZ_BILDIRIM_SIRRI` ile üretilen cihaz anahtarı. `GET` isteği ise oturum ister. |
 | `GET /api/zamanlayici` | Vercel Cron (`vercel.json`) ya da harici zamanlayıcı | `Authorization: Bearer <CRON_SECRET>` başlığı. Kampanya ve otomasyonu birlikte çalıştırır. |
 | `GET /api/kampanya-zamanlayici` | Harici zamanlayıcı (yalnızca kampanya) | `Authorization: Bearer <CRON_SECRET>` başlığı. |
+| `POST /api/konusma/isleyici` (GET de olur) | Supabase pg_cron + pg_net (10 sn'de bir, Bölüm 9.4) | `Authorization: Bearer <CRON_SECRET>` başlığı. Konuşma kuyruğunu işler. |
 
 ### Ortak webhook: nasıl yönlendirilir
 Üç ürün de aynı adrese yazar; kod gövdedeki `object` alanına bakar (`components/konusma/meta-webhook.ts`):
@@ -303,7 +305,7 @@ Bu değerler derleme sırasında tarayıcı paketine gömülür, yani gizli değ
 | `PORTAL_OTURUM_SECRET` | `components/portal/oturum.ts` | Bayi portalı oturum çerezini imzalar | Production'da hata fırlatır |
 | `ABONELIK_SIRRI` | `lib/abonelik.ts` | Abonelikten çıkma bağlantısını imzalar | Production'da hata; geliştirmede demo sırrı |
 | `CIHAZ_BILDIRIM_SIRRI` | `lib/cihaz-anahtari.ts`, `scripts/cihaz-simulator.mjs` | Cihaz anahtarlarını üretir ve doğrular. **Değiştirilirse sahadaki cihazların anahtarları geçersiz olur.** | Production'da hata; geliştirmede demo sırrı |
-| `CRON_SECRET` | `lib/cron.ts` (`/api/zamanlayici`, `/api/kampanya-zamanlayici`) | Zamanlayıcı çağrısının doğrulaması | Zamanlayıcı adresleri her isteğe 401 döner, Vercel'de zamanlı işler çalışmaz |
+| `CRON_SECRET` | `lib/cron.ts` (`/api/zamanlayici`, `/api/kampanya-zamanlayici`, `/api/konusma/isleyici`) | Zamanlayıcı ve kuyruk işleyicisi çağrısının doğrulaması | Bu adresler her isteğe 401 döner; Vercel'de zamanlı işler ve konuşma kuyruğu çalışmaz |
 | `RESEND_API_KEY` | `lib/ileti-gonder.ts` | Resend ile e-posta gönderimi | Demo modu |
 | `ANTHROPIC_API_KEY` | (P2.1'de `components/bot/`) | Claude API | Bot kapalı |
 
@@ -362,7 +364,41 @@ openssl rand -base64 48
   - **Harici zamanlayıcı** (ör. bir uptime / cron servisi): aynı adres ve başlık.
   - Pro plana geçersen `vercel.json`'daki `schedule` değerini `* * * * *` yapman yeterli.
 - Otomasyon motoru kendi kilidini tutar: iki çağrı aynı anda gelirse ikincisi otomasyonu atlar (yanıtta `"otomasyon": null`). Kampanya tarafında planlı kampanya bir kez çalışır (çalışınca zamanlaması kaldırılır); sürekli kampanya her turda yalnızca kitlede kalan kişilere gönderir.
-- P1.1'deki kuyruk işleyicisi (bot cevapları) dakikalık değil saniyeler mertebesinde tetiklenmeli; günlük Vercel Cron bunun için **uygun değildir**. P1.1'de pg_cron ya da bir kuyruk servisi seçilecek.
+- Konuşma kuyruğu işleyicisi (P1.1) saniyeler mertebesinde çalışmalı; günlük Vercel Cron bunun için **uygun değildir**, Bölüm 9.4.
+
+### 9.4 Konuşma işleyicisi (Supabase pg_cron)
+
+Webhook Meta'ya hızlı 200 dönmek için mesajı yalnızca kaydeder ve `konusma_isleri` kuyruğuna yazar; fırsat eşleştirme, yeni lead ve (P2.1'de) bot cevabı **işleyicide** yapılır (`components/konusma/kuyruk.ts`, `POST /api/konusma/isleyici`). Aynı konuşmanın işleri konuşma kilidiyle sırayla işlenir; birden fazla çağrının üst üste binmesi güvenlidir.
+
+**Neden pg_cron:** Vercel Hobby cron günde bir kez çalışır (Pro'da bile en sık dakikada bir); Supabase Cron saniye aralıklı iş kurabiliyor (supabase.com/docs/guides/cron), projede zaten var, ek hesap ya da sır gerektirmez. Kuyruk servisi (ör. QStash) ayrı hesap, ayrı imza doğrulaması ve ek maliyet demek; bugünkü hacimde gerekmiyor. Webhook ayrıca `after()` ile işleyiciyi yanıt gittikten sonra bir kez dürtür; bu çoğu mesajı anında işler ama sunucusuz ortamda garanti değildir, asıl güvence cron'dur.
+
+Kurulum (Supabase › SQL Editor; `pg_cron` ve `pg_net` eklentileri Database › Extensions'tan açık olmalı). Değerleri Vault'a koy, SQL'e düz metin yazma:
+
+```sql
+select vault.create_secret('https://<canlı-alan-adı>/api/konusma/isleyici', 'konusma_isleyici_url');
+select vault.create_secret('<CRON_SECRET değeri>', 'cron_secret');
+
+select cron.schedule(
+  'konusma-isleyici',
+  '10 seconds',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'konusma_isleyici_url'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 5000
+  );
+  $$
+);
+```
+
+- Kontrol: `select * from cron.job_run_details order by start_time desc limit 5;` ve `select status_code, error_msg from net._http_response order by created desc limit 5;` (200 beklenir; 401 → `CRON_SECRET` uyuşmuyor).
+- Durdurmak: `select cron.unschedule('konusma-isleyici');`
+- Takılan işler: `select durum, count(*) from public.konusma_isleri group by 1;` 5 denemede başaramayan iş `hata` durumunda kalır, `son_hata` sütununda nedeni (müşteri metni içermez) yazar.
+- Geliştirmede ve `next start` ile `instrumentation.ts` işleyiciyi 5 saniyede bir zaten çalıştırır; pg_cron gerekmez. pg_cron'un saniye aralıklı schedule biçimi (`'10 seconds'`) Supabase belgesinde "every second" olarak geçiyor; canlıda ilk kurulumda `cron.job_run_details`'ten çalıştığını doğrula.
 
 ---
 

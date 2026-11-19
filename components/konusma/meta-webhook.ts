@@ -9,17 +9,18 @@
 //        INSTAGRAM_APP_SECRET tanımlıysa yalnızca object: instagram gövdelerinde onunla atılmış imza da kabul edilir
 //        (Instagram Login, aşağıda imzaAnahtarlari).
 //        Secret tanımsızsa geliştirmede imzasız istek kabul edilir, production'da her istek reddedilir.
-//        Gövdedeki `object` alanına göre kanal seçilir:
-//          whatsapp_business_account → WhatsApp: mesajlar satış hattına işlenir (components/whatsapp/isle.ts)
-//          instagram                 → Instagram: henüz işlenmez (P4.1), yalnızca olay türleri loglanır
-//          page                      → Messenger: henüz işlenmez (P4.2), yalnızca olay türleri loglanır
+//        Gövdedeki `object` alanına göre kanal adaptörü seçilir (components/konusma/kanallar/, kanal adına göre dal yok):
+//          adaptörü olan kanal (bugün whatsapp_business_account) → adaptör gövdeyi ortak mesaj listesine çevirir,
+//            mesajlar kaydedilir + kuyruğa yazılır (components/konusma/kuyruk.ts) ve HEMEN 200 döner; fırsat / lead işini
+//            işleyici yapar (/api/konusma/isleyici, pg_cron; ayrıca after() ile hemen bir kez dürtülür)
+//          instagram / page (adaptörleri P4.1 / P4.2) → 200, yalnızca olay türleri loglanır
 //        Loglara yalnızca kanal ve olay türü sayıları yazılır; mesaj içeriği, kullanıcı / sayfa kimliği yazılmaz.
-// Meta 200 dönmeyen bildirimi tekrar gönderir; aynı mesaj kimliği ikinci kez işlenmez (konusma_mesajlari.dis_mesaj_id).
-// P1.1'de kanal adaptörleri (components/konusma/kanallar/) bu dosyadaki kanal dallarının yerini alır.
+// Meta 200 dönmeyen bildirimi tekrar gönderir (WhatsApp 7 güne kadar; Messenger / Instagram 5 sn içinde 200 bekler);
+// aynı mesaj kimliği ikinci kez yazılmaz (konusma_mesajlari.dis_mesaj_id). Kayıt hatasında 500 döner ki Meta yeniden göndersin.
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
-import { whatsappMesajiIsle } from "@/components/whatsapp/isle";
-import type { MesajEki } from "@/components/konusma/queries";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { webhookAdaptoru } from "@/components/konusma/kanallar";
+import { kuyrugaYaz, kuyruguIsle } from "@/components/konusma/kuyruk";
 import { sistemOlarak } from "@/lib/supabase/db";
 
 /** Meta uygulamasının App Secret'ı; eski kurulumlarla uyum için WHATSAPP_APP_SECRET'e düşer */
@@ -78,20 +79,48 @@ export async function metaWebhookAl(istek: NextRequest) {
   if (!veri) return NextResponse.json({ ok: false, hata: "Gövde JSON olmalı." }, { status: 400 });
   const girdiler = Array.isArray(veri?.entry) ? (veri.entry as MetaGirdi[]) : [];
 
-  switch (veri?.object) {
-    case "whatsapp_business_account":
-      return NextResponse.json({ ok: true, islenen: await whatsappBildirimiIsle(girdiler) });
-    case "instagram":
-      olaylariLogla("instagram", girdiler); // P4.1
-      return NextResponse.json({ ok: true, islenen: 0 });
-    case "page":
-      olaylariLogla("messenger", girdiler); // P4.2
-      return NextResponse.json({ ok: true, islenen: 0 });
-    default:
-      console.info(`[meta-webhook] bilinmeyen object: ${guvenliAd(veri?.object)}`);
-      return NextResponse.json({ ok: true, islenen: 0 });
+  const adaptor = webhookAdaptoru(veri.object);
+  if (adaptor) {
+    const { mesajlar, durumlar } = adaptor.webhookCevir(veri);
+    let kaydedilen = 0;
+    if (mesajlar.length) {
+      try {
+        // Meta oturumsuz çağırır: veritabanı işi gizli anahtarlı istemciyle
+        kaydedilen = (await sistemOlarak(() => kuyrugaYaz(mesajlar))).length;
+      } catch (e) {
+        console.error(`[meta-webhook] ${adaptor.kanal} mesajı kaydedilemedi: ${(e as Error).message?.slice(0, 200)}`);
+        return NextResponse.json({ ok: false }, { status: 500 }); // Meta yeniden gönderir; kaydedilenler tekrar yazılmaz
+      }
+    }
+    if (kaydedilen) isleyiciyiDurt();
+    // Teslim / okundu durumları adaptörde çevrilir; mesajın yanında gösterilmesi P1.2'de
+    return NextResponse.json({ ok: true, kaydedilen, durum: durumlar.length });
+  }
+  const kanal = typeof veri.object === "string" && Object.hasOwn(ADAPTORU_OLMAYAN, veri.object) ? ADAPTORU_OLMAYAN[veri.object] : null;
+  if (kanal) {
+    olaylariLogla(kanal, girdiler);
+    return NextResponse.json({ ok: true, kaydedilen: 0 });
+  }
+  console.info(`[meta-webhook] bilinmeyen object: ${guvenliAd(veri?.object)}`);
+  return NextResponse.json({ ok: true, kaydedilen: 0 });
+}
+
+/**
+ * Yanıt gittikten sonra işleyiciyi bir kez çalıştırır. Yalnızca hızlandırıcıdır: sunucusuz ortamda yarıda kalabilir,
+ * iş yine kaybolmaz (pg_cron her 10 sn'de işleyiciyi çağırır). İstek bağlamı yoksa (testler) sessizce geçer.
+ */
+function isleyiciyiDurt() {
+  try {
+    after(() => sistemOlarak(() => kuyruguIsle({ sureMs: 8_000 })).then(() => undefined, (e) => {
+      console.error(`[meta-webhook] işleyici: ${(e as Error).message?.slice(0, 200)}`);
+    }));
+  } catch {
+    /* istek bağlamı yok */
   }
 }
+
+/** Adaptörü henüz yazılmamış Meta kanalları: yalnızca olay türleri loglanır (P4.1 Instagram, P4.2 Messenger) */
+const ADAPTORU_OLMAYAN: Record<string, string> = { instagram: "instagram", page: "messenger" };
 
 /* ---------------- Instagram / Messenger: yalnızca olay türü ---------------- */
 
@@ -121,90 +150,7 @@ export function olayTurleri(girdiler: MetaGirdi[]): Record<string, number> {
   return sayac;
 }
 
-function olaylariLogla(kanal: "instagram" | "messenger", girdiler: MetaGirdi[]) {
+function olaylariLogla(kanal: string, girdiler: MetaGirdi[]) {
   const s = Object.entries(olayTurleri(girdiler)).map(([t, n]) => `${t}×${n}`).join(", ");
   console.info(`[meta-webhook] ${kanal} bildirimi henüz işlenmiyor: ${s || "olay yok"}`);
-}
-
-/* ---------------- WhatsApp ---------------- */
-
-type WaMedya = { mime_type?: string; caption?: string; filename?: string };
-export type WaMesaj = {
-  from: string; id: string; timestamp: string; type: string;
-  text?: { body: string };
-  image?: WaMedya; document?: WaMedya; video?: WaMedya; audio?: WaMedya; sticker?: WaMedya;
-  location?: { name?: string; address?: string; latitude: number; longitude: number };
-  button?: { text: string }; interactive?: { button_reply?: { title: string }; list_reply?: { title: string } };
-  reaction?: { message_id?: string; emoji?: string };
-  context?: { id?: string; from?: string };
-  referral?: { source_url?: string; source_id?: string; source_type?: string; headline?: string; body?: string; media_type?: string; ctwa_clid?: string };
-};
-type WaDeger = {
-  metadata?: { phone_number_id?: string; display_phone_number?: string };
-  contacts?: { wa_id: string; profile?: { name?: string } }[];
-  messages?: WaMesaj[];
-};
-
-function mesajMetni(m: WaMesaj) {
-  switch (m.type) {
-    case "text": return m.text?.body ?? "";
-    case "image": return m.image?.caption ? `📷 ${m.image.caption}` : "";
-    case "video": return m.video?.caption ? `🎬 ${m.video.caption}` : "";
-    case "document": return `📄 ${m.document?.filename ?? "Belge"}${m.document?.caption ? ` · ${m.document.caption}` : ""}`;
-    case "location": return `📍 ${m.location?.name ?? m.location?.address ?? `${m.location?.latitude}, ${m.location?.longitude}`}`;
-    case "button": return m.button?.text ?? "";
-    case "interactive": return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? "";
-    case "reaction": return m.reaction?.emoji ? `Tepki: ${m.reaction.emoji}` : "Tepki kaldırıldı";
-    default: return "";
-  }
-}
-
-const kirp = (x: unknown, n = 300) => (typeof x === "string" && x ? x.slice(0, n) : undefined);
-
-/**
- * Mesajın ek bilgisi. Kişisel veri yazılmaz: context.from (telefon), konum, ctwa_clid (tıklama kimliği) ve medya
- * bağlantıları bilerek atlanır.
- */
-export function whatsappEki(m: WaMesaj): MesajEki {
-  const ek: MesajEki = {};
-  const medya = m.image ?? m.document ?? m.video ?? m.audio ?? m.sticker;
-  if (medya?.mime_type) ek.ek_dosya_turu = kirp(medya.mime_type, 100);
-  const yanitlanan = m.type === "reaction" ? m.reaction?.message_id : m.context?.id;
-  if (yanitlanan) ek.yanitlanan_mesaj_id = kirp(yanitlanan, 200);
-  if (m.referral) {
-    const r = m.referral;
-    ek.yonlendirme = Object.fromEntries(Object.entries({
-      kaynak_turu: kirp(r.source_type, 40), kaynak_id: kirp(r.source_id, 100), baslik: kirp(r.headline),
-      govde: kirp(r.body, 1000), medya_turu: kirp(r.media_type, 40), kaynak_url: kirp(r.source_url, 500),
-    }).filter(([, v]) => v !== undefined));
-  }
-  return ek;
-}
-
-async function whatsappBildirimiIsle(girdiler: MetaGirdi[]) {
-  let islenen = 0;
-  for (const entry of girdiler) {
-    for (const degisiklik of entry.changes ?? []) {
-      const deger = degisiklik.value as WaDeger | undefined;
-      // Okundu / iletildi gibi durum bildirimleri (statuses) mesaj içermez, atlanır (P1.2'de işlenecek)
-      for (const m of deger?.messages ?? []) {
-        const kisi = deger?.contacts?.find((c) => c.wa_id === m.from);
-        // Meta oturumsuz çağırır: veritabanı işi gizli anahtarlı istemciyle
-        const sonuc = await sistemOlarak(() => whatsappMesajiIsle({
-          // Kullanıcı adı kullanan WhatsApp kullanıcılarında `from` (telefon) gelmeyebilir (yalnızca from_user_id);
-          // bu durumda isle.ts telefonu çözemez ve mesajı atlar. Telefonsuz kimlik P1.1 adaptöründe ele alınacak.
-          waId: m.from ?? "",
-          ad: kisi?.profile?.name ?? "",
-          metin: mesajMetni(m),
-          tur: m.type,
-          mesajId: m.id,
-          zaman: new Date(Number(m.timestamp) * 1000 || Date.now()).toISOString(),
-          kanalHesapId: deger?.metadata?.phone_number_id,
-          ek: whatsappEki(m),
-        }));
-        if (sonuc) islenen++;
-      }
-    }
-  }
-  return islenen;
 }

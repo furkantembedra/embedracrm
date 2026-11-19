@@ -112,6 +112,24 @@ export function whatsappGovdesi(o: {
   return { object: "whatsapp_business_account", entry: [{ id: "WABA-1", changes: [{ field: "messages", value: deger }] }] };
 }
 
+/**
+ * WhatsApp Business uygulamasından (coexistence) gönderilen mesajın kopyası: field smb_message_echoes,
+ * value.message_echoes[] { from: işletme numarası, to: müşteri, to_user_id?, id, timestamp, type, … }
+ */
+export function whatsappEchoGovdesi(o: { to?: string; toUserId?: string; id?: string; metin?: string; type?: string; ek?: Record<string, unknown>; phoneNumberId?: string } = {}) {
+  const echo: Record<string, unknown> = {
+    from: "905550000000", ...(o.to === "" ? {} : { to: o.to ?? "905321112233" }), ...(o.toUserId ? { to_user_id: o.toUserId } : {}),
+    id: o.id ?? `wamid.ECHO${Math.random().toString(36).slice(2, 10)}`, timestamp: saniye(), type: o.type ?? "text",
+    ...((o.type ?? "text") === "text" ? { text: { body: o.metin ?? "Merhaba, nasıl yardımcı olabiliriz?" } } : {}), ...o.ek,
+  };
+  return {
+    object: "whatsapp_business_account",
+    entry: [{ id: "WABA-1", changes: [{ field: "smb_message_echoes", value: {
+      messaging_product: "whatsapp", metadata: { display_phone_number: "905550000000", phone_number_id: o.phoneNumberId ?? "PNID-1" }, message_echoes: [echo],
+    } }] }],
+  };
+}
+
 /* ---------- Instagram ve Messenger: entry[].messaging[] olayları ---------- */
 
 type Olay = Record<string, unknown>;

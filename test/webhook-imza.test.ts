@@ -1,20 +1,28 @@
 // Ortak Meta webhook'u (components/konusma/meta-webhook.ts): /api/meta/webhook ve geriye uyumlu /api/whatsapp/webhook.
 // Meta doğrulaması (GET), X-Hub-Signature-256 imza kontrolü (POST), secret / token geri düşüşü (META_* → WHATSAPP_*),
 // object'e göre yönlendirme, Instagram / Messenger'da içerik loglanmaması ve WhatsApp ek bilgisi.
-// Mesaj işleme (isle.ts) burada sahtelenir; kuralları test/isle.test.ts sınar.
+// Kayıt ve kuyruk (components/konusma/kuyruk.ts) burada sahtelenir: webhook adaptörün çevirdiği mesajları kuyruğa yazar
+// ve hemen döner. Kuyruk / işleyici kuralları test/kuyruk.test.ts ve test/konusma-isle.test.ts'te, WhatsApp çevirisinin
+// ayrıntıları test/kanal-whatsapp.test.ts'te.
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GelenMesaj } from "@/components/konusma/kanallar/tur";
 import {
   echoOlayi, hikayeBahsetmeOlayi, hikayeYanitiOlayi, imzala as imzalaS, instagramGovdesi, mesajOlayi, messengerGovdesi,
-  okunduOlayi, postbackOlayi, reklamMesajiOlayi, tepkiOlayi, waMesaj, whatsappGovdesi,
+  okunduOlayi, postbackOlayi, reklamMesajiOlayi, tepkiOlayi, waMesaj, whatsappEchoGovdesi, whatsappGovdesi,
 } from "./sahte/meta";
 
-const islenen = vi.hoisted(() => [] as Record<string, unknown>[]);
-vi.mock("@/components/whatsapp/isle", () => ({
-  whatsappMesajiIsle: vi.fn(async (m: Record<string, unknown>) => {
-    islenen.push(m);
-    return { firsat: { id: "1" }, yeni: true };
+const islenen = vi.hoisted(() => [] as GelenMesaj[]);
+const kuyruk = vi.hoisted(() => ({ hata: null as Error | null, gorulen: new Set<string>(), isleyici: 0 }));
+vi.mock("@/components/konusma/kuyruk", () => ({
+  kuyrugaYaz: vi.fn(async (mesajlar: GelenMesaj[]) => {
+    if (kuyruk.hata) throw kuyruk.hata;
+    const yeni = mesajlar.filter((m) => !kuyruk.gorulen.has(m.disMesajId));
+    for (const m of yeni) kuyruk.gorulen.add(m.disMesajId);
+    islenen.push(...yeni);
+    return yeni.map((m, i) => ({ konusmaId: 1, mesajId: i + 1, echo: m.echo }));
   }),
+  kuyruguIsle: vi.fn(async () => void kuyruk.isleyici++),
 }));
 vi.mock("@/lib/supabase/db", () => ({ sistemOlarak: <T>(is: () => Promise<T>) => is() }));
 
@@ -28,6 +36,8 @@ const metaGovdesi = (mesajId = "wamid.TEST1") =>
 
 beforeEach(() => {
   islenen.length = 0;
+  kuyruk.hata = null;
+  kuyruk.gorulen.clear();
   vi.stubEnv("META_APP_SECRET", "");
   vi.stubEnv("META_VERIFY_TOKEN", "");
   vi.stubEnv("INSTAGRAM_APP_SECRET", "");
@@ -47,14 +57,15 @@ describe.each([
     POST(new NextRequest(ADRES, { method: "POST", body: govde, headers: imza ? { "x-hub-signature-256": imza } : {} }));
 
   describe("POST imza doğrulaması", () => {
-    it("geçerli imzalı bildirimi kabul eder ve mesajı işler", async () => {
+    it("geçerli imzalı bildirimi kabul eder, mesajı adaptörle çevirip kuyruğa yazar ve hemen döner", async () => {
       const govde = metaGovdesi();
       const r = await gonder(govde, imzala(govde));
       expect(r.status).toBe(200);
-      expect(await r.json()).toEqual({ ok: true, islenen: 1 });
-      expect(islenen).toEqual([expect.objectContaining({
-        waId: "905321112233", ad: "Ahmet", metin: "Fiyat alabilir miyim?", tur: "text", mesajId: "wamid.TEST1", kanalHesapId: "PNID-1",
-      })]);
+      expect(await r.json()).toEqual({ ok: true, kaydedilen: 1, durum: 0 });
+      expect(islenen).toEqual([{
+        kanal: "whatsapp", kanalHesapId: "PNID-1", disKullaniciId: "+905321112233", disMesajId: "wamid.TEST1", tur: "metin",
+        metin: "Fiyat alabilir miyim?", ek: {}, zaman: new Date(1763460000_000).toISOString(), echo: false, profilAdi: "Ahmet",
+      }]);
     });
 
     it("yanlış anahtarla imzalanmış bildirimi reddeder", async () => {
@@ -150,7 +161,7 @@ describe.each([
       }));
       const r = await gonder(govde, imzala(govde));
       expect(r.status).toBe(200);
-      expect(await r.json()).toEqual({ ok: true, islenen: 0 });
+      expect(await r.json()).toEqual({ ok: true, kaydedilen: 0 });
       expect(islenen).toHaveLength(0);
       const yazilan = l.mock.calls.flat().join("\n");
       expect(yazilan).toBe("[meta-webhook] instagram bildirimi henüz işlenmiyor: message×3, message_echo×1, read×1, reaction×1");
@@ -163,7 +174,7 @@ describe.each([
         sayfa: "SAYFA-GIZLI", olaylar: [reklamMesajiOlayi({ hesap: "SAYFA-GIZLI" }), postbackOlayi()], standby: [mesajOlayi({ metin: "Gelen kutusundaki mesaj" })],
       }));
       const r = await gonder(govde, imzala(govde));
-      expect(await r.json()).toEqual({ ok: true, islenen: 0 });
+      expect(await r.json()).toEqual({ ok: true, kaydedilen: 0 });
       const yazilan = l.mock.calls.flat().join("\n");
       expect(yazilan).toBe("[meta-webhook] messenger bildirimi henüz işlenmiyor: message×1, postback×1, standby:message×1");
       for (const gizli of ["SAYFA-GIZLI", "Gelen kutusundaki", "Reklamdaki", "REKLAM-1"]) expect(yazilan).not.toContain(gizli);
@@ -182,14 +193,47 @@ describe.each([
       const l = log();
       for (const object of ["user", "<script>Gizli içerik</script>", 42]) {
         const govde = JSON.stringify({ object, entry: [] });
-        expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, islenen: 0 });
+        expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, kaydedilen: 0 });
       }
       expect(l.mock.calls.flat()).toEqual(["[meta-webhook] bilinmeyen object: user", "[meta-webhook] bilinmeyen object: ?", "[meta-webhook] bilinmeyen object: ?"]);
     });
 
-    it("WhatsApp durum bildirimi (statuses) mesaj işlemez", async () => {
+    it("WhatsApp durum bildirimi (statuses) mesaj kaydetmez, yalnızca sayılır", async () => {
       const govde = JSON.stringify(whatsappGovdesi({ durumlar: [{ id: "wamid.X", status: "read", recipient_id: "905321112233" }] }));
-      expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, islenen: 0 });
+      expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, kaydedilen: 0, durum: 1 });
+      expect(islenen).toHaveLength(0);
+    });
+
+    it("WhatsApp Business uygulamasından yazılan mesaj (smb_message_echoes) echo olarak kuyruğa yazılır", async () => {
+      const govde = JSON.stringify(whatsappEchoGovdesi({ id: "wamid.ECHO-A", metin: "Merhaba, teklifiniz hazır" }));
+      expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, kaydedilen: 1, durum: 0 });
+      expect(islenen).toEqual([expect.objectContaining({ echo: true, disKullaniciId: "+905321112233", metin: "Merhaba, teklifiniz hazır" })]);
+    });
+
+    it("aynı bildirim tekrar gelirse 200 döner, hiçbir şey kaydedilmez", async () => {
+      const govde = metaGovdesi("wamid.TEKRAR");
+      await gonder(govde, imzala(govde));
+      const r = await gonder(govde, imzala(govde));
+      expect(await r.json()).toEqual({ ok: true, kaydedilen: 0, durum: 0 });
+      expect(islenen).toHaveLength(1);
+    });
+
+    it("kayıt hata verirse 500 döner (Meta yeniden gönderir); içerik loglanmaz", async () => {
+      kuyruk.hata = new Error("Gelen mesaj kaydedilirken başarısız: bağlantı koptu");
+      const l = vi.spyOn(console, "error").mockImplementation(() => {});
+      const govde = metaGovdesi();
+      const r = await gonder(govde, imzala(govde));
+      expect(r.status).toBe(500);
+      const yazilan = l.mock.calls.flat().join("\n");
+      expect(yazilan).toContain("bağlantı koptu");
+      expect(yazilan).not.toContain("Fiyat alabilir");
+    });
+
+    it("işleyiciyi istek içinde çalıştırmaz (ağır iş kuyrukta; after() istek bağlamı dışında sessizce geçer)", async () => {
+      const once = kuyruk.isleyici;
+      const govde = metaGovdesi();
+      expect((await gonder(govde, imzala(govde))).status).toBe(200);
+      expect(kuyruk.isleyici).toBe(once);
     });
   });
 
@@ -216,40 +260,5 @@ describe.each([
       vi.stubEnv("WHATSAPP_VERIFY_TOKEN", "");
       expect((await dogrula("")).status).toBe(403);
     });
-  });
-});
-
-describe("WhatsApp ek bilgisi (kişisel veri yazılmaz)", () => {
-  const gonder = async (mesaj: ReturnType<typeof waMesaj>, o: Parameters<typeof whatsappGovdesi>[0] = {}) => {
-    const govde = JSON.stringify(whatsappGovdesi({ ...o, mesajlar: [mesaj] }));
-    const r = await meta.POST(new NextRequest("http://localhost:3000/api/meta/webhook", { method: "POST", body: govde, headers: { "x-hub-signature-256": imzala(govde) } }));
-    expect(r.status).toBe(200);
-    return islenen.at(-1)!;
-  };
-
-  it("reklamdan gelen mesajın yönlendirme bilgisi yazılır, tıklama kimliği (ctwa_clid) yazılmaz", async () => {
-    const m = await gonder(waMesaj({ referral: {
-      source_url: "https://fb.me/abc", source_id: "REKLAM-9", source_type: "ad", headline: "ONE ile direksiyon testi", body: "Detaylar", media_type: "image", ctwa_clid: "GIZLI-TIKLAMA",
-    } }));
-    expect(m.ek).toEqual({ yonlendirme: { kaynak_turu: "ad", kaynak_id: "REKLAM-9", baslik: "ONE ile direksiyon testi", govde: "Detaylar", medya_turu: "image", kaynak_url: "https://fb.me/abc" } });
-    expect(JSON.stringify(m.ek)).not.toContain("GIZLI-TIKLAMA");
-  });
-
-  it("yanıtlanan mesajın kimliği yazılır, yanıtlananın telefonu (context.from) yazılmaz", async () => {
-    const m = await gonder(waMesaj({ context: { from: "905559998877", id: "wamid.ONCEKI" } }));
-    expect(m.ek).toEqual({ yanitlanan_mesaj_id: "wamid.ONCEKI" });
-  });
-
-  it("dosyanın MIME türü yazılır, medya kimliği yazılmaz; tepkide tepki verilen mesaj yanıtlanan olarak yazılır", async () => {
-    const d = await gonder(waMesaj({ type: "document", document: { id: "MEDYA-1", mime_type: "application/pdf", filename: "teklif.pdf" } }));
-    expect(d).toMatchObject({ tur: "document", metin: "📄 teklif.pdf", ek: { ek_dosya_turu: "application/pdf" } });
-    expect(JSON.stringify(d.ek)).not.toContain("MEDYA-1");
-    const t = await gonder(waMesaj({ type: "reaction", reaction: { message_id: "wamid.BIZIM", emoji: "👍" } }));
-    expect(t).toMatchObject({ tur: "reaction", metin: "Tepki: 👍", ek: { yanitlanan_mesaj_id: "wamid.BIZIM" } });
-  });
-
-  it("metadata yoksa hesap kimliği boş geçer (isle.ts varsayılana düşer)", async () => {
-    const m = await gonder(waMesaj(), { phoneNumberId: null });
-    expect(m.kanalHesapId).toBeUndefined();
   });
 });

@@ -15,6 +15,7 @@ const ACIK_YOLLAR = [
   "/api/abonelik",
   "/api/kampanya-zamanlayici",
   "/api/zamanlayici",
+  "/api/konusma/isleyici",
 ];
 
 export async function updateSession(request: NextRequest) {
