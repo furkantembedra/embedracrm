@@ -38,6 +38,12 @@ export type MesajEki = {
   hikaye?: { id?: string };
   /** Reklam / yönlendirme (Click-to-WhatsApp / Messenger / Instagram reklamı, m.me bağlantısı…) */
   yonlendirme?: { kaynak_turu?: string; kaynak_id?: string; reklam_id?: string; baslik?: string; govde?: string; medya_turu?: string; ref?: string; kaynak_url?: string };
+  /** Giden mesaj demo modunda kaydedildi: kanal anahtarı olmadığı için gönderilmedi */
+  demo?: true;
+  /** Giden mesaj onaylı şablonla gönderildi (WhatsApp, pencere kapalıyken) */
+  sablon?: { ad: string; dil: string };
+  /** Temsilci, kanalın insan etiketiyle (HUMAN_AGENT) gönderdi */
+  insan_etiketi?: true;
 };
 
 /** Konuşmayı bulur, yoksa açar. Aynı anda iki istek açmaya çalışsa da tek kayıt kalır (unique + ignoreDuplicates). */
@@ -79,15 +85,18 @@ export type YeniMesaj = {
  * aynı mesajın echo'su webhook'tan gelirse dis_mesaj_id tekilliği onu ikinci kez yazmaz. Echo bizden önce yazılmışsa
  * (yarış) mevcut satır gönderenimizle düzeltilir ve onun kimliği döner.
  */
-export async function gidenMesajKaydet(m: Omit<YeniMesaj, "yon"> & { gonderen: "bot" | "temsilci" }): Promise<number> {
+export async function gidenMesajKaydet(
+  m: Omit<YeniMesaj, "yon"> & { gonderen: "bot" | "temsilci"; /** CRM'den yazan temsilci (kullanicilar.id) */ gonderenKullaniciId?: number | null },
+): Promise<number> {
   const s = await db();
+  const kullanici = m.gonderen === "temsilci" ? m.gonderenKullaniciId ?? null : null;
   const satir = {
     konusma_id: m.konusmaId, satis_hatti_id: m.satisHattiId ?? null, yon: "giden", gonderen: m.gonderen,
-    dis_mesaj_id: m.disMesajId, metin: m.metin, tur: m.tur, ek: m.ek ?? {}, zaman: m.zaman,
+    dis_mesaj_id: m.disMesajId, metin: m.metin, tur: m.tur, ek: m.ek ?? {}, zaman: m.zaman, gonderen_kullanici_id: kullanici,
   };
   const r = await s.from("konusma_mesajlari").insert(satir).select("id").single();
   if (r.error?.code === "23505" && m.disMesajId) {
-    const g = await s.from("konusma_mesajlari").update({ gonderen: m.gonderen }).eq("dis_mesaj_id", m.disMesajId).select("id").single();
+    const g = await s.from("konusma_mesajlari").update({ gonderen: m.gonderen, gonderen_kullanici_id: kullanici }).eq("dis_mesaj_id", m.disMesajId).select("id").single();
     return (sonuc(g, "Giden mesaj düzeltilirken") as { id: number }).id;
   }
   return (sonuc(r, "Mesaj kaydedilirken") as { id: number }).id;
@@ -209,6 +218,16 @@ export async function bekleyenIsler(konusmaId: number): Promise<{ konusma: Kuyru
 export async function temsilciYazdi(konusmaId: number) {
   const s = await db();
   sonuc(await s.from("konusmalar").update({ bot_aktif: false }).eq("id", konusmaId), "Bot kapatılırken");
+}
+
+/** Webhook teslim / okundu bildirimleri: yalnızca giden mesajda ve yalnızca ileri (SQL: teslim_durumlari_isle) */
+export async function teslimDurumlariYaz(
+  durumlar: { disMesajId: string; durum: string; zaman: string; hataKodu?: string }[],
+): Promise<number> {
+  if (!durumlar.length) return 0;
+  const s = await db();
+  const p = durumlar.map((d) => ({ dis_mesaj_id: d.disMesajId, durum: d.durum, zaman: d.zaman, hata_kodu: d.hataKodu ?? null }));
+  return sonuc(await s.rpc("teslim_durumlari_isle", { p_durumlar: p }), "Teslim durumları yazılırken") as number;
 }
 
 /** Konuşmayı kimliğiyle okur (gönderim için) */

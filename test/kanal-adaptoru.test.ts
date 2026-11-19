@@ -211,7 +211,11 @@ describe.each(ADAPTORLER.map((a) => [a.kanal, a] as const))("%s adaptörü sözl
       o.ortamKur(meta.adres);
       meta.hata(400, "(#131047) Re-engagement message", 131047);
       const r = await a.gonder(alici, { tur: "metin", metin: "Merhaba" });
-      expect(r).toEqual({ ok: false, hata: expect.stringContaining("131047") });
+      // Kod ayrı alanda; temsilciye Meta'nın İngilizce metni değil, adaptörün Türkçe açıklaması gösterilir
+      expect(r).toEqual({ ok: false, hata: a.hataAciklamasi("131047"), kod: "131047" });
+      expect(a.hataAciklamasi("131047")).not.toMatch(/Re-engagement/);
+      expect(a.hataAciklamasi("999999")).toContain("999999"); // bilinmeyen kod da gösterilir
+      expect(a.hataAciklamasi(null)).toEqual(expect.any(String));
       o.ortamKur("http://127.0.0.1:9"); // kapalı port
       expect(await a.gonder(alici, { tur: "metin", metin: "Merhaba" })).toEqual({ ok: false, hata: expect.any(String) });
     });

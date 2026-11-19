@@ -7,11 +7,9 @@ import { CIHAZ_MODELLERI, type CihazModeli } from "@/lib/urunler";
 import { LISANS_SECENEKLERI, icerikCoz, icerikYaz, type LisansSecenegi } from "./urun-secimi";
 import { firsattanSiparisAc, type Kalem } from "@/components/siparisler/queries";
 import { telefonNormalize } from "@/components/whatsapp/telefon";
-import { adaptorBul } from "@/components/konusma/kanallar";
-import { kuyrugaYaz, kuyruguIsle } from "@/components/konusma/kuyruk";
 import {
   ASAMALAR, KAYIP_NEDENLERI, KAYNAKLAR, firsatAsamasiDepo, firsatKaydetDepo, firsatKazanciIsaretle, firsatMusteriBagla, firsatSirasiDepo,
-  getFirsat, type Asama, type Firsat, type KayipBilgisi, type Kaynak,
+  type Asama, type Firsat, type KayipBilgisi, type Kaynak,
 } from "./queries";
 
 const ULKE_KODU: Record<string, string> = {
@@ -180,39 +178,4 @@ export async function firsatSirasiKaydet(idler: string[]) {
   await oturumGerekli();
   await firsatSirasiDepo(idler.filter((id) => typeof id === "string").slice(0, 500));
   revalidatePath("/satis-hatti");
-}
-
-export type SimulasyonDurumu = { hatalar?: Record<string, string>; firsat?: Firsat; duyuru?: string; zaman?: number };
-
-/**
- * Demo: Meta webhook'u gelmiş gibi mesaj işler, webhook'la aynı yoldan: mesaj kaydedilir + kuyruğa yazılır, sonra
- * işleyici yalnızca bu konuşma için hemen çalıştırılır (kilit başka işleyicideyse iş kuyrukta kalır, birazdan işlenir).
- * "İşletmeden" seçilirse CRM dışından yazılmış temsilci mesajı (echo) gibi işlenir.
- */
-export async function konusmaSimuleEt(_o: SimulasyonDurumu, form: FormData): Promise<SimulasyonDurumu> {
-  await oturumGerekli();
-  const metin = (ad: string) => String(form.get(ad) ?? "").trim();
-  const a = adaptorBul(metin("kanal"));
-  if (!a) return { hatalar: { kanal: "Bu kanalın adaptörü henüz yok (Faz 4)." } };
-  const kimlik = a.kimlikCoz(metin("kimlik"));
-  const mesaj = metin("mesaj").slice(0, 4096);
-  const echo = metin("gonderen") === "isletme";
-  const hatalar: Record<string, string> = {};
-  if (!kimlik) hatalar.kimlik = `${a.kimlikAlani.etiket} geçersiz (örn. ${a.kimlikAlani.ornek}).`;
-  if (!mesaj) hatalar.mesaj = "Mesajı yazın.";
-  if (Object.keys(hatalar).length) return { hatalar };
-  const [kayit] = await kuyrugaYaz([{
-    kanal: a.kanal, kanalHesapId: a.varsayilanHesap(), disKullaniciId: kimlik!, disMesajId: `sim-${crypto.randomUUID()}`,
-    tur: "metin", metin: mesaj, ek: {}, zaman: new Date().toISOString(), echo, profilAdi: metin("ad").slice(0, 200) || undefined,
-  }]);
-  if (!kayit) return { hatalar: { mesaj: "Mesaj kaydedilemedi." } };
-  const isleyici = await kuyruguIsle({ konusmaId: kayit.konusmaId, sureMs: 10_000 });
-  const sonuc = isleyici.sonuclar.find((x) => x.mesajId === kayit.mesajId);
-  if (!sonuc) return { duyuru: "Mesaj kuyruğa alındı; işleyici birazdan işleyecek.", zaman: Date.now() };
-  const firsat = sonuc.firsatId ? (await getFirsat(sonuc.firsatId)) ?? undefined : undefined;
-  const duyuru = echo
-    ? `İşletmeden yazılmış ${a.ad} mesajı temsilci mesajı olarak kaydedildi; bu konuşmada bot kapatıldı.`
-    : !firsat ? `${a.ad} mesajı işlendi.`
-    : sonuc.yeni ? `${a.ad} üzerinden yeni lead: ${firsat.firma}` : `${firsat.firma} fırsatına ${a.ad} mesajı eklendi.`;
-  return { firsat, duyuru, zaman: Date.now() };
 }

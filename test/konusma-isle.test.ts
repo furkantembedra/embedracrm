@@ -4,7 +4,7 @@
 // P1.1 ekleri: kişi eşleştirmesi kanal + hesap + kullanıcı kimliğiyle, telefonsuz kimlik (BSUID), echo kuralı.
 // Veritabanı yerine bellek içi depo (test/sahte/depo.ts).
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { depo, depoyuSifirla, firsatEkle, musteriEkle } from "./sahte/depo";
+import { depo, depoyuSifirla, firsatEkle, firsatMesajlari, musteriEkle } from "./sahte/depo";
 import type { GelenMesaj } from "@/components/konusma/kanallar/tur";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -41,7 +41,8 @@ describe("açık fırsata ekleme", () => {
     expect(s?.yeni).toBe(false);
     expect(s?.firsat?.id).toBe("3");
     expect(s?.firsat?.sonrakiAdim).toBe("WhatsApp'tan dönüş yap");
-    expect(s?.firsat?.mesajlar).toEqual([expect.objectContaining({ metin: "Merhaba, fiyat alabilir miyim?", yon: "gelen" })]);
+    expect(firsatMesajlari(s?.firsat?.id)).toEqual([expect.objectContaining({ metin: "Merhaba, fiyat alabilir miyim?", yon: "gelen" })]);
+    expect(s?.firsat?.konusma).toMatchObject({ kanal: "whatsapp", sonMesaj: { metin: "Merhaba, fiyat alabilir miyim?", yon: "gelen", gonderen: "musteri" } });
     expect(depo.firsatlar).toHaveLength(1);
     expect(depo.konusmalar).toEqual([expect.objectContaining({ kanal: "whatsapp", disKullaniciId: "+905321112233", satisHattiId: 3, sonMusteriMesaji: "2026-11-18T10:00:00.000Z" })]);
   });
@@ -66,7 +67,7 @@ describe("yeni lead açma", () => {
     const s = await isle(mesaj("+905339998877"));
     expect(s?.yeni).toBe(true);
     expect(s?.firsat).toMatchObject({ firma: "Ahmet Usta", kaynak: "WhatsApp", asama: "yeni", telefon: "+905339998877", konum: "Türkiye", sonrakiAdim: "WhatsApp'tan dönüş yap" });
-    expect(s?.firsat?.mesajlar).toHaveLength(1);
+    expect(firsatMesajlari(s?.firsat?.id)).toHaveLength(1);
     expect(depo.konusmalar[0]).toMatchObject({ satisHattiId: Number(s!.firsat!.id), musteriId: null });
   });
 
@@ -91,7 +92,7 @@ describe("kişi eşleştirmesi: kanal + hesap + dış kullanıcı kimliği", () 
     const ikinci = await isle(mesaj("TR.BSUID1", "Fiyat?"));
     expect(ikinci?.yeni).toBe(false);
     expect(ikinci?.firsat?.id).toBe(ilk?.firsat?.id);
-    expect(ikinci?.firsat?.mesajlar?.map((x) => x.metin)).toEqual(["Merhaba", "Fiyat?"]);
+    expect(firsatMesajlari(ikinci?.firsat?.id).map((x) => x.metin)).toEqual(["Merhaba", "Fiyat?"]);
   });
 
   it("konuşmanın fırsatı kapanmışsa (ve telefonla açık fırsat yoksa) yeni lead açılır", async () => {
@@ -179,7 +180,7 @@ describe("aynı mesajın iki kez gelmesi", () => {
     await isle(mesaj("+905339998877", "Merhaba"));
     const s = await isle(mesaj("+905339998877", "Fiyat?"));
     expect(s?.yeni).toBe(false);
-    expect(s?.firsat?.mesajlar?.map((x) => x.metin)).toEqual(["Merhaba", "Fiyat?"]);
+    expect(firsatMesajlari(s?.firsat?.id).map((x) => x.metin)).toEqual(["Merhaba", "Fiyat?"]);
     expect(depo.konusmalar).toHaveLength(1);
   });
 });

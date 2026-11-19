@@ -25,6 +25,15 @@ vi.mock("@/components/konusma/kuyruk", () => ({
   kuyruguIsle: vi.fn(async () => void kuyruk.isleyici++),
 }));
 vi.mock("@/lib/supabase/db", () => ({ sistemOlarak: <T>(is: () => Promise<T>) => is() }));
+const durumlar = vi.hoisted(() => ({ yazilan: [] as unknown[], hata: null as Error | null }));
+vi.mock("@/components/konusma/queries", async (asil) => ({
+  ...(await asil<object>()),
+  teslimDurumlariYaz: vi.fn(async (d: unknown[]) => {
+    if (durumlar.hata) throw durumlar.hata;
+    durumlar.yazilan.push(...d);
+    return d.length;
+  }),
+}));
 
 const meta = await import("@/app/api/meta/webhook/route");
 const whatsapp = await import("@/app/api/whatsapp/webhook/route");
@@ -202,6 +211,20 @@ describe.each([
       const govde = JSON.stringify(whatsappGovdesi({ durumlar: [{ id: "wamid.X", status: "read", recipient_id: "905321112233" }] }));
       expect(await (await gonder(govde, imzala(govde))).json()).toEqual({ ok: true, kaydedilen: 0, durum: 1 });
       expect(islenen).toHaveLength(0);
+      expect(durumlar.yazilan.at(-1)).toEqual({ disMesajId: "wamid.X", durum: "okundu", zaman: expect.any(String) });
+    });
+
+    it("teslim durumu yazılamazsa 500 döner (Meta tekrar gönderir)", async () => {
+      durumlar.hata = new Error("bağlantı koptu");
+      const e = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const govde = JSON.stringify(whatsappGovdesi({ durumlar: [{ id: "wamid.Y", status: "delivered", recipient_id: "905321112233" }] }));
+        expect((await gonder(govde, imzala(govde))).status).toBe(500);
+        expect(e.mock.calls.flat().join(" ")).not.toContain("wamid.Y");
+      } finally {
+        durumlar.hata = null;
+        e.mockRestore();
+      }
     });
 
     it("WhatsApp Business uygulamasından yazılan mesaj (smb_message_echoes) echo olarak kuyruğa yazılır", async () => {

@@ -5,7 +5,7 @@
 //  • gelen_mesaj_kaydet: konuşma + mesaj + kuyruk işi tek adımda (araya başka istek girmez, SQL'de tek işlem)
 //  • konuşma kilidi: kilitsiz ya da süresi geçmiş, en eski bekleyen işinin zamanı gelmiş konuşma alınır; sahibi bırakır
 // Her çağrı bir olay döngüsü turu bekler, böylece eşzamanlı istekler gerçek veritabanındaki gibi iç içe geçer.
-import type { Firsat, WhatsappMesaji } from "@/components/satis-hatti/queries";
+import type { Firsat } from "@/components/satis-hatti/queries";
 import type { Musteri } from "@/components/musteriler/queries";
 import { KAPALI_ASAMALAR } from "@/components/satis-hatti/sabitler";
 import { telefonNormalize } from "@/components/whatsapp/telefon";
@@ -35,6 +35,10 @@ export const depo = {
   aktifYazma: 0,
   enCokAktifYazma: 0,
 };
+
+/** Fırsata bağlanmış mesajlar (eskiden yeniye) */
+export const firsatMesajlari = (firsatId: string | undefined) =>
+  depo.mesajlar.filter((m) => firsatId !== undefined && String(m.satisHattiId) === firsatId).sort((a, b) => a.zaman.localeCompare(b.zaman) || a.id - b.id);
 
 export function depoyuSifirla() {
   depo.firsatlar = [];
@@ -187,10 +191,13 @@ export const konusmaModulu = {
 function firsatOku(id: string): Firsat | null {
   const f = depo.firsatlar.find((x) => x.id === id);
   if (!f) return null;
-  const mesajlar: WhatsappMesaji[] = depo.mesajlar
-    .filter((m) => String(m.satisHattiId) === id)
-    .map((m) => ({ id: m.disMesajId ?? String(m.id), metin: m.metin, zaman: m.zaman, yon: m.yon, tur: m.tur }));
-  return kopya({ ...f, mesajlar });
+  // Gerçek sorgudaki gibi: fırsata bağlı konuşmanın son mesajı (satis-hatti/queries.ts FIRSAT_SECIMI)
+  const k = depo.konusmalar.find((x) => String(x.satisHattiId) === id);
+  const son = k ? depo.mesajlar.filter((m) => m.konusmaId === k.id).sort((a, b) => a.zaman.localeCompare(b.zaman)).at(-1) : undefined;
+  const konusma = k
+    ? { id: k.id, kanal: k.kanal, botAktif: k.botAktif, sonMesaj: son ? { metin: son.metin, zaman: son.zaman, yon: son.yon, gonderen: son.gonderen } : null }
+    : null;
+  return kopya({ ...f, konusma });
 }
 
 /** Fırsat yazımı birkaç tur sürer; bu sürede aynı anda kaç yazma olduğunu sayar (paralel işleme dedektörü) */
@@ -216,7 +223,7 @@ export const satisHattiModulu = {
       throw e;
     }
     f.id = String(++depo.sayac);
-    depo.firsatlar.push(kopya({ ...f, mesajlar: undefined }));
+    depo.firsatlar.push(kopya({ ...f, konusma: undefined }));
   },
   async firsatiGuncelle(id: string, degisiklik: (f: Firsat) => void) {
     await yazmaIzle();

@@ -21,6 +21,14 @@ const ANA_MENU: MenuOgesi[] = [
   { href: "/bayiler", label: "Bayi & Distribütör", icon: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M2 12h20M12 2a15.3 15.3 0 0 1 4 10a15.3 15.3 0 0 1-4 10a15.3 15.3 0 0 1-4-10a15.3 15.3 0 0 1 4-10z" },
 ];
 
+/** Bot menüsü: yalnızca Yönetici, Satış ve Pazarlama görür (layout sunucuda rolü kontrol edip BotMenusu'nu verir) */
+const BOT_MENU: MenuOgesi[] = [
+  { href: "/bot", label: "Gelen kutusu", icon: "M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" },
+  { href: "/bot/kanallar", label: "Kanallar", icon: "M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88z" },
+  { href: "/bot/ayarlar", label: "Bot ayarları", icon: "M12 8V4H8M4 8h16v12H4zM2 14h2M20 14h2M15 13v2M9 13v2" },
+  { href: "/bot/rapor", label: "Bot raporu", icon: "M3 3v18h18M7 16l4-4 4 4 5-6" },
+];
+
 const OPERASYON: MenuOgesi[] = [
   { href: "/siparisler", label: "Sipariş & Sevkiyat", icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" },
   { href: "/rma", label: "Garanti & RMA", icon: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" },
@@ -30,12 +38,13 @@ const OPERASYON: MenuOgesi[] = [
   { href: "/bayiler/raporlama", label: "Raporlar", icon: "M3 3v18h18M18 17V9M13 17V5M8 17v-3" },
 ];
 
-function MenuBolumu({ baslik, ogeler, aktif }: { baslik: string; ogeler: MenuOgesi[]; aktif: string }) {
+function MenuBolumu({ baslik, ogeler, aktif, tam = false }: { baslik: string; ogeler: MenuOgesi[]; aktif: string; tam?: boolean }) {
   return (
     <div className="flex shrink-0 gap-1 lg:flex-col">
       <p className="hidden px-3 pb-2 text-[11px] font-bold tracking-[0.08em] text-[#8D9187] lg:block">{baslik}</p>
       {ogeler.map((o) => {
-        const secili = aktif === o.href || aktif.startsWith(o.href + "/");
+        // tam: yalnızca birebir eşleşme (/bot, /bot/kanallar açıkken seçili görünmesin)
+        const secili = aktif === o.href || (!tam && aktif.startsWith(o.href + "/"));
         return (
           <Link
             key={o.href}
@@ -57,23 +66,40 @@ function MenuBolumu({ baslik, ogeler, aktif }: { baslik: string; ogeler: MenuOge
   );
 }
 
-function Menu({ aktif }: { aktif: string }) {
+function Menu({ aktif, botMenusu }: { aktif: string; botMenusu?: React.ReactNode }) {
   // /bayiler/raporlama açıkken "Bayi & Distribütör" de seçili görünmesin
   const bayiAktif = aktif.startsWith("/bayiler/raporlama") ? "" : aktif;
   return (
     <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:gap-6 lg:overflow-visible lg:p-0">
       <MenuBolumu baslik="ANA MENÜ" ogeler={ANA_MENU} aktif={bayiAktif} />
+      {botMenusu}
       <MenuBolumu baslik="OPERASYON" ogeler={OPERASYON} aktif={aktif} />
     </div>
   );
 }
 
-function AktifMenu() {
-  return <Menu aktif={usePathname() ?? ""} />;
+function AktifMenu({ botMenusu }: { botMenusu?: React.ReactNode }) {
+  return <Menu aktif={usePathname() ?? ""} botMenusu={botMenusu} />;
 }
 
-/** kullanici: alt köşedeki oturum kartı (sunucuda, Suspense içinde render edilir — layout verir) */
-export default function Sidebar({ kullanici }: { kullanici?: React.ReactNode }) {
+function AktifBotMenusu() {
+  return <MenuBolumu baslik="BOT" ogeler={BOT_MENU} aktif={usePathname() ?? ""} tam />;
+}
+
+/** Bot bölümü; yalnızca rolü uygun kullanıcıya layout tarafından verilir (rol kontrolü sunucuda) */
+export function BotMenusu() {
+  return (
+    <Suspense fallback={<MenuBolumu baslik="BOT" ogeler={BOT_MENU} aktif="" />}>
+      <AktifBotMenusu />
+    </Suspense>
+  );
+}
+
+/**
+ * kullanici: alt köşedeki oturum kartı; botMenusu: rolü uygunsa Bot bölümü
+ * (ikisi de sunucuda, Suspense içinde render edilir — layout verir)
+ */
+export default function Sidebar({ kullanici, botMenusu }: { kullanici?: React.ReactNode; botMenusu?: React.ReactNode }) {
   return (
     <aside className="bg-ink text-white print:hidden lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0">
       <nav aria-label="Ana menü" className="flex h-full flex-col gap-4 px-3.5 py-4 lg:gap-6 lg:py-5">
@@ -88,8 +114,8 @@ export default function Sidebar({ kullanici }: { kullanici?: React.ReactNode }) 
           </div>
         </div>
 
-        <Suspense fallback={<Menu aktif="" />}>
-          <AktifMenu />
+        <Suspense fallback={<Menu aktif="" botMenusu={botMenusu} />}>
+          <AktifMenu botMenusu={botMenusu} />
         </Suspense>
 
         {kullanici}

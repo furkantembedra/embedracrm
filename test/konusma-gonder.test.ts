@@ -10,7 +10,7 @@ vi.mock("@/components/konusma/queries", async () => (await import("./sahte/depo"
 vi.mock("@/components/satis-hatti/queries", async () => (await import("./sahte/depo")).satisHattiModulu);
 vi.mock("@/components/musteriler/queries", async () => (await import("./sahte/depo")).musteriModulu);
 
-const { mesajGonder } = await import("@/components/konusma/gonder");
+const { mesajGonder, sablonGonder } = await import("@/components/konusma/gonder");
 const { kuyrugaYaz, kuyruguIsle } = await import("@/components/konusma/kuyruk");
 const { whatsappAdaptoru } = await import("@/components/konusma/kanallar/whatsapp");
 
@@ -94,7 +94,7 @@ describe("mesajGonder", () => {
     const once = depo.mesajlar.length;
     meta.hata(400, "(#131026) Message undeliverable", 131026);
     const r = await mesajGonder(id, "Merhaba", "temsilci");
-    expect(r).toEqual({ ok: false, hata: expect.stringContaining("131026"), gonderilen: 0 });
+    expect(r).toEqual({ ok: false, hata: expect.stringContaining("teslim edilemedi"), kod: "131026", gonderilen: 0 });
     expect(depo.mesajlar).toHaveLength(once);
     expect(depo.konusmalar[0].botAktif).toBe(true);
   });
@@ -104,4 +104,49 @@ describe("mesajGonder", () => {
     expect(await mesajGonder(id, "   ", "bot")).toMatchObject({ ok: false, hata: "Boş mesaj gönderilemez." });
     expect(await mesajGonder(99999, "Merhaba", "bot")).toMatchObject({ ok: false, hata: "Konuşma bulunamadı." });
   });
+
+  it("temsilci mesajı gönderen kullanıcıyla yazılır; bot mesajında kullanıcı yok", async () => {
+    const id = await konusma();
+    await mesajGonder(id, "Merhaba", "temsilci", 2);
+    expect(depo.mesajlar.at(-1)).toMatchObject({ gonderen: "temsilci", gonderenKullaniciId: 2, ek: {} });
+  });
+
+  it("anahtar yoksa demo: kaydeder, göndermez, ek.demo işaretli", async () => {
+    vi.stubEnv("WHATSAPP_TOKEN", "");
+    const id = await konusma();
+    const r = await mesajGonder(id, "Merhaba", "temsilci", 2);
+    expect(r).toMatchObject({ ok: true, demo: true });
+    expect(meta.istekler).toHaveLength(0);
+    expect(depo.mesajlar.at(-1)).toMatchObject({ ek: { demo: true }, disMesajId: expect.stringMatching(/^crm-/) });
+  });
+
+  it("pencere kapalıyken temsilciye şablon yolunu söyler", async () => {
+    const id = await konusma(24 * 60 + 5);
+    const r = await mesajGonder(id, "Merhaba", "temsilci", 2);
+    expect(r).toMatchObject({ ok: false, hata: expect.stringContaining("onaylı şablon") });
+  });
 });
+
+describe("sablonGonder", () => {
+  it("pencere kapalıyken onaylı şablon gönderir (Cloud API template gövdesi), temsilci olarak kaydeder, bot susar", async () => {
+    const id = await konusma(3 * 24 * 60);
+    const r = await sablonGonder(id, { ad: "takip_mesaji", dil: "tr", parametreler: ["Ahmet", "ONE"] }, 2);
+    expect(r).toMatchObject({ ok: true, demo: false });
+    expect(meta.gonderilenler().at(-1)).toMatchObject({
+      messaging_product: "whatsapp", to: "905321112233", type: "template",
+      template: { name: "takip_mesaji", language: { code: "tr" }, components: [{ type: "body", parameters: [{ type: "text", text: "Ahmet" }, { type: "text", text: "ONE" }] }] },
+    });
+    expect(depo.mesajlar.at(-1)).toMatchObject({ gonderen: "temsilci", gonderenKullaniciId: 2, metin: "Şablon: takip_mesaji · Ahmet · ONE", ek: { sablon: { ad: "takip_mesaji", dil: "tr" } } });
+    expect(depo.konusmalar[0].botAktif).toBe(false);
+  });
+
+  it("geçersiz şablon adı ya da dil Meta'ya gitmez; Meta hatası Türkçe açıklamayla döner", async () => {
+    const id = await konusma(3 * 24 * 60);
+    expect(await sablonGonder(id, { ad: "Takip Mesajı", dil: "tr", parametreler: [] }, 2)).toMatchObject({ ok: false });
+    expect(await sablonGonder(id, { ad: "takip", dil: "türkçe", parametreler: [] }, 2)).toMatchObject({ ok: false });
+    expect(meta.istekler).toHaveLength(0);
+    meta.hata(404, "(#132001) Template name does not exist in the translation", 132001);
+    expect(await sablonGonder(id, { ad: "yok", dil: "tr", parametreler: [] }, 2)).toMatchObject({ ok: false, kod: "132001", hata: expect.stringContaining("onaylı şablon yok") });
+  });
+});
+

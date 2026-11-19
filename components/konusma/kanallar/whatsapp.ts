@@ -203,14 +203,78 @@ export function whatsappPenceresi(sonMusteriMesaji: string | null, simdi = new D
   return bitis > simdi.getTime() ? { durum: "acik", bitis: new Date(bitis).toISOString() } : { durum: "kapali", bitis: null };
 }
 
-async function hataMetni(r: Response) {
+/**
+ * Cloud API hata kodları → temsilciye gösterilecek açıklama. Kaynak (19 Kasım 2026'da okundu):
+ * developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes. 131030 o sayfada yok
+ * (doğrulanmadı; test numarasında izinli alıcı listesi hatası olarak bilinir). Bilinmeyen kod genel cümleye düşer.
+ */
+export const WHATSAPP_HATALARI: Record<string, string> = {
+  "131047": "Müşterinin son mesajından bu yana 24 saat geçmiş; yalnızca onaylı şablon gönderilebilir.",
+  "131026": "Mesaj teslim edilemedi: numara WhatsApp kullanmıyor, uygulaması çok eski ya da koşulları kabul etmemiş olabilir.",
+  "131051": "Bu mesaj türü desteklenmiyor.",
+  "131021": "Alıcı, gönderen işletme numarasıyla aynı olamaz.",
+  "130429": "Gönderim hızı sınırına takıldı; biraz sonra tekrar deneyin.",
+  "131048": "Spam sınırına takıldı: bu numaradan giden mesajlar çok sayıda engellendi ya da bildirildi.",
+  "131056": "Aynı kişiye çok kısa sürede çok mesaj gönderildi; biraz sonra tekrar deneyin.",
+  "131030": "Test numarası: alıcı, Meta panelindeki izinli numaralar listesinde değil (doğrulanmadı).",
+  "131049": "Meta, müşteri deneyimi için bu mesajı teslim etmemeyi seçti (pazarlama sınırı).",
+  "131050": "Müşteri işletmeden pazarlama mesajı almayı durdurmuş.",
+  "131042": "WhatsApp hesabının ödeme yönteminde sorun var.",
+  "131053": "Medya dosyası yüklenemedi.",
+  "131000": "WhatsApp'ta bilinmeyen bir hata oluştu; tekrar deneyin.",
+  "132000": "Şablon parametre sayısı şablondakiyle uyuşmuyor.",
+  "132001": "Bu adla bu dilde onaylı şablon yok.",
+  "132012": "Şablon parametrelerinin biçimi şablonla uyuşmuyor.",
+  "133010": "İşletme numarası WhatsApp'a kayıtlı değil.",
+  "190": "WhatsApp erişim token'ının süresi dolmuş ya da geçersiz (WHATSAPP_TOKEN).",
+  "100": "WhatsApp isteği geçersiz bir alan içeriyor.",
+  "10": "Uygulamanın bu işlem için izni yok ya da geri alınmış.",
+  "200": "WhatsApp erişim token'ı ya da uygulama kimliği eksik veya geçersiz (WHATSAPP_TOKEN).",
+};
+
+export function whatsappHataAciklamasi(kod: string | null | undefined): string {
+  if (!kod) return "WhatsApp mesajı gönderemedi.";
+  return WHATSAPP_HATALARI[kod] ?? `WhatsApp mesajı gönderemedi (hata kodu ${kod}).`;
+}
+
+/** Hata cevabından kodu çıkarır; Meta'nın İngilizce metni yerine Türkçe açıklama döner (metin loglanmaz) */
+async function hataSonucu(r: Response): Promise<{ ok: false; hata: string; kod?: string }> {
+  let kod: string | undefined;
   try {
-    const j = (await r.json()) as { error?: { message?: string; code?: number } };
-    return j.error?.message ? `${j.error.message}${j.error.code ? ` (${j.error.code})` : ""}` : `HTTP ${r.status}`;
+    const j = (await r.json()) as { error?: { code?: number | string } };
+    if (j.error?.code !== undefined) kod = String(j.error.code).slice(0, 20);
   } catch {
-    return `HTTP ${r.status}`;
+    /* gövde JSON değil */
+  }
+  return kod ? { ok: false, hata: whatsappHataAciklamasi(kod), kod } : { ok: false, hata: `WhatsApp isteği başarısız (HTTP ${r.status}).` };
+}
+
+/** Graph API'ye mesaj gövdesi gönderir; anahtar yoksa demo */
+async function whatsappIstegi(kanalHesapId: string, govde: Record<string, unknown>) {
+  const token = process.env.WHATSAPP_TOKEN;
+  const hesap = kanalHesapId === VARSAYILAN_KANAL_HESABI ? process.env.WHATSAPP_PHONE_ID : kanalHesapId;
+  if (!token || !process.env.WHATSAPP_PHONE_ID || !hesap) return { ok: true as const, disMesajId: null, demo: true };
+  try {
+    const r = await fetch(`${graphAdresi()}/${GRAPH_SURUMU}/${encodeURIComponent(hesap)}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", ...govde }),
+    });
+    if (!r.ok) return hataSonucu(r);
+    const j = (await r.json()) as { messages?: { id?: string }[] };
+    return { ok: true as const, disMesajId: j.messages?.[0]?.id ?? null, demo: false };
+  } catch {
+    return { ok: false as const, hata: "WhatsApp'a ulaşılamadı; bağlantıyı kontrol edip tekrar deneyin." };
   }
 }
+
+/** Alıcı alanı: telefonu olan kişiye `to`, kullanıcı adlı kişiye (BSUID) `recipient` */
+const aliciAlani = (disKullaniciId: string) =>
+  disKullaniciId.startsWith("+") ? { to: disKullaniciId.slice(1) } : { recipient: disKullaniciId };
+
+/** Şablon adı: Meta'da küçük harf, rakam ve alt çizgi; dil kodu "tr", "en_US"… */
+export const SABLON_ADI = /^[a-z0-9_]{1,512}$/;
+export const SABLON_DILI = /^[a-z]{2,3}(_[A-Z]{2})?$/;
 
 export const whatsappAdaptoru: KanalAdaptoru = {
   kanal: KANAL,
@@ -233,32 +297,34 @@ export const whatsappAdaptoru: KanalAdaptoru = {
   },
   bol: (metin) => metniBol(metin, AZAMI, karakterSay),
 
+  kapaliPencereYolu: "sablon",
+  hataAciklamasi: whatsappHataAciklamasi,
+
   async gonder(alici, icerik) {
-    const token = process.env.WHATSAPP_TOKEN;
-    const hesap = alici.kanalHesapId === VARSAYILAN_KANAL_HESABI ? process.env.WHATSAPP_PHONE_ID : alici.kanalHesapId;
     if (icerik.tur !== "metin" || !icerik.metin.trim()) return { ok: false, hata: "Boş mesaj gönderilemez." };
     if (karakterSay(icerik.metin) > AZAMI) return { ok: false, hata: `Mesaj ${AZAMI} karakteri aşıyor; önce bölünmeli.` };
-    if (!token || !process.env.WHATSAPP_PHONE_ID || !hesap) return { ok: true, disMesajId: null, demo: true };
-    const telefon = alici.disKullaniciId.startsWith("+") ? alici.disKullaniciId.slice(1) : null;
-    try {
-      const r = await fetch(`${graphAdresi()}/${GRAPH_SURUMU}/${encodeURIComponent(hesap)}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          // Telefonu olmayan (kullanıcı adlı) kişiye BSUID ile: `recipient`
-          ...(telefon ? { to: telefon } : { recipient: alici.disKullaniciId }),
-          type: "text",
-          text: { body: icerik.metin, preview_url: false },
-        }),
-      });
-      if (!r.ok) return { ok: false, hata: await hataMetni(r) };
-      const j = (await r.json()) as { messages?: { id?: string }[] };
-      return { ok: true, disMesajId: j.messages?.[0]?.id ?? null, demo: false };
-    } catch {
-      return { ok: false, hata: "WhatsApp'a ulaşılamadı." };
-    }
+    // WhatsApp'ta insan temsilci etiketi yoktur (insanTemsilci yok sayılır; pencere zaten "acik" ya da "kapali")
+    return whatsappIstegi(alici.kanalHesapId, {
+      ...aliciAlani(alici.disKullaniciId),
+      type: "text",
+      text: { body: icerik.metin, preview_url: false },
+    });
+  },
+
+  async sablonGonder(alici, sablon) {
+    if (!SABLON_ADI.test(sablon.ad)) return { ok: false, hata: "Şablon adı yalnızca küçük harf, rakam ve alt çizgi içerebilir." };
+    if (!SABLON_DILI.test(sablon.dil)) return { ok: false, hata: "Dil kodu geçersiz (ör. tr, en_US)." };
+    return whatsappIstegi(alici.kanalHesapId, {
+      ...aliciAlani(alici.disKullaniciId),
+      type: "template",
+      template: {
+        name: sablon.ad,
+        language: { code: sablon.dil },
+        ...(sablon.parametreler.length
+          ? { components: [{ type: "body", parameters: sablon.parametreler.map((text) => ({ type: "text", text })) }] }
+          : {}),
+      },
+    });
   },
 };
 

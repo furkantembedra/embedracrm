@@ -1,7 +1,9 @@
 "use client";
 
 // Kanban içindeki tek fırsat kartı. Sürüklenebilir; menüden de aşama değiştirilebilir.
-import { Bell, ChevronDown, ChevronUp, FileText, MessageCircle, Pencil } from "lucide-react";
+import Link from "next/link";
+import { Bell, ChevronDown, ChevronUp, FileText, Pencil } from "lucide-react";
+import { BotRozeti, KanalSimgesi, botDurumu, kanalAdi, kisaZaman } from "@/components/bot/kanal-gorunumu";
 import Chip from "@/components/ui/chip";
 import { tl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama } from "./sabitler";
@@ -9,7 +11,7 @@ import type { Firsat } from "./queries";
 import { useBugun } from "@/lib/use-bugun";
 import { KAYNAK_TONU, tarihEtiketi } from "./ortak";
 
-export type KartEylemi = "mesajlar" | "teklif" | "hatirlatma";
+export type KartEylemi = "teklif" | "hatirlatma";
 
 const KUCUK = "inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-bold text-[#474A42] transition-colors hover:bg-bg";
 
@@ -39,6 +41,7 @@ export default function FirsatKarti({
 
   return (
     <article
+      id={`firsat-${f.id}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", f.id);
@@ -46,7 +49,7 @@ export default function FirsatKarti({
         onSurukleBasla(f.id);
       }}
       onDragEnd={onSurukleBitti}
-      className={`flex cursor-grab flex-col gap-2.5 rounded-2xl border bg-card p-3.5 transition-shadow hover:shadow-[0_6px_18px_rgba(14,15,12,0.08)] active:cursor-grabbing ${
+      className={`flex scroll-mt-24 cursor-grab flex-col gap-2.5 rounded-2xl border bg-card p-3.5 transition-shadow hover:shadow-[0_6px_18px_rgba(14,15,12,0.08)] active:cursor-grabbing ${
         tarih.gecikti ? "border-[#F5C089]" : "border-line"
       } ${kaybedildi ? "opacity-75" : ""}`}
     >
@@ -74,14 +77,31 @@ export default function FirsatKarti({
         </div>
       )}
 
+      {f.konusma && (
+        <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line px-2.5 py-2">
+          <div className="flex items-center gap-1.5">
+            <KanalSimgesi kanal={f.konusma.kanal} boyut={12} />
+            <BotRozeti durum={botDurumu(f.konusma.botAktif, f.konusma.sonMesaj?.yon)} />
+            {f.konusma.sonMesaj && (
+              <time dateTime={f.konusma.sonMesaj.zaman} className="ml-auto text-[11px] font-semibold text-muted" suppressHydrationWarning>
+                {kisaZaman(f.konusma.sonMesaj.zaman)}
+              </time>
+            )}
+          </div>
+          {f.konusma.sonMesaj && (
+            <p className="line-clamp-2 break-words text-xs text-[#474A42]">
+              {f.konusma.sonMesaj.yon === "giden" && <span className="font-semibold">{f.konusma.sonMesaj.gonderen === "bot" ? "Bot: " : "Siz: "}</span>}
+              {f.konusma.sonMesaj.metin}
+            </p>
+          )}
+          <Link href={`/bot?k=${f.konusma.id}`} className="self-start text-xs font-bold text-info hover:underline" aria-label={`${f.firma} ${kanalAdi(f.konusma.kanal)} konuşmasını aç`}>
+            Konuşmayı aç →
+          </Link>
+        </div>
+      )}
+
       {onEylem && (
         <div className="-mx-1 flex flex-wrap items-center gap-0.5">
-          {!!f.mesajlar?.length && (
-            <button type="button" onClick={() => onEylem("mesajlar")} className={`${KUCUK} text-ok`} aria-label={`${f.firma} WhatsApp mesajları (${f.mesajlar.length})`}>
-              <MessageCircle size={14} aria-hidden="true" />
-              {f.mesajlar.length} mesaj
-            </button>
-          )}
           {!KAPALI_ASAMALAR.includes(f.asama) && (
             <button type="button" onClick={() => onEylem("teklif")} className={KUCUK} aria-label={`${f.firma} için teklif oluştur`}>
               <FileText size={14} aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/layout/sidebar";
+import Sidebar, { BotMenusu } from "@/components/layout/sidebar";
+import { botMenusuGorur } from "@/components/bot/erisim";
 import { bayiHesabi, crmKullanicisi } from "@/lib/oturum";
 import { cikisYap } from "@/components/giris/actions";
 
@@ -10,6 +11,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-bg lg:flex-row">
       <Sidebar
+        botMenusu={
+          <Suspense fallback={null}>
+            <BotMenuKapisi />
+          </Suspense>
+        }
         kullanici={
           <Suspense fallback={<div className="mt-auto hidden h-[58px] lg:block" />}>
             <KullaniciKarti />
@@ -21,6 +27,12 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       </main>
     </div>
   );
+}
+
+/** Bot menüsü yalnızca Yönetici, Satış ve Pazarlama rolüne gösterilir (sayfalar da aynı rolü sunucuda ister) */
+async function BotMenuKapisi() {
+  const k = await crmKullanicisi();
+  return botMenusuGorur(k?.rol) ? <BotMenusu /> : null;
 }
 
 /** Oturumdaki ekip üyesi. Ekipte olmayan hesap (ör. bayi) CRM'e giremez; veriyi zaten RLS kapatır, burada yönlendirilir. */

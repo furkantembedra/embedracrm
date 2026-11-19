@@ -21,6 +21,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { webhookAdaptoru } from "@/components/konusma/kanallar";
 import { kuyrugaYaz, kuyruguIsle } from "@/components/konusma/kuyruk";
+import { teslimDurumlariYaz } from "@/components/konusma/queries";
 import { sistemOlarak } from "@/lib/supabase/db";
 
 /** Meta uygulamasının App Secret'ı; eski kurulumlarla uyum için WHATSAPP_APP_SECRET'e düşer */
@@ -92,9 +93,19 @@ export async function metaWebhookAl(istek: NextRequest) {
         return NextResponse.json({ ok: false }, { status: 500 }); // Meta yeniden gönderir; kaydedilenler tekrar yazılmaz
       }
     }
+    // Teslim / okundu durumları (adaptörde ortak türe çevrildi): giden mesajın yanında gösterilir (Bot › Gelen kutusu).
+    // Yazılamazsa mesajlar zaten kaydedildiği için yine 500: Meta tekrar gönderir, mesajlar ikinci kez yazılmaz.
+    let durum = 0;
+    if (durumlar.length) {
+      try {
+        durum = await sistemOlarak(() => teslimDurumlariYaz(durumlar));
+      } catch (e) {
+        console.error(`[meta-webhook] ${adaptor.kanal} teslim durumu yazılamadı: ${(e as Error).message?.slice(0, 200)}`);
+        return NextResponse.json({ ok: false }, { status: 500 });
+      }
+    }
     if (kaydedilen) isleyiciyiDurt();
-    // Teslim / okundu durumları adaptörde çevrilir; mesajın yanında gösterilmesi P1.2'de
-    return NextResponse.json({ ok: true, kaydedilen, durum: durumlar.length });
+    return NextResponse.json({ ok: true, kaydedilen, durum });
   }
   const kanal = typeof veri.object === "string" && Object.hasOwn(ADAPTORU_OLMAYAN, veri.object) ? ADAPTORU_OLMAYAN[veri.object] : null;
   if (kanal) {

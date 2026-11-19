@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, MessageCircle, Plus, X } from "lucide-react";
+import { CheckCircle2, Plus, X } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
 import Modal from "@/components/ui/modal";
 import OzetKartlari from "./ozet-kartlari";
@@ -18,7 +18,6 @@ import type { Firsat } from "./queries";
 import MusteriDetay from "@/components/musteriler/musteri-detay";
 import TeklifFormu from "@/components/teklifler/teklif-formu";
 import HatirlatmaFormu from "@/components/hatirlatmalar/hatirlatma-formu";
-import { KonusmaSimulasyonu, MesajGecmisi, type SimulasyonKanali } from "./whatsapp-pencereleri";
 import type { KartEylemi } from "./firsat-karti";
 import type { Musteri } from "@/components/musteriler/queries";
 import type { FiyatListesi } from "@/lib/urunler";
@@ -132,13 +131,11 @@ export default function SatisHattiGorunumu({
   musteriler,
   kampanyalar = [],
   fiyatListesi,
-  simulasyonKanallari = [],
 }: {
   firsatlar: Firsat[];
   musteriler: Musteri[]; // "Müşteriyi aç" penceresi için
   kampanyalar?: { id: string; ad: string; durum: string }[];
   fiyatListesi?: FiyatListesi;
-  simulasyonKanallari?: SimulasyonKanali[];
 }) {
   const router = useRouter();
   const [firsatlar, setFirsatlar] = useState(ilk);
@@ -154,8 +151,6 @@ export default function SatisHattiGorunumu({
   const [eylem, setEylem] = useState<{ id: string; tur: KartEylemi } | null>(null);
   const eylemFirsat = eylem ? firsatlar.find((f) => f.id === eylem.id) ?? null : null;
   const eylemKapat = useCallback(() => setEylem(null), []);
-  const [simulasyon, setSimulasyon] = useState(false);
-  const simulasyonKapat = useCallback(() => setSimulasyon(false), []);
   const [duyuru, setDuyuru] = useState<string | null>(null);
   const teklifKaydedildi = useCallback(
     (t: { id: string; durum: string }) => {
@@ -169,11 +164,6 @@ export default function SatisHattiGorunumu({
     setEylem(null);
     setDuyuru("Hatırlatma eklendi.");
   }, []);
-  const simulasyonIslendi = useCallback((f: Firsat | null, metin: string) => {
-    setSimulasyon(false);
-    if (f) setFirsatlar((l) => ekleVeyaGuncelle(l, f));
-    setDuyuru(metin);
-  }, []);
   useEffect(() => {
     if (!duyuru) return;
     const t = setTimeout(() => setDuyuru(null), 5000);
@@ -185,7 +175,7 @@ export default function SatisHattiGorunumu({
   const duzenleKapat = useCallback(() => setDuzenleId(null), []);
   // Düzenlemede aşama ve kayıp nedeni korunur (onlar kart üzerinden değişir)
   const duzenlendi = useCallback((f: Firsat) => {
-    setFirsatlar((l) => l.map((x) => (x.id === f.id ? { ...f, asama: x.asama, kayipNedeni: x.kayipNedeni, kayipAciklama: x.kayipAciklama, mesajlar: x.mesajlar } : x)));
+    setFirsatlar((l) => l.map((x) => (x.id === f.id ? { ...f, asama: x.asama, kayipNedeni: x.kayipNedeni, kayipAciklama: x.kayipAciklama, konusma: x.konusma, sorumluId: x.sorumluId, sorumluAd: x.sorumluAd } : x)));
     setDuzenleId(null);
   }, []);
   const [bildirim, setBildirim] = useState<Bildirim | null>(null);
@@ -248,14 +238,6 @@ export default function SatisHattiGorunumu({
       <PageHeader title="Satış Hattı" description="Cihaz + lisans fırsatları · Kazanıldı'ya taşınan firma müşterilere eklenir">
         <button
           type="button"
-          onClick={() => setSimulasyon(true)}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line-strong bg-card px-4 text-sm font-bold transition-colors hover:bg-[#F4F5F0]"
-        >
-          <MessageCircle size={18} aria-hidden="true" className="text-[#1F8F4E]" />
-          Mesaj simüle et
-        </button>
-        <button
-          type="button"
           onClick={() => setEkleAsama("yeni")}
           className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-ink-soft"
         >
@@ -273,14 +255,6 @@ export default function SatisHattiGorunumu({
         onDuzenle={setDuzenleId}
         onEylem={(id, tur) => setEylem({ id, tur })}
       />
-
-      <Modal acik={simulasyon} onKapat={simulasyonKapat} baslik="Mesaj simüle et" aciklama="Webhook'a gelen mesajla aynı akış: kuyruk + işleyici">
-        <KonusmaSimulasyonu kanallar={simulasyonKanallari} onIslendi={simulasyonIslendi} onVazgec={simulasyonKapat} />
-      </Modal>
-
-      <Modal acik={eylem?.tur === "mesajlar" && !!eylemFirsat} onKapat={eylemKapat} baslik="WhatsApp mesajları" aciklama={eylemFirsat?.firma}>
-        {eylemFirsat && <MesajGecmisi firsat={eylemFirsat} />}
-      </Modal>
 
       <Modal acik={eylem?.tur === "teklif" && !!eylemFirsat} onKapat={eylemKapat} baslik="Teklif oluştur" aciklama={eylemFirsat ? `${eylemFirsat.firma} · ${eylemFirsat.icerik}` : undefined}>
         {eylemFirsat && <TeklifFormu key={eylemFirsat.id} firsat={eylemFirsat} fiyatListesi={fiyatListesi} onKaydedildi={teklifKaydedildi} onVazgec={eylemKapat} />}

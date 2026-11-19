@@ -64,12 +64,27 @@ export type BicimSinirlari = {
   not: string;
 };
 
-export type GidenIcerik = { tur: "metin"; metin: string };
+/**
+ * insanTemsilci: pencere "yalnizca_temsilci" iken temsilcinin gönderdiği mesaj; adaptör kanalın insan etiketini ekler
+ * (Instagram / Messenger: messaging_type MESSAGE_TAG + tag HUMAN_AGENT, P4). Bot hiçbir zaman etiket kullanmaz.
+ */
+export type GidenIcerik = { tur: "metin"; metin: string; insanTemsilci?: boolean };
 // İleride: | { tur: "dosya"; ... } | { tur: "baglanti"; ... }
+
+/** Onaylı mesaj şablonu (WhatsApp'ta pencere kapalıyken tek yol). Yalnızca temsilci gönderir; bot şablon kullanmaz. */
+export type SablonIcerigi = { ad: string; dil: string; parametreler: string[] };
+
+/**
+ * Pencere kapalıyken temsilciye önerilecek yol:
+ *  sablon      → kanal onaylı şablonla yazmaya izin verir (WhatsApp); adaptör sablonGonder'i uygular
+ *  baska_kanal → kanaldan hiçbir şey gönderilemez (Instagram / Messenger etiket süresi de bittiyse): e-posta / telefon
+ */
+export type KapaliPencereYolu = "sablon" | "baska_kanal";
 
 export type GonderimSonucu =
   | { ok: true; disMesajId: string | null; demo: boolean }
-  | { ok: false; hata: string };
+  /** hata: temsilciye gösterilecek açıklama; kod: kanalın hata kodu (varsa) */
+  | { ok: false; hata: string; kod?: string };
 
 export type Alici = { kanalHesapId: string; disKullaniciId: string };
 
@@ -100,6 +115,12 @@ export interface KanalAdaptoru {
   gonder(alici: Alici, icerik: GidenIcerik): Promise<GonderimSonucu>;
   /** Müşterinin son mesaj zamanına göre pencere */
   pencere(sonMusteriMesaji: string | null, simdi?: Date): PencereDurumu;
+  /** Pencere kapalıyken temsilcinin başvurabileceği yol */
+  kapaliPencereYolu: KapaliPencereYolu;
+  /** Onaylı şablon gönderir (yalnızca kapaliPencereYolu "sablon" olan kanalda). Anahtar yoksa demo. */
+  sablonGonder?(alici: Alici, sablon: SablonIcerigi): Promise<GonderimSonucu>;
+  /** Kanalın hata kodunu (gönderim cevabı ya da teslim bildirimi) temsilcinin anlayacağı Türkçe cümleye çevirir */
+  hataAciklamasi(kod: string | null | undefined): string;
   sinirlar: BicimSinirlari;
   /** Uzun metni kanalın sınırına göre parçalar (paragraf → satır → cümle → kelime sınırından; boş parça yok) */
   bol(metin: string): string[];

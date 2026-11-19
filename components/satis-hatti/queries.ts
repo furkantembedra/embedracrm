@@ -1,13 +1,19 @@
 // Satış Hattı: veri okuma ve yazma (Supabase).
-// Tablolar: satis_hatti (aşama: asama.kod, kaynak: kaynak.f_kaynak, sıra: f_sira), konusma_mesajlari (yazışma; yalnızca components/konusma üzerinden yazılır).
+// Tablolar: satis_hatti (aşama: asama.kod, kaynak: kaynak.f_kaynak, sıra: f_sira, sorumlu: kullanicilar), konusmalar +
+// konusma_mesajlari (salt okunur özet; yazışma Bot › Gelen kutusu'nda, yalnızca components/konusma üzerinden yazılır).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, sonuc } from "@/lib/supabase/db";
 import { ASAMALAR, KAYNAKLAR, type Asama, type KayipBilgisi, type KayipNedeni, type Kaynak } from "./sabitler";
 
 export * from "./sabitler";
 
-/** WhatsApp yazışması: gelen mesajlar webhook'tan, giden notlar CRM'den */
-export type WhatsappMesaji = { id: string; metin: string; zaman: string; yon: "gelen" | "giden"; tur: string }; // zaman: ISO
+/** Fırsata bağlı en son konuşmanın özeti (kart: son mesaj, kanal, bot durumu, "Konuşmayı aç") */
+export type FirsatKonusmasi = {
+  id: number;
+  kanal: string;
+  botAktif: boolean;
+  sonMesaj: { metin: string; zaman: string; yon: "gelen" | "giden"; gonderen: "musteri" | "bot" | "temsilci" } | null; // zaman: ISO
+};
 
 export type Firsat = {
   id: string;
@@ -23,14 +29,19 @@ export type Firsat = {
   kayipAciklama?: string; // "Diğer" seçilince yazılan sebep
   kampanyaId?: string | null; // lead hangi pazarlama kampanyasından geldi
   telefon?: string; // "+905321234567" (WhatsApp lead'lerinde otomatik dolar)
-  mesajlar?: WhatsappMesaji[]; // eskiden yeniye; salt okunur (konusma_mesajlari, components/konusma yazar)
+  konusma?: FirsatKonusmasi | null; // salt okunur (konuşmalar Bot › Gelen kutusu'nda)
+  sorumluId?: string | null; // "u2"; konuşmanın atanmış kişisi
+  sorumluAd?: string | null;
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
 };
 
 
 /* ---------- Satır ↔ domain ---------- */
 
-type MesajSatiri = { id: number; dis_mesaj_id: string | null; metin: string; yon: "gelen" | "giden"; tur: string; zaman: string };
+type KonusmaSatiri = {
+  id: number; kanal: string; bot_aktif: boolean;
+  son: { metin: string; zaman: string; yon: "gelen" | "giden"; gonderen: "musteri" | "bot" | "temsilci" }[];
+};
 type FirsatSatiri = {
   id: number;
   f_firma: string;
@@ -47,19 +58,33 @@ type FirsatSatiri = {
   f_sira: number;
   asama: { kod: Asama } | null;
   kaynak: { f_kaynak: string } | null;
-  mesajlar: MesajSatiri[];
+  sorumlu_id: number | null;
+  sorumlu: { k_ad: string } | null;
+  konusmalar: KonusmaSatiri[];
 };
 
 const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, f_sonraki_tarih, f_kayip_nedeni, f_kayip_aciklama,
-  kampanya_id, f_telefon, f_son_hareket, f_sira,
+  kampanya_id, f_telefon, f_son_hareket, f_sira, sorumlu_id,
   asama:asama!satis_hatti_asama_id_fkey(kod),
   kaynak:kaynak!satis_hatti_kaynak_id_fkey(f_kaynak),
-  mesajlar:konusma_mesajlari!konusma_mesajlari_satis_hatti_id_fkey(id, dis_mesaj_id, metin, yon, tur, zaman)`;
+  sorumlu:kullanicilar!satis_hatti_sorumlu_id_fkey(k_ad),
+  konusmalar:konusmalar!konusmalar_satis_hatti_id_fkey(id, kanal, bot_aktif,
+    son:konusma_mesajlari!konusma_mesajlari_konusma_id_fkey(metin, zaman, yon, gonderen))`;
+
+/** Her konuşmadan yalnızca son mesaj (gömülü kaynakta sıralama + limit; PostgREST ebeveyn başına uygular) */
+const SON_MESAJ = "konusmalar.son";
+
+function firsatKonusmasi(l: KonusmaSatiri[] | null | undefined): FirsatKonusmasi | null {
+  const ozet = (l ?? []).map((k) => ({
+    id: Number(k.id), kanal: k.kanal, botAktif: k.bot_aktif,
+    sonMesaj: k.son?.[0] ? { ...k.son[0], metin: k.son[0].metin.slice(0, 160), zaman: new Date(k.son[0].zaman).toISOString() } : null,
+  }));
+  // Birden çok konuşma bağlıysa (ör. iki kanaldan yazan aynı kişi) en son mesajı olanı
+  ozet.sort((a, b) => (b.sonMesaj?.zaman ?? "").localeCompare(a.sonMesaj?.zaman ?? ""));
+  return ozet[0] ?? null;
+}
 
 function satirdanFirsat(r: FirsatSatiri): Firsat {
-  const mesajlar = [...(r.mesajlar ?? [])]
-    .sort((a, b) => (a.zaman === b.zaman ? a.id - b.id : a.zaman < b.zaman ? -1 : 1))
-    .map((m) => ({ id: m.dis_mesaj_id ?? String(m.id), metin: m.metin, zaman: new Date(m.zaman).toISOString(), yon: m.yon, tur: m.tur }));
   return {
     id: String(r.id),
     firma: r.f_firma,
@@ -74,7 +99,9 @@ function satirdanFirsat(r: FirsatSatiri): Firsat {
     kayipAciklama: r.f_kayip_aciklama ?? undefined,
     kampanyaId: r.kampanya_id != null ? String(r.kampanya_id) : null,
     telefon: r.f_telefon ?? undefined,
-    mesajlar,
+    konusma: firsatKonusmasi(r.konusmalar),
+    sorumluId: r.sorumlu_id != null ? `u${r.sorumlu_id}` : null,
+    sorumluAd: r.sorumlu?.k_ad ?? null,
     sonHareket: r.f_son_hareket,
   };
 }
@@ -109,7 +136,8 @@ async function sonrakiSira(s: SupabaseClient, asamaId: number): Promise<number> 
 async function firsatOku(s: SupabaseClient, id: string): Promise<Firsat | null> {
   const no = sayiKimlik(id);
   if (no == null) return null;
-  const r = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).eq("id", no).maybeSingle(), "Fırsat okunurken") as unknown as FirsatSatiri | null;
+  const r = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).eq("id", no)
+    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ }).maybeSingle(), "Fırsat okunurken") as unknown as FirsatSatiri | null;
   return r ? satirdanFirsat(r) : null;
 }
 
@@ -148,7 +176,8 @@ async function firsatYaz(s: SupabaseClient, f: Firsat, sonHareket: string) {
 /** Tüm fırsatlar; sütun içi sıra f_sira'dan (sayfa aşamaya göre süzer, sıra korunur) */
 export async function getFirsatlar(): Promise<Firsat[]> {
   const s = await db();
-  const rows = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).order("f_sira").order("id"), "Satış hattı okunurken") as unknown as FirsatSatiri[];
+  const rows = sonuc(await s.from("satis_hatti").select(FIRSAT_SECIMI).order("f_sira").order("id")
+    .order("zaman", { ascending: false, referencedTable: SON_MESAJ }).limit(1, { referencedTable: SON_MESAJ }), "Satış hattı okunurken") as unknown as FirsatSatiri[];
   return rows.map(satirdanFirsat);
 }
 

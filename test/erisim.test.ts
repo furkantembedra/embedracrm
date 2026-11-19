@@ -42,6 +42,24 @@ vi.mock("@/components/cihaz-lisans/queries", async (asil) => ({ ...(await asil<o
 vi.mock("@/components/bayi-dokumanlar/queries", async (asil) => ({ ...(await asil<object>()), getDokuman: async () => null }));
 vi.mock("@/components/operasyon/queries", async (asil) => ({ ...(await asil<object>()), getEkip: async () => [] }));
 
+// Bot › Gelen kutusu: erişim kontrolünü geçen çağrının veri katmanına ulaştığını görmek için
+const botVeri = vi.hoisted(() => ({ cagrilar: [] as string[] }));
+vi.mock("@/components/bot/queries", async (asil) => ({
+  ...(await asil<object>()),
+  gelenKutusu: async () => (botVeri.cagrilar.push("gelenKutusu"), []),
+  konusmaDetayi: async () => (botVeri.cagrilar.push("konusmaDetayi"), null),
+  okunduYaz: async () => void botVeri.cagrilar.push("okunduYaz"),
+  firsatSorumlusuYaz: async () => void botVeri.cagrilar.push("firsatSorumlusuYaz"),
+}));
+vi.mock("@/components/konusma/gonder", () => ({
+  mesajGonder: async (_k: number, _m: string, g: string, kullanici: number | null) => (botVeri.cagrilar.push(`mesajGonder:${g}:${kullanici}`), { ok: true, mesajIdleri: [1], demo: true }),
+  sablonGonder: async () => (botVeri.cagrilar.push("sablonGonder"), { ok: true, mesajIdleri: [1], demo: true }),
+}));
+vi.mock("@/components/konusma/kuyruk", () => ({
+  kuyrugaYaz: async () => (botVeri.cagrilar.push("kuyrugaYaz"), []),
+  kuyruguIsle: async () => ({ sonuclar: [] }),
+}));
+
 const { oturumGerekli, rolEksik } = await import("@/lib/oturum");
 const { sistemOlarak } = await import("@/lib/supabase/db");
 
@@ -118,6 +136,76 @@ describe("rol kısıtlı Server Action'lar", () => {
     ekipUyesi("Satış");
     expect(await bayiPortalPaneli("1")).toBeNull(); // kontrolü geçti, bayi listesinde yok
     expect(bayiOkundu).toHaveBeenCalled();
+  });
+});
+
+describe("Bot menüsü (P1.2): Yönetici, Satış, Pazarlama", () => {
+  beforeEach(() => void (botVeri.cagrilar.length = 0));
+
+  it("menüyü yalnızca üç rol görür", async () => {
+    const { botMenusuGorur } = await import("@/components/bot/erisim");
+    expect(["Yönetici", "Satış", "Pazarlama"].every(botMenusuGorur)).toBe(true);
+    expect([null, "", "Destek", "Operasyon", "Bayi"].some(botMenusuGorur)).toBe(false);
+  });
+
+  it("sayfalar: diğer roller hata ekranı yerine rol mesajı alır; oturum yoksa fırlatır", async () => {
+    const { botRolMesaji } = await import("@/components/bot/sayfa");
+    await expect(botRolMesaji()).rejects.toThrow(/Oturum gerekli/);
+    for (const rol of ["Destek", "Operasyon"]) {
+      ekipUyesi(rol);
+      expect(await botRolMesaji()).toBe("Bu işlem için yetkiniz yok (yalnızca Yönetici / Satış / Pazarlama).");
+    }
+    for (const rol of ["Yönetici", "Satış", "Pazarlama"]) {
+      ekipUyesi(rol);
+      expect(await botRolMesaji()).toBeNull();
+    }
+  });
+
+  it("gelen kutusu aksiyonları Destek ve Operasyon'u veriye ulaşmadan reddeder", async () => {
+    const a = await import("@/components/bot/actions");
+    const cagir = [
+      () => a.gelenKutusuGetir(), () => a.konusmaGetir(1), () => a.okunduIsaretle(1, 2), () => a.cevapGonder(1, "Merhaba"),
+      () => a.sablonlaGonder(1, { ad: "takip", dil: "tr", parametreler: [] }), () => a.sorumluDegistir("1", ""),
+    ];
+    for (const c of cagir) await expect(c()).rejects.toThrow(/Oturum gerekli/);
+    for (const rol of ["Destek", "Operasyon"]) {
+      ekipUyesi(rol);
+      for (const c of cagir) await expect(c()).rejects.toThrow("yalnızca Yönetici / Satış / Pazarlama");
+    }
+    expect(botVeri.cagrilar).toEqual([]);
+    for (const rol of ["Yönetici", "Satış", "Pazarlama"]) {
+      ekipUyesi(rol);
+      for (const c of cagir) await c();
+    }
+    expect(botVeri.cagrilar).toContain("gelenKutusu");
+    // Giden mesaj gönderen temsilci ve oturumdaki kullanıcıyla yazılır (ekipUyesi: kullanicilar.id = 6)
+    expect(botVeri.cagrilar).toContain("mesajGonder:temsilci:6");
+  });
+
+  it("simülasyon yalnızca Yönetici ve yalnızca geliştirmede", async () => {
+    const { konusmaSimuleEt } = await import("@/components/bot/actions");
+    const { simulasyonAcik } = await import("@/components/bot/erisim");
+    const form = new FormData();
+    form.set("kanal", "whatsapp");
+    form.set("kimlik", "+905321112233");
+    form.set("mesaj", "Merhaba");
+    for (const rol of ["Satış", "Pazarlama", "Destek"]) {
+      ekipUyesi(rol);
+      expect(simulasyonAcik(rol)).toBe(false);
+      await expect(konusmaSimuleEt({}, form)).rejects.toThrow("yalnızca Yönetici");
+    }
+    ekipUyesi("Yönetici");
+    expect(simulasyonAcik("Yönetici")).toBe(true);
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(simulasyonAcik("Yönetici")).toBe(false);
+      expect(await konusmaSimuleEt({}, form)).toEqual({ hatalar: { kanal: "Simülasyon yalnızca geliştirme ortamında çalışır." } });
+      expect(botVeri.cagrilar).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    await konusmaSimuleEt({}, form);
+    expect(botVeri.cagrilar).toEqual(["kuyrugaYaz"]);
   });
 });
 
