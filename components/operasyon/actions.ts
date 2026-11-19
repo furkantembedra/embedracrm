@@ -339,8 +339,9 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
   await oturumGerekli();
   const tamSayi = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n > 0 && n < 100_000_000;
   if (!CIHAZ_MODELLERI.every((m) => tamSayi(f.cihaz[m]))) return { hata: "Cihaz fiyatları sıfırdan büyük olmalı." };
-  for (const [ad, p] of Object.entries(f.lisans) as [LisansPaketi, { fiyat: number | null; cihaz: number | null }][]) {
+  for (const [ad, p] of Object.entries(f.lisans) as [LisansPaketi, FiyatListesi["lisans"][LisansPaketi]][]) {
     if (p.fiyat !== null && !tamSayi(p.fiyat)) return { hata: `${ad} fiyatı geçersiz (özel fiyat için boş bırakın).` };
+    if (p.eurFiyat != null && !tamSayi(p.eurFiyat)) return { hata: `${ad} EUR fiyatı geçersiz (kurla çevrilsin diye boş bırakın).` };
     if (p.cihaz !== null && !(Number.isInteger(p.cihaz) && p.cihaz >= 1 && p.cihaz <= 1000)) return { hata: `${ad} cihaz kapsamı 1–1000 arası olmalı.` };
   }
   if (!(f.kdv >= 0 && f.kdv <= 0.5)) return { hata: "KDV oranı %0–50 arası olmalı." };
@@ -361,7 +362,7 @@ export async function fiyatListesiKaydet(f: FiyatListesi, aksesuar: Record<strin
   }
   const temiz: FiyatListesi = {
     cihaz: { ONE: Math.round(f.cihaz.ONE), "ONE Lite": Math.round(f.cihaz["ONE Lite"]) },
-    lisans: Object.fromEntries(Object.entries(f.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? null : Math.round(v.fiyat), cihaz: v.cihaz }])) as FiyatListesi["lisans"],
+    lisans: Object.fromEntries(Object.entries(f.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? null : Math.round(v.fiyat), cihaz: v.cihaz, eurFiyat: v.eurFiyat == null ? null : Math.round(v.eurFiyat) }])) as FiyatListesi["lisans"],
     kdv: Math.round(f.kdv * 1000) / 1000,
     eurKur: Math.round(f.eurKur * 100) / 100,
   };

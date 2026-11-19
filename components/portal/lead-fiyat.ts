@@ -1,11 +1,10 @@
 // Bayi teklifleri için önerilen satış fiyatları (Embedra liste fiyatı, bayinin para biriminde) ve yerel KDV.
 import { getFiyatListesi } from "@/components/operasyon/queries";
-import { ticariKosullar } from "./katalog";
+import { bayiFiyatlari } from "./katalog";
 import { YEREL_KDV } from "./lead-ortak";
 
 export async function bayiTeklifAyarlari(ulkeKodu: string) {
-  const fiyat = await getFiyatListesi();
-  const kosul = ticariKosullar(ulkeKodu, fiyat);
+  const { kosul, fiyat } = bayiFiyatlari(ulkeKodu, await getFiyatListesi());
   const cevir = (tl: number) => Math.round(tl / kosul.kur);
   return {
     paraBirimi: kosul.paraBirimi,

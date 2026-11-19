@@ -3,7 +3,7 @@
 import { getFiyatListesi } from "@/components/operasyon/queries";
 import { getHavuz } from "@/components/bayiler/lisans-havuzu";
 import { getYenilemeTalepleri } from "./queries";
-import { bayiFiyati, ticariKosullar } from "./katalog";
+import { bayiFiyati, bayiFiyatlari } from "./katalog";
 import { bayiVerisi, gunler } from "./veri";
 
 const GUN = 86_400_000;
@@ -27,10 +27,10 @@ export type PortalLisans = {
 
 export async function lisanslarVerisi() {
   const v = await bayiVerisi();
-  const [fiyat, talepler, havuz] = await Promise.all([getFiyatListesi(), getYenilemeTalepleri(v.bayi.id), getHavuz(v.bayi.id)]);
+  const [hamFiyat, talepler, havuz] = await Promise.all([getFiyatListesi(), getYenilemeTalepleri(v.bayi.id), getHavuz(v.bayi.id)]);
   const { bugun } = gunler();
   const indirim = v.basvuru?.sozlesme.moq.indirim ?? 0;
-  const kosul = ticariKosullar(v.bayi.ulkeKodu, fiyat);
+  const { kosul, fiyat } = bayiFiyatlari(v.bayi.ulkeKodu, hamFiyat);
   const talepSeri = new Set(talepler.map((t) => t.seriNo));
 
   const lisanslar: PortalLisans[] = v.cihazlar

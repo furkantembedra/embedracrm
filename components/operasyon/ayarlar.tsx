@@ -1,10 +1,11 @@
 "use client";
 
-// Ayarlar & ekip sekmesi: fiyat listesi (satış hattı ve sipariş formları buradan okur), kargo firmaları, ekip
+// Ayarlar & ekip sekmesi: fiyat listesi (satış hattı ve sipariş formları buradan okur), özellik × plan kataloğu (salt okunur), kargo firmaları, ekip
 import { useState, useTransition } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { Check, Pencil, Plus, X } from "lucide-react";
 import Chip from "@/components/ui/chip";
 import { CIHAZ_MODELLERI, LISANS_PAKETLERI, URUN_BILGI, type FiyatListesi, type LisansPaketi } from "@/lib/urunler";
+import { OZELLIK_KATALOGU, PLAN_SIRASI, type Ozellik } from "@/lib/urun-bilgisi";
 import { fiyatListesiKaydet, kargoFirmalariniKaydet, kullaniciKaydet, servisAdresiKaydet } from "./actions";
 import { ROLLER } from "./ortak";
 import type { Kullanici, Rol, ServisAdresi } from "./queries";
@@ -15,6 +16,8 @@ const BIRINCIL = "min-h-10 cursor-pointer rounded-control bg-ink px-4 text-[13px
 const IKINCIL = "min-h-10 cursor-pointer rounded-control border border-line-strong bg-card px-4 text-[13px] font-bold hover:bg-[#F4F5F0]";
 
 const sayiAl = (v: string) => Number(v.replace(/\./g, "").replace(",", "."));
+/** Alanlara yazılan ilk değer: ondalık ayırıcı virgül olmalı, yoksa sayiAl "55.54"ü 5554 okur */
+const sayiYaz = (n: number) => String(n).replace(".", ",");
 
 function Durum({ hata, tamam }: { hata: string | null; tamam: string | null }) {
   if (hata) return <span role="alert" className="text-xs font-semibold text-err">{hata}</span>;
@@ -39,10 +42,10 @@ export function FiyatListesiAyari({
   // Metin olarak tutulur ki kullanıcı yazarken alan boşalabilsin; kaydederken sayıya çevrilir
   const [cihaz, setCihaz] = useState(() => Object.fromEntries(CIHAZ_MODELLERI.map((m) => [m, String(fiyat.cihaz[m])])));
   const [lisans, setLisans] = useState(() =>
-    Object.fromEntries(Object.entries(fiyat.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? "" : String(v.fiyat), cihaz: v.cihaz === null ? "" : String(v.cihaz) }])),
+    Object.fromEntries(Object.entries(fiyat.lisans).map(([k, v]) => [k, { fiyat: v.fiyat === null ? "" : String(v.fiyat), cihaz: v.cihaz === null ? "" : String(v.cihaz), eur: v.eurFiyat == null ? "" : String(v.eurFiyat) }])),
   );
-  const [kdv, setKdv] = useState(String(Math.round(fiyat.kdv * 1000) / 10));
-  const [kur, setKur] = useState(String(fiyat.eurKur));
+  const [kdv, setKdv] = useState(sayiYaz(Math.round(fiyat.kdv * 1000) / 10));
+  const [kur, setKur] = useState(sayiYaz(fiyat.eurKur));
   const [aks, setAks] = useState(() => Object.fromEntries(aksesuarlar.map((a) => [a.kod, String(a.fiyat)])));
 
   const kaydet = () =>
@@ -51,7 +54,7 @@ export function FiyatListesiAyari({
       const yeni: FiyatListesi = {
         cihaz: Object.fromEntries(CIHAZ_MODELLERI.map((m) => [m, sayiAl(cihaz[m])])) as FiyatListesi["cihaz"],
         lisans: Object.fromEntries(
-          Object.entries(lisans).map(([k, v]) => [k, { fiyat: v.fiyat.trim() ? sayiAl(v.fiyat) : null, cihaz: v.cihaz.trim() ? sayiAl(v.cihaz) : null }]),
+          Object.entries(lisans).map(([k, v]) => [k, { fiyat: v.fiyat.trim() ? sayiAl(v.fiyat) : null, cihaz: v.cihaz.trim() ? sayiAl(v.cihaz) : null, eurFiyat: v.eur.trim() ? sayiAl(v.eur) : null }]),
         ) as FiyatListesi["lisans"],
         kdv: sayiAl(kdv) / 100,
         eurKur: sayiAl(kur),
@@ -95,12 +98,13 @@ export function FiyatListesiAyari({
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-bold">ONESuite lisans paketleri (yıllık)</span>
         <div className="overflow-x-auto rounded-[14px] border border-line">
-          <table className="w-full min-w-[420px] border-collapse text-[13px]">
+          <table className="w-full min-w-[560px] border-collapse text-[13px]">
             <thead className="bg-[#F8F9F5] text-xs text-muted">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left font-semibold">Paket</th>
                 <th scope="col" className="px-3 py-2 text-left font-semibold">Yıllık ücret · boş = özel fiyat</th>
                 <th scope="col" className="px-3 py-2 text-left font-semibold">Kapsadığı cihaz · boş = özel</th>
+                <th scope="col" className="px-3 py-2 text-left font-semibold">Yıllık EUR · boş = kurla çevrilir</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +116,16 @@ export function FiyatListesiAyari({
                   </td>
                   <td className="px-3 py-2">
                     <input aria-label={`${p} kapsadığı cihaz`} inputMode="numeric" placeholder="Özel" value={lisans[p].cihaz} onChange={(e) => setLisans({ ...lisans, [p]: { ...lisans[p], cihaz: e.target.value } })} className={`${GIRDI} tabular-nums`} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      aria-label={`${p} yıllık EUR fiyatı`}
+                      inputMode="numeric"
+                      placeholder={lisans[p].fiyat.trim() && sayiAl(kur) > 0 ? `≈ ${Math.round(sayiAl(lisans[p].fiyat) / sayiAl(kur)).toLocaleString("tr-TR")} (kurla)` : "Kurla çevrilir"}
+                      value={lisans[p].eur}
+                      onChange={(e) => setLisans({ ...lisans, [p]: { ...lisans[p], eur: e.target.value } })}
+                      className={`${GIRDI} tabular-nums`}
+                    />
                   </td>
                 </tr>
               ))}
@@ -138,6 +152,74 @@ export function FiyatListesiAyari({
         <Durum hata={hata} tamam={tamam} />
         <button type="button" onClick={kaydet} disabled={bekliyor} className={`${BIRINCIL} ml-auto`}>{bekliyor ? "Kaydediliyor…" : "Fiyatları kaydet"}</button>
       </div>
+    </section>
+  );
+}
+
+/* ---------- Özellik × plan kataloğu (salt okunur) ---------- */
+
+const tl = (n: number) => `${n.toLocaleString("tr-TR")} ₺`;
+
+/** Botun plan önerirken kullandığı katalog. Kaynağı docs/bot/ belgeleri; burada düzenlenmez. Fiyatlar güncel fiyat listesinden. */
+export function OzellikKatalogu({ fiyat, katalog = OZELLIK_KATALOGU }: { fiyat: FiyatListesi; katalog?: readonly Ozellik[] }) {
+  return (
+    <section aria-labelledby="ok-baslik" className={KART}>
+      <div className="flex flex-col gap-0.5">
+        <h2 id="ok-baslik" className="text-[17px] font-extrabold">Özellik × plan kataloğu</h2>
+        <span className="text-xs font-semibold text-muted">
+          Salt okunur · bot plan önerisini bu tablodan ve yukarıdaki güncel fiyatlardan hesaplar · kaynak: docs/bot/ozellikler.md
+        </span>
+      </div>
+
+      {katalog.length === 0 ? (
+        <p role="status" className="rounded-[14px] border border-dashed border-line-strong bg-[#F8F9F5] p-4 text-[13px] font-medium text-[#474A42]">
+          Katalog henüz boş. Özellikler <code className="font-mono text-xs">docs/bot/ozellikler.md</code> belgesi eklenince oradan aktarılacak.
+          O zamana kadar bot plan önermez; özellik sorularını satışçıya devreder.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-[14px] border border-line">
+          <table className="w-full min-w-[960px] border-collapse text-[13px]">
+            <thead className="bg-[#F8F9F5] text-xs text-muted">
+              <tr>
+                <th scope="col" className="w-[240px] px-3 py-2 text-left font-semibold">Özellik</th>
+                <th scope="col" className="w-[240px] px-3 py-2 text-left font-semibold">Müşteri nasıl söyler</th>
+                {PLAN_SIRASI.map((p) => (
+                  <th key={p} scope="col" className="px-2 py-2 text-center font-semibold">
+                    <span className="block text-ink">{p}</span>
+                    <span className="block whitespace-nowrap font-normal tabular-nums">{fiyat.lisans[p].fiyat === null ? "Özel fiyat" : tl(fiyat.lisans[p].fiyat!)}</span>
+                  </th>
+                ))}
+                <th scope="col" className="w-[130px] px-3 py-2 text-left font-semibold">Cihaz</th>
+              </tr>
+            </thead>
+            <tbody>
+              {katalog.map((o) => (
+                <tr key={o.id} className="border-t border-bg align-top">
+                  <th scope="row" className="px-3 py-2 text-left font-normal">
+                    <b className="block">{o.ad}</b>
+                    <span className="block text-xs text-muted">{o.aciklama}</span>
+                    <code className="block font-mono text-[11px] text-muted">{o.id}</code>
+                  </th>
+                  <td className="px-3 py-2 text-xs text-[#474A42]">
+                    {o.ifadeler.length > 0 ? o.ifadeler.map((i) => <span key={i} className="block">“{i}”</span>) : "—"}
+                  </td>
+                  {PLAN_SIRASI.map((p) => {
+                    const var_ = PLAN_SIRASI.indexOf(p) >= PLAN_SIRASI.indexOf(o.enDusukPlan);
+                    return (
+                      <td key={p} className="px-2 py-2 text-center">
+                        {var_ ? <Check size={16} aria-label={`${p} planında var`} className="mx-auto text-ok" /> : <span aria-label={`${p} planında yok`} className="text-muted">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-2">
+                    {o.cihazlar && o.cihazlar.length > 0 && o.cihazlar.length < CIHAZ_MODELLERI.length ? <Chip ton="warn">Yalnızca {o.cihazlar.join(", ")}</Chip> : <span className="text-xs text-muted">Hepsi</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

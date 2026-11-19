@@ -2,14 +2,14 @@ import { tl } from "@/lib/format";
 import { getFiyatListesi } from "@/components/operasyon/queries";
 import { IADE_ADIMLARI, getIadeler, getSiparisler, getStok } from "@/components/siparisler/queries";
 import { DURUM_ADI, DURUM_TONU, tamamlananAdim } from "@/components/siparisler/ortak";
-import { enErkenTeslim, katalogOlustur, kayitliAdres, ticariKosullar } from "@/components/portal/katalog";
+import { bayiFiyatlari, enErkenTeslim, katalogOlustur, kayitliAdres } from "@/components/portal/katalog";
 import SiparisSepeti, { type GecmisSiparis } from "@/components/portal/siparis-sepeti";
 import { bayiVerisi, gunler, tarihTr } from "@/components/portal/veri";
 import { CIHAZ_MODELLERI } from "@/lib/urunler";
 
 export default async function PortalSiparisPage() {
-  const [v, fiyat, stok, tumSiparisler, iadeler] = await Promise.all([bayiVerisi(), getFiyatListesi(), getStok(), getSiparisler(), getIadeler()]);
-  const kosul = ticariKosullar(v.bayi.ulkeKodu, fiyat);
+  const [v, hamFiyat, stok, tumSiparisler, iadeler] = await Promise.all([bayiVerisi(), getFiyatListesi(), getStok(), getSiparisler(), getIadeler()]);
+  const { kosul, fiyat } = bayiFiyatlari(v.bayi.ulkeKodu, hamFiyat);
   const indirim = v.basvuru?.sozlesme.moq.indirim ?? 0;
   const katalog = katalogOlustur(fiyat, stok);
   const gecmis: GecmisSiparis[] = [...v.siparisler]

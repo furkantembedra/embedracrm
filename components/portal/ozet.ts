@@ -8,7 +8,7 @@ import { getEkip, getFiyatListesi } from "@/components/operasyon/queries";
 import { getIcerikler } from "@/components/pazarlama/queries";
 import { getYenilemeTalepleri } from "./queries";
 import { bayiVerisi, gunler } from "./veri";
-import { ticariKosullar } from "./katalog";
+import { bayiFiyatlari } from "./katalog";
 
 const GUN = 86_400_000;
 const gunFarki = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / GUN);
@@ -26,7 +26,7 @@ async function temsilci(id: string | null | undefined) {
 
 export async function portalOzeti() {
   const v = await bayiVerisi();
-  const [leadler, rmalar, fiyat, icerikler, talepler] = await Promise.all([getBayiLeadleri(v.bayi.id), getRmalar(), getFiyatListesi(), getIcerikler(), getYenilemeTalepleri(v.bayi.id)]);
+  const [leadler, rmalar, hamFiyat, icerikler, talepler] = await Promise.all([getBayiLeadleri(v.bayi.id), getRmalar(), getFiyatListesi(), getIcerikler(), getYenilemeTalepleri(v.bayi.id)]);
   const { bugun, ileri: otuzGun } = gunler(30);
   const doksanGun = gunler(90).ileri;
   const talepSeri = new Set(talepler.map((t) => t.seriNo));
@@ -36,7 +36,7 @@ export async function portalOzeti() {
   const yakinda = musteride.filter((c) => c.lisansBitis! <= otuzGun).sort((a, b) => a.lisansBitis!.localeCompare(b.lisansBitis!));
   const doksan = musteride.filter((c) => c.lisansBitis! >= bugun && c.lisansBitis! <= doksanGun);
   // Bayinin para biriminde (yurt dışı bayi EUR, kur Operasyon › Ayarlar'dan)
-  const kosul = ticariKosullar(v.bayi.ulkeKodu, fiyat);
+  const { kosul, fiyat } = bayiFiyatlari(v.bayi.ulkeKodu, hamFiyat);
   const yenilemeTutari = Math.round(doksan.reduce((t, c) => t + (fiyat.lisans[c.plan]?.fiyat ?? 0), 0) / kosul.kur);
   const birYilOnce = new Date(Date.parse(bugun) - 365 * GUN).toISOString().slice(0, 10);
   const yenilenen = v.hareketler.filter((h) => h.tur === "lisans" && h.tarih >= birYilOnce).reduce((t, h) => t + Math.max(1, h.kalemler.length), 0);

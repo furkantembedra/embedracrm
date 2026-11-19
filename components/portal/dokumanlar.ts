@@ -5,7 +5,7 @@ import { hedefteMi } from "@/components/bayi-dokumanlar/ortak";
 import { getFiyatListesi } from "@/components/operasyon/queries";
 import { getIcerikler } from "@/components/pazarlama/queries";
 import { getStok } from "@/components/siparisler/queries";
-import { bayiFiyati, katalogOlustur, ticariKosullar } from "./katalog";
+import { bayiFiyati, bayiFiyatlari, katalogOlustur } from "./katalog";
 import { bayiVerisi, gunler } from "./veri";
 
 const ayEkle = (t: string, ay: number) => { const d = new Date(t + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + ay); return d.toISOString().slice(0, 10); };
@@ -13,9 +13,9 @@ const ayEkle = (t: string, ay: number) => { const d = new Date(t + "T12:00:00Z")
 /** Fiyat listesi satırları (bayinin para biriminde): liste, bayi (iskontolu), önerilen satış */
 export async function bayiFiyatListesi() {
   const v = await bayiVerisi();
-  const [fiyat, stok] = await Promise.all([getFiyatListesi(), getStok()]);
+  const [hamFiyat, stok] = await Promise.all([getFiyatListesi(), getStok()]);
   const indirim = v.basvuru?.sozlesme.moq.indirim ?? 0;
-  const kosul = ticariKosullar(v.bayi.ulkeKodu, fiyat);
+  const { kosul, fiyat } = bayiFiyatlari(v.bayi.ulkeKodu, hamFiyat);
   const cevir = (tl: number) => Math.round(tl / kosul.kur);
   const satirlar = katalogOlustur(fiyat, stok).map((u) => ({
     grup: u.tur === "cihaz" ? "Cihazlar" : u.tur === "lisans" ? "ONESuite lisans (12 ay)" : "Aksesuar ve yedek parça",

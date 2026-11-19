@@ -16,7 +16,7 @@ import { ihtiyactanOlustur, icUretimGirisiSil, kaliteyeGonder, tedarikTeslimAl, 
 import type { BilesenKalemi, HavuzSeri, IcUretimEmri, Kullanici, Recete, ServisAdresi, TedarikSiparisi, UretimPartisi } from "./queries";
 import { BilesenStoku, IcUretimListesi, SeriHavuzu, TedarikListesi, UretimOzeti, UretimPartileri } from "./uretim";
 import { GunlukGirisFormu, IcUretimFormu, KaliteFormu, PartiFormu, TedarikFormu } from "./uretim-formlari";
-import { EkipAyari, FiyatListesiAyari, KargoFirmalariAyari, ServisAdresiAyari } from "./ayarlar";
+import { EkipAyari, FiyatListesiAyari, KargoFirmalariAyari, OzellikKatalogu, ServisAdresiAyari } from "./ayarlar";
 
 type Sekme = "uretim" | "ihtiyac" | "ayarlar";
 type Pencere = null | { tur: "parti" } | { tur: "depo"; id: string } | { tur: "tamir"; id: string } | { tur: "tedarik" } | { tur: "icUretim" } | { tur: "giris"; id: string };
@@ -145,7 +145,7 @@ export default function OperasyonGorunumu(p: {
         </>
       ) : (
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex min-w-0 flex-[2_1_620px]">
+          <div className="flex min-w-0 flex-[2_1_620px] flex-col gap-4">
             <FiyatListesiAyari
               fiyat={fiyat}
               aksesuarlar={aksesuarlar}
@@ -154,6 +154,7 @@ export default function OperasyonGorunumu(p: {
                 setAksesuarlar((l) => l.map((x) => ({ ...x, fiyat: a[x.kod] ?? x.fiyat })));
               }}
             />
+            <OzellikKatalogu fiyat={fiyat} />
           </div>
           <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
             <EkipAyari ekip={ekip} onKaydedildi={setEkip} />

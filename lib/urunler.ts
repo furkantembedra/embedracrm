@@ -27,7 +27,8 @@ export type LisansPaketi = keyof typeof LISANS_PAKETLERI;
 /** Satışta kullanılan güncel fiyatlar. Operasyon › Ayarlar'dan değiştirilir; buradaki sabitler başlangıç değeridir. */
 export type FiyatListesi = {
   cihaz: Record<CihazModeli, number>;
-  lisans: Record<LisansPaketi, { fiyat: number | null; cihaz: number | null }>;
+  /** eurFiyat: yurt dışı için elle belirlenen yıllık EUR fiyatı; boş/yok = TL fiyat eurKur ile çevrilir. */
+  lisans: Record<LisansPaketi, { fiyat: number | null; cihaz: number | null; eurFiyat?: number | null }>;
   kdv: number; // 0.2 = %20, yalnızca cihaz ve aksesuara eklenir
   eurKur: number; // 1 EUR = ? TL · yurt dışı bayilerin fiyatları buna göre EUR'ya çevrilir
 };
@@ -37,6 +38,17 @@ export const VARSAYILAN_FIYAT: FiyatListesi = {
   kdv: KDV_ORANI,
   eurKur: 48,
 };
+
+export type ParaBirimi = "TRY" | "EUR";
+
+/** Bir lisansın yıllık liste fiyatı (KDV yok). EUR: elle girilmiş eurFiyat varsa o, yoksa TL fiyat / kur (yuvarlanmış).
+ *  null = özel fiyat. Lisans fiyatını para birimine göre okuyan her yer bunu kullanmalı. */
+export function lisansYillikFiyat(f: Pick<FiyatListesi, "lisans" | "eurKur">, paket: LisansPaketi, paraBirimi: ParaBirimi = "TRY"): number | null {
+  const l = f.lisans[paket];
+  if (paraBirimi === "TRY") return l.fiyat;
+  if (l.eurFiyat != null) return l.eurFiyat;
+  return l.fiyat === null ? null : Math.round(l.fiyat / f.eurKur);
+}
 
 /** [{model:"ONE"},{model:"ONE"},{model:"ONE Lite"}] → "2× ONE · 1× ONE Lite" */
 export function modelOzeti(cihazlar: { model: CihazModeli }[]) {

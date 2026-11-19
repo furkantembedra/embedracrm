@@ -14,7 +14,7 @@ import { musteriBulAdla } from "@/components/musteriler/queries";
 import { getFiyatListesi } from "@/components/operasyon/queries";
 import { getSiparisler, getStok, siparisEkle, sonrakiSiparisNo, type Siparis } from "@/components/siparisler/queries";
 import { siparisiIptalEt } from "@/components/siparisler/iptal";
-import { ODEME_SECENEKLERI, bayiFiyati, enErkenTeslim, katalogOlustur, kayitliAdres, sepetToplami, sepettenKalemler, ticariKosullar, type PortalOdeme } from "./katalog";
+import { ODEME_SECENEKLERI, bayiFiyati, bayiFiyatlari, enErkenTeslim, katalogOlustur, kayitliAdres, sepetToplami, sepettenKalemler, type PortalOdeme } from "./katalog";
 import { hatirlatmaEkleDepo } from "@/components/hatirlatmalar/queries";
 import { simdiYerel } from "@/components/rma/islemler";
 import { oturumAc, oturumKapat, portalOturumu } from "./oturum";
@@ -71,7 +71,8 @@ export async function portalSiparisVer(_o: PortalFormDurumu, form: FormData): Pr
   const { bayi } = await oturumGerekli();
   const basvuru = (await getBasvurular()).find((b) => b.id === bayi.id);
   const indirim = basvuru?.sozlesme.moq.indirim ?? 0;
-  const [fiyat, stok] = await Promise.all([getFiyatListesi(), getStok()]);
+  const [hamFiyat, stok] = await Promise.all([getFiyatListesi(), getStok()]);
+  const { kosul, fiyat } = bayiFiyatlari(bayi.ulkeKodu, hamFiyat);
   const katalog = katalogOlustur(fiyat, stok);
   // Sepet formdan "adet:<anahtar>" alanlarıyla gelir; fiyat her zaman sunucudaki katalogdan hesaplanır
   const sepet: Record<string, number> = {};
@@ -82,7 +83,6 @@ export async function portalSiparisVer(_o: PortalFormDurumu, form: FormData): Pr
   }
   const kalemler = sepettenKalemler(katalog, sepet);
   if (!kalemler.length) return { hatalar: { genel: "Sepetiniz boş. En az bir ürün ekleyin." } };
-  const kosul = ticariKosullar(bayi.ulkeKodu, fiyat);
   const netTl = sepetToplami(katalog, sepet, indirim, kosul.kdv).net;
   const tutar = kosul.paraBirimi === "TRY" ? netTl : Math.round(netTl / kosul.kur);
 
@@ -203,8 +203,7 @@ export async function portalDuzeltmeTalebi(seriNo: string, aciklama: string): Pr
 async function bayiLisansSiparisiAc(bayi: { id: string; ad: string; ulkeKodu: string; temsilciId?: string | null }, atamalar: { seriNo: string; plan: LisansPlani }[], sure: number, aciklama: string) {
   const basvuru = (await getBasvurular()).find((b) => b.id === bayi.id);
   const indirim = basvuru?.sozlesme.moq.indirim ?? 0;
-  const fiyat = await getFiyatListesi();
-  const kosul = ticariKosullar(bayi.ulkeKodu, fiyat);
+  const { kosul, fiyat } = bayiFiyatlari(bayi.ulkeKodu, await getFiyatListesi());
   const adetler = new Map<string, number>();
   for (const a of atamalar) adetler.set(a.plan, (adetler.get(a.plan) ?? 0) + 1);
   const kalemler: Siparis["kalemler"] = [...adetler].map(([paket, adet]) => ({ tur: "lisans", paket, adet, sureAy: sure }));

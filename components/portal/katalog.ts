@@ -1,6 +1,6 @@
 // Bayi sipariş kataloğu: cihaz, ONESuite lisansı ve aksesuar kalemleri tek listede.
 // Sayfa (fiyat gösterimi) ve server action (tutar hesabı) aynı listeyi kullanır; istemcide de çalışır.
-import { CIHAZ_MODELLERI, URUN_BILGI, type FiyatListesi } from "@/lib/urunler";
+import { CIHAZ_MODELLERI, URUN_BILGI, lisansYillikFiyat, type FiyatListesi, type LisansPaketi, type ParaBirimi } from "@/lib/urunler";
 import type { Kalem, StokKalemi } from "@/components/siparisler/queries";
 
 export type KatalogTuru = "cihaz" | "lisans" | "aksesuar";
@@ -51,6 +51,28 @@ export type PortalOdeme = (typeof ODEME_SECENEKLERI)[number]["deger"];
 export function ticariKosullar(ulkeKodu: string, fiyat: Pick<FiyatListesi, "kdv" | "eurKur">) {
   const yurtDisi = ulkeKodu !== "TR";
   return { paraBirimi: (yurtDisi ? "EUR" : "TRY") as "EUR" | "TRY", kur: yurtDisi ? fiyat.eurKur : 1, kdv: yurtDisi ? 0 : fiyat.kdv, yurtDisi };
+}
+
+/**
+ * Bayinin göreceği fiyat listesi. Portal tutarları TL tutar ve en sonda kura böler; EUR'lu bayide Ayarlar'da elle
+ * EUR fiyatı girilmiş lisansın TL karşılığı "EUR fiyat × kur" yapılır, böylece her "TL / kur" hesabı tam o EUR fiyatını
+ * bulur (bot da aynı fiyatı lisansYillikFiyat ile okur). EUR fiyatı girilmemişse ya da bayi TRY ise liste aynen döner.
+ */
+export function etkinFiyatListesi(fiyat: FiyatListesi, paraBirimi: ParaBirimi): FiyatListesi {
+  if (paraBirimi === "TRY") return fiyat;
+  const lisans = Object.fromEntries(
+    (Object.entries(fiyat.lisans) as [LisansPaketi, FiyatListesi["lisans"][LisansPaketi]][]).map(([p, l]) => [
+      p,
+      l.eurFiyat == null ? l : { ...l, fiyat: Math.round(lisansYillikFiyat(fiyat, p, "EUR")! * fiyat.eurKur) },
+    ]),
+  ) as FiyatListesi["lisans"];
+  return { ...fiyat, lisans };
+}
+
+/** Bayinin ticari koşulları ve onun para birimine göre etkin fiyat listesi; portaldaki her fiyat okuması bununla başlar. */
+export function bayiFiyatlari(ulkeKodu: string, fiyat: FiyatListesi) {
+  const kosul = ticariKosullar(ulkeKodu, fiyat);
+  return { kosul, fiyat: etkinFiyatListesi(fiyat, kosul.paraBirimi) };
 }
 
 /** TL tutarı bayinin para birimine çevirir ve biçimler */
