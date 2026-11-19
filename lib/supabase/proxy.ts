@@ -13,6 +13,7 @@ const ACIK_YOLLAR = [
   "/api/whatsapp/",
   "/api/abonelik",
   "/api/kampanya-zamanlayici",
+  "/api/zamanlayici",
 ];
 
 export async function updateSession(request: NextRequest) {

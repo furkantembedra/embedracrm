@@ -27,13 +27,13 @@ describe("oturum yoksa", () => {
     expect(konum.pathname + konum.search).toBe(hedef);
   });
 
-  it.each(["/api/bayi-dokuman/5", "/api/cihaz-bildirimi-sahte", "/api/whatsapp"])("korumalı API %s 401 döner", async (yol) => {
+  it.each(["/api/bayi-dokuman/5", "/api/cihaz-bildirimi-sahte", "/api/whatsapp", "/api/zamanlayici-sahte"])("korumalı API %s 401 döner", async (yol) => {
     const y = await istek(yol);
     expect(y.status).toBe(401);
     expect(await y.json()).toEqual({ ok: false, hata: "Oturum gerekli." });
   });
 
-  it.each(["/giris", "/portal/giris", "/auth/onay", "/api/cihaz-bildirimi", "/api/whatsapp/webhook", "/api/abonelik", "/api/kampanya-zamanlayici"])(
+  it.each(["/giris", "/portal/giris", "/auth/onay", "/api/cihaz-bildirimi", "/api/whatsapp/webhook", "/api/abonelik", "/api/kampanya-zamanlayici", "/api/zamanlayici"])(
     "açık yol %s geçer (kendi doğrulaması var)",
     async (yol) => {
       const y = await istek(yol);
