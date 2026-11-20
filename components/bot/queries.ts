@@ -6,6 +6,7 @@ import { adaptorBul, kanalListesi } from "@/components/konusma/kanallar";
 import type { KapaliPencereYolu, PencereDurumu } from "@/components/konusma/kanallar/tur";
 import type { Gonderen, Kanal, MesajEki } from "@/components/konusma/queries";
 import { ASAMA_BILGI, type Asama } from "@/components/satis-hatti/sabitler";
+import type { BotModu } from "./veri";
 
 export type KanalBilgisi = { kanal: Kanal; ad: string; bagli: boolean };
 
@@ -96,6 +97,23 @@ export type SohbetMesaji = {
   demo: boolean;
   sablon: string | null;
   insanEtiketi: boolean;
+  /** Bot mesajı: üretildiği turda çağrılan araçlar (bot_kullanim) */
+  botAraclari: string[] | null;
+};
+
+/** Bot turu (bot_kullanim): sağ paneldeki araç geçmişi. Metin yok, yalnızca araçlar, sonuç ve kullanım. */
+export type BotTuruGorunumu = {
+  id: number;
+  zaman: string;
+  araclar: string[];
+  sonuc: string;
+  hataKodu: string | null;
+  apiCagrisi: number;
+  token: number;
+  cacheOkuma: number;
+  maliyetUsd: number;
+  istemSurumu: string;
+  model: string;
 };
 
 /** Sohbetteki sistem satırı (konusma_olaylari): kim devraldı, kim bota geri verdi, bot neden devretti */
@@ -130,6 +148,8 @@ export type KonusmaDetayi = {
   mesajlar: SohbetMesaji[];
   /** Sistem satırları (zamana göre mesajların arasına yerleşir) */
   olaylar: SistemSatiri[];
+  /** Son bot turları (yeniden eskiye) */
+  botGecmisi: BotTuruGorunumu[];
   firsat: {
     id: string; firma: string; asama: Asama; asamaAd: string; tutar: number; icerik: string;
     sorumluId: string | null; sorumluAd: string | null; telefon: string | null;
@@ -142,6 +162,7 @@ type MesajSatiri = {
   id: number; yon: "gelen" | "giden"; gonderen: Gonderen; metin: string; zaman: string; tur: string; ek: MesajEki | null;
   teslim_durumu: TeslimGorunumu["durum"] | null; teslim_zamani: string | null; teslim_hata_kodu: string | null;
   kullanici: { k_ad: string } | null;
+  bot_tur: { araclar: string[] } | null;
 };
 type OlaySatiri = {
   id: number; tur: SistemSatiri["tur"]; kaynak: SistemSatiri["kaynak"]; sebep: string | null; aciklama: string | null; zaman: string;
@@ -158,12 +179,20 @@ type DetaySatiri = {
   } | null;
 };
 
+type BotTuruSatiri = {
+  id: number; created_at: string; araclar: string[] | null; sonuc: string; hata_kodu: string | null; api_cagrisi: number;
+  girdi_token: number; cikti_token: number; cache_yazma_token: number; cache_okuma_token: number; maliyet_usd: number | string;
+  istem_surumu: string; model: string;
+};
+/** Sağ panelde gösterilen bot turu sayısı */
+const BOT_GECMISI_SINIRI = 20;
+
 /** Sohbette gösterilen en eski mesaj sınırı (daha eskisi P1.3 sonrası "daha fazla yükle" ile) */
 const SOHBET_SINIRI = 300;
 
 export async function konusmaDetayi(id: number, simdi = new Date()): Promise<KonusmaDetayi | null> {
   const s = await db();
-  const [k, m, o] = await Promise.all([
+  const [k, m, o, bt] = await Promise.all([
     s.from("konusmalar")
       .select(`id, kanal, dis_kullanici_id, dis_profil_adi, bot_aktif, devir_sebebi, devralan_id, bot_notu, son_musteri_mesaji_zamani, musteri_id,
         devralan:kullanicilar!konusmalar_devralan_id_fkey(k_ad),
@@ -175,12 +204,17 @@ export async function konusmaDetayi(id: number, simdi = new Date()): Promise<Kon
       .maybeSingle(),
     s.from("konusma_mesajlari")
       .select(`id, yon, gonderen, metin, zaman, tur, ek, teslim_durumu, teslim_zamani, teslim_hata_kodu,
-        kullanici:kullanicilar!konusma_mesajlari_gonderen_kullanici_id_fkey(k_ad)`)
+        kullanici:kullanicilar!konusma_mesajlari_gonderen_kullanici_id_fkey(k_ad),
+        bot_tur:bot_kullanim!konusma_mesajlari_bot_kullanim_id_fkey(araclar)`)
       .eq("konusma_id", id).order("zaman", { ascending: false }).order("id", { ascending: false }).limit(SOHBET_SINIRI),
     s.from("konusma_olaylari")
       .select("id, tur, kaynak, sebep, aciklama, zaman, kullanici:kullanicilar!konusma_olaylari_kullanici_id_fkey(k_ad)")
       .eq("konusma_id", id).order("zaman", { ascending: false }).order("id", { ascending: false }).limit(SOHBET_SINIRI),
+    s.from("bot_kullanim")
+      .select("id, created_at, araclar, sonuc, hata_kodu, api_cagrisi, girdi_token, cikti_token, cache_yazma_token, cache_okuma_token, maliyet_usd, istem_surumu, model")
+      .eq("konusma_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(BOT_GECMISI_SINIRI),
   ]);
+  const turlar = (sonuc(bt, "Bot araç geçmişi okunurken") ?? []) as BotTuruSatiri[];
   const ks = sonuc(k, "Konuşma okunurken") as unknown as DetaySatiri | null;
   if (!ks) return null;
   const satirlar = (sonuc(m, "Mesajlar okunurken") ?? []) as unknown as MesajSatiri[];
@@ -221,6 +255,7 @@ export async function konusmaDetayi(id: number, simdi = new Date()): Promise<Kon
       demo: !!x.ek?.demo,
       sablon: x.ek?.sablon?.ad ?? null,
       insanEtiketi: !!x.ek?.insan_etiketi,
+      botAraclari: x.gonderen === "bot" && x.bot_tur ? x.bot_tur.araclar ?? [] : null,
     })),
     olaylar: olaySatirlari
       .filter((x) => !enEski || Date.parse(x.zaman) >= Date.parse(enEski))
@@ -229,6 +264,11 @@ export async function konusmaDetayi(id: number, simdi = new Date()): Promise<Kon
         id: Number(x.id), tur: x.tur, kaynak: x.kaynak, kullaniciAd: x.kullanici?.k_ad ?? null, sebep: x.sebep, aciklama: x.aciklama,
         zaman: new Date(x.zaman).toISOString(),
       })),
+    botGecmisi: turlar.map((t) => ({
+      id: Number(t.id), zaman: new Date(t.created_at).toISOString(), araclar: t.araclar ?? [], sonuc: t.sonuc, hataKodu: t.hata_kodu,
+      apiCagrisi: t.api_cagrisi, token: t.girdi_token + t.cikti_token + t.cache_yazma_token + t.cache_okuma_token,
+      cacheOkuma: t.cache_okuma_token, maliyetUsd: Number(t.maliyet_usd), istemSurumu: t.istem_surumu, model: t.model,
+    })),
     firsat: f
       ? {
           id: String(f.id), firma: f.f_firma, asama, asamaAd: ASAMA_BILGI[asama].ad, tutar: Number(f.f_tutar ?? 0), icerik: f.f_icerik ?? "",
@@ -254,21 +294,25 @@ export async function firsatSorumlusuYaz(firsatId: number, kullaniciId: number |
 
 /* ---------------- Bot › Kanallar (P1.3: yeni konuşmada bot; P2.4 bot modu vb. ekler) ---------------- */
 
-export type KanalAyari = { kanal: Kanal; yeniKonusmadaBot: boolean; guncelleme: string | null };
+export type KanalAyari = { kanal: Kanal; yeniKonusmadaBot: boolean; botModu: BotModu; guncelleme: string | null };
 
 export async function kanalAyarlari(): Promise<KanalAyari[]> {
   const s = await db();
-  const r = (sonuc(await s.from("kanal_ayarlari").select("kanal, yeni_konusmada_bot, updated_at").order("kanal"), "Kanal ayarları okunurken") ?? []) as
-    { kanal: Kanal; yeni_konusmada_bot: boolean; updated_at: string | null }[];
-  return r.map((x) => ({ kanal: x.kanal, yeniKonusmadaBot: x.yeni_konusmada_bot, guncelleme: x.updated_at }));
+  const r = (sonuc(await s.from("kanal_ayarlari").select("kanal, yeni_konusmada_bot, bot_modu, updated_at").order("kanal"), "Kanal ayarları okunurken") ?? []) as
+    { kanal: Kanal; yeni_konusmada_bot: boolean; bot_modu: BotModu; updated_at: string | null }[];
+  return r.map((x) => ({ kanal: x.kanal, yeniKonusmadaBot: x.yeni_konusmada_bot, botModu: x.bot_modu ?? "kapali", guncelleme: x.updated_at }));
 }
 
-/** Yeni konuşmada bot açık mı (yalnızca Yönetici; RLS de denetler: başkası güncelleyemez → hata) */
-export async function kanalAyariYaz(kanal: string, yeniKonusmadaBot: boolean, kullaniciId: number | null) {
+/** Kanal ayarı: yeni konuşmada bot ve / veya bot modu (yalnızca Yönetici; RLS de denetler: başkası güncelleyemez → hata) */
+export async function kanalAyariYaz(kanal: string, a: { yeniKonusmadaBot?: boolean; botModu?: BotModu }, kullaniciId: number | null) {
   const s = await db();
   const r = sonuc(
     await s.from("kanal_ayarlari")
-      .update({ yeni_konusmada_bot: yeniKonusmadaBot, guncelleyen_id: kullaniciId, updated_at: new Date().toISOString() })
+      .update({
+        ...(a.yeniKonusmadaBot !== undefined ? { yeni_konusmada_bot: a.yeniKonusmadaBot } : {}),
+        ...(a.botModu !== undefined ? { bot_modu: a.botModu } : {}),
+        guncelleyen_id: kullaniciId, updated_at: new Date().toISOString(),
+      })
       .eq("kanal", kanal).select("kanal"),
     "Kanal ayarı kaydedilirken",
   ) as { kanal: string }[];

@@ -17,6 +17,8 @@ type Konusma = {
   /** P1.3 devir durumu (SQL: konusma_devral / konusma_bot_devretti); olaylar: sistem satırları */
   devirSebebi?: string | null; devralanId?: number | null; olaylar?: { tur: string; kaynak?: string; kullaniciId?: number | null }[];
   kilitSahibi: string | null; kilitBitis: number;
+  /** P2.1 bot turunun zamanı (ms; SQL: bot_cevap_zamani) */
+  botCevapZamani?: number | null;
 };
 type Mesaj = YeniMesaj & { id: number };
 type Is = { id: number; konusmaId: number; mesajId: number; tur: "musteri_mesaji" | "temsilci_mesaji"; durum: "bekliyor" | "tamam" | "hata"; deneme: number; sonrakiDeneme: number; sonHata: string | null };
@@ -84,6 +86,10 @@ const basZamaniGeldi = (konusmaId: number) => {
   const bas = bekleyenler(konusmaId)[0];
   return !!bas && bas.sonrakiDeneme <= Date.now();
 };
+/** P2.1: bot turunun zamanı geldi mi */
+const botZamaniGeldi = (k: Konusma) => k.botCevapZamani != null && k.botCevapZamani <= Date.now();
+/** Bot turu bekleme süresi (SQL: interval '6 seconds'); testler kısaltabilir */
+export const botBekleme = { ms: 6_000 };
 const konusmaGorunumu = (k: Konusma): KuyrukKonusmasi => ({
   id: k.id, kanal: k.kanal, kanalHesapId: k.kanalHesapId, disKullaniciId: k.disKullaniciId, satisHattiId: k.satisHattiId,
   musteriId: k.musteriId, profilAdi: k.profilAdi, sonMusteriMesaji: k.sonMusteriMesaji,
@@ -108,17 +114,19 @@ export const konusmaModulu = {
     if (musteri) {
       if (!k.sonMusteriMesaji || m.zaman > k.sonMusteriMesaji) k.sonMusteriMesaji = m.zaman;
       if (m.profilAdi?.trim()) k.profilAdi = m.profilAdi.trim();
+      if (k.botAktif) k.botCevapZamani = Date.now() + botBekleme.ms;
     }
     return { konusmaId: k.id, mesajId };
   },
-  async konusmaKilidiAl(sahip: string, sureSn: number, konusmaId?: number) {
+  async konusmaKilidiAl(sahip: string, sureSn: number, konusmaId?: number, bot = false) {
     await tur();
     const aday = depo.isler
       .filter((i) => i.durum === "bekliyor" && (konusmaId === undefined || i.konusmaId === konusmaId))
       .sort((a, b) => a.id - b.id)
       .find((i) => bekleyenler(i.konusmaId)[0] === i && i.sonrakiDeneme <= Date.now() && !kilitli(konusmaBul(i.konusmaId)));
-    if (!aday) return null;
-    const k = konusmaBul(aday.konusmaId);
+    const botAday = aday || !bot ? null : depo.konusmalar.find((x) => botZamaniGeldi(x) && !kilitli(x) && (konusmaId === undefined || x.id === konusmaId));
+    if (!aday && !botAday) return null;
+    const k = aday ? konusmaBul(aday.konusmaId) : botAday!;
     k.kilitSahibi = sahip;
     k.kilitBitis = Date.now() + sureSn * 1000;
     return k.id;
@@ -138,11 +146,11 @@ export const konusmaModulu = {
     }
     return true;
   },
-  async konusmaKilidiBirak(konusmaId: number, sahip: string, sureSn: number) {
+  async konusmaKilidiBirak(konusmaId: number, sahip: string, sureSn: number, bot = false) {
     await tur();
     const k = konusmaBul(konusmaId);
     if (!depo.kilitDevreDisi && k.kilitSahibi !== sahip) return "kayip" as const;
-    if (basZamaniGeldi(konusmaId)) {
+    if (basZamaniGeldi(konusmaId) || (bot && botZamaniGeldi(k))) {
       k.kilitBitis = Date.now() + sureSn * 1000;
       return "devam" as const;
     }
@@ -171,6 +179,13 @@ export const konusmaModulu = {
     k.devirSebebi = null;
     k.devralanId = devralan;
     (k.olaylar ??= []).push({ tur: "devralindi", kaynak, kullaniciId: kullanici });
+    return true;
+  },
+  async konusmaBotTuruAl(konusmaId: number, sahip: string) {
+    await tur();
+    const k = konusmaBul(konusmaId);
+    if ((!depo.kilitDevreDisi && (k.kilitSahibi !== sahip || k.kilitBitis < Date.now())) || !botZamaniGeldi(k)) return false;
+    k.botCevapZamani = null;
     return true;
   },
   async konusmaOku(konusmaId: number) {

@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { OctagonAlert } from "lucide-react";
 import PageHeader from "@/components/layout/page-header";
+import { botAyarlariOku } from "@/components/bot/veri";
 import { crmKullanicisi } from "@/lib/oturum";
 import GelenKutusu from "@/components/bot/gelen-kutusu";
 import { simulasyonAcik } from "@/components/bot/erisim";
@@ -13,10 +16,17 @@ export default async function BotGelenKutusuPage({ searchParams }: { searchParam
   if (mesaj || !k) return <RolMesaji baslik="Gelen kutusu" mesaj={mesaj ?? ""} />;
   const { k: secili } = await searchParams;
   const id = secili && /^\d{1,15}$/.test(secili) ? Number(secili) : null;
-  const [liste, detay, ekip] = await Promise.all([gelenKutusu(), id ? konusmaDetayi(id) : Promise.resolve(null), getEkip()]);
+  const [liste, detay, ekip, ayarlar] = await Promise.all([gelenKutusu(), id ? konusmaDetayi(id) : Promise.resolve(null), getEkip(), botAyarlariOku()]);
   return (
     <>
       <PageHeader title="Gelen kutusu" description="WhatsApp, Messenger ve Instagram konuşmaları tek yerde · bot konuşurken de canlı izlenir" />
+      {ayarlar.acilDurdurma && (
+        <p role="alert" className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-err bg-err-bg px-4 py-2.5 text-sm font-semibold text-err">
+          <OctagonAlert size={16} aria-hidden="true" />
+          Acil durdurma açık: bot hiçbir konuşmada cevap vermiyor.
+          <Link href="/bot/ayarlar" className="font-bold underline">Bot ayarları</Link>
+        </p>
+      )}
       <GelenKutusu
         ilkListe={liste}
         ilkDetay={detay}

@@ -134,11 +134,14 @@ export async function gelenMesajKaydet(m: GelenKayit): Promise<{ konusmaId: numb
   return satir ? { konusmaId: Number(satir.konusma_id), mesajId: Number(satir.mesaj_id) } : null;
 }
 
-/** Zamanı gelmiş işi olan kilitsiz bir konuşmayı kilitler (yoksa null). konusmaId verilirse yalnızca ona bakar. */
-export async function konusmaKilidiAl(sahip: string, sureSn: number, konusmaId?: number): Promise<number | null> {
+/**
+ * Zamanı gelmiş işi olan kilitsiz bir konuşmayı kilitler (yoksa null). konusmaId verilirse yalnızca ona bakar.
+ * bot: işleyici bot turunu çalıştırabiliyorsa true; o zaman bot turunun zamanı gelmiş konuşmalar da alınır.
+ */
+export async function konusmaKilidiAl(sahip: string, sureSn: number, konusmaId?: number, bot = false): Promise<number | null> {
   const s = await db();
   const r = sonuc(
-    await s.rpc("konusma_kilidi_al", { p_sahip: sahip, p_sure_sn: sureSn, p_konusma_id: konusmaId ?? null }),
+    await s.rpc("konusma_kilidi_al", { p_sahip: sahip, p_sure_sn: sureSn, p_konusma_id: konusmaId ?? null, p_bot: bot }),
     "Konuşma kilidi alınırken",
   ) as number | string | null;
   return r == null ? null : Number(r);
@@ -153,11 +156,20 @@ export async function konusmaIsiBitir(isId: number, sahip: string, hata: string 
   ) as boolean;
 }
 
+/**
+ * Bot turunu üstlenir: kilit bizdeyken konuşmanın bot turunun zamanı (son müşteri mesajı + 6 sn) geldiyse zamanı siler
+ * ve true döner; tur böylece bir kez çalışır (SQL: 20261120090000_bot_dongusu.sql).
+ */
+export async function konusmaBotTuruAl(konusmaId: number, sahip: string): Promise<boolean> {
+  const s = await db();
+  return sonuc(await s.rpc("konusma_bot_turu_al", { p_konusma_id: konusmaId, p_sahip: sahip }), "Bot turu alınırken") as boolean;
+}
+
 /** Kilidi bırakır: 'birakildi' | 'devam' (yeni iş geldi, kilit bizde kaldı) | 'kayip' (kilit başkasına geçmiş) */
-export async function konusmaKilidiBirak(konusmaId: number, sahip: string, sureSn: number): Promise<"birakildi" | "devam" | "kayip"> {
+export async function konusmaKilidiBirak(konusmaId: number, sahip: string, sureSn: number, bot = false): Promise<"birakildi" | "devam" | "kayip"> {
   const s = await db();
   return sonuc(
-    await s.rpc("konusma_kilidi_birak", { p_konusma_id: konusmaId, p_sahip: sahip, p_sure_sn: sureSn }),
+    await s.rpc("konusma_kilidi_birak", { p_konusma_id: konusmaId, p_sahip: sahip, p_sure_sn: sureSn, p_bot: bot }),
     "Konuşma kilidi bırakılırken",
   ) as "birakildi" | "devam" | "kayip";
 }

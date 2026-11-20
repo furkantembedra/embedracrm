@@ -11,7 +11,7 @@ export async function register() {
   const { otomasyonZamanlayici } = await import("./components/otomasyon/motor");
   const { gizliAnahtarVar } = await import("./lib/supabase/admin");
   const { sistemOlarak } = await import("./lib/supabase/db");
-  const { kuyruguIsle } = await import("./components/konusma/kuyruk");
+  const { konusmaIsleyicisi } = await import("./components/bot/isleyici");
   const taban = process.env.SITE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
   let uyarildi = false;
   g.__embedraZamanlayici = setInterval(() => {
@@ -29,12 +29,12 @@ export async function register() {
     }
   }, 60_000);
 
-  // Konuşma kuyruğu (webhook mesajları): önceki tur bitmeden yenisi başlamaz; kilit zaten paralel işlemeyi önler
+  // Konuşma kuyruğu (webhook mesajları) + bot turu (P2.1): önceki tur bitmeden yenisi başlamaz; kilit zaten paralel işlemeyi önler
   let kuyrukCalisiyor = false;
   g.__embedraKuyruk = setInterval(() => {
     if (kuyrukCalisiyor || !gizliAnahtarVar()) return;
     kuyrukCalisiyor = true;
-    sistemOlarak(() => kuyruguIsle({ sureMs: 4_000 }))
+    sistemOlarak(() => konusmaIsleyicisi({ sureMs: 4_000 }))
       .catch((e) => console.error("[konuşma kuyruğu]", (e as Error).message?.slice(0, 200)))
       .finally(() => void (kuyrukCalisiyor = false));
   }, 5_000);

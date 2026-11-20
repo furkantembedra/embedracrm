@@ -3,7 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 
 export type KayitliIstek = { yontem: string; yol: string; basliklar: IncomingMessage["headers"]; govde: unknown };
-export type Yanitla = (istek: KayitliIstek) => { durum: number; govde: unknown };
+/** gecikmeMs: yanıtı bu kadar geciktir (zaman aşımı testleri) */
+export type Yanitla = (istek: KayitliIstek) => { durum: number; govde: unknown; gecikmeMs?: number };
 
 export type SahteSunucu = {
   /** "http://127.0.0.1:PORT" */
@@ -28,14 +29,20 @@ export async function sahteSunucuBaslat(yanitla: Yanitla): Promise<SahteSunucu> 
     const istek: KayitliIstek = { yontem: req.method ?? "", yol: req.url ?? "", basliklar: req.headers, govde };
     istekler.push(istek);
     const y = yanitla(istek);
+    if (y.gecikmeMs) await new Promise((r) => setTimeout(r, y.gecikmeMs));
+    if (res.destroyed) return;
     res.writeHead(y.durum, { "Content-Type": "application/json" });
     res.end(JSON.stringify(y.govde));
   });
   await new Promise<void>((tamam) => sunucu.listen(0, "127.0.0.1", tamam));
+  const kapat = () => new Promise<void>((tamam, hata) => {
+    sunucu.closeAllConnections?.();
+    sunucu.close((e) => (e ? hata(e) : tamam()));
+  });
   const { port } = sunucu.address() as AddressInfo;
   return {
     adres: `http://127.0.0.1:${port}`,
     istekler,
-    kapat: () => new Promise((tamam, hata) => sunucu.close((e) => (e ? hata(e) : tamam()))),
+    kapat,
   };
 }

@@ -238,20 +238,20 @@ Sayfanın Messenger ve Instagram mesajlarına hem **Meta Business Suite gelen ku
 
 ## 6. Anthropic API anahtarı ve harcama limiti
 
-Bot katmanı P2.1'de gelecek. Bugün kodda `ANTHROPIC_API_KEY` kullanılmıyor. P2.1'e göre **anahtar yoksa bot kapalıdır**.
+Bot döngüsü P2.1'de kuruldu (`components/bot/`). **Anahtar yoksa bot kapalıdır**: bot açık bir konuşmaya müşteri yazınca Claude çağrılmaz, konuşma "Cevap bekliyor"a düşer (sebep: Diğer · "ANTHROPIC_API_KEY tanımlı değil"). Bot ayrıca kanalın bot modu **Otomatik** (Bot › Kanallar) ve acil durdurma kapalıyken (Bot › Ayarlar) çalışır; yeni kurulumda üç kanal da **Kapalı** başlar. Bot turu son müşteri mesajından 6 sn sonra konuşma işleyicisinde çalışır: canlıda Bölüm 9.4'teki pg_cron işi kurulmadan bot cevap vermez.
 
 ### 6.1 Anahtar
 1. **console.anthropic.com**'da organizasyonu kur ve **Billing** altında ödeme yöntemini ekle (ön ödemeli kredi).
 2. **Settings › Workspaces** altında bot için ayrı bir workspace aç (ör. `embedra-bot`). Böylece botun harcaması ve limiti diğer işlerden ayrı izlenir.
 3. Bu workspace içinde **API Keys › Create Key**. Anahtarı (`sk-ant-…`) `ANTHROPIC_API_KEY` olarak kaydet. Console onu bir daha göstermez.
 4. Yerel geliştirme ve production için ayrı anahtar kullan. Sızan anahtarı Console'dan hemen devre dışı bırak.
-5. Model adı ortam değişkeni değildir. P2.1'e göre botun modeli ve effort ayarı tek bir yapılandırma dosyasında tutulacak. Yol haritası botta `claude-haiku-5-5` ile başlamayı, P5.1 değerlendirmesinden sonra Haiku 5.5 ile Sonnet 5.5 arasında karar vermeyi öngörüyor. Anthropic'in genel varsayılan modeli `claude-opus-5-5`'tir.
+5. Model adı ortam değişkeni değildir: model (`claude-haiku-5-5`), effort (`low`), fiyat tablosu ve döngü sınırları `components/bot/yapilandirma.ts`'te. Yol haritası botta `claude-haiku-5-5` ile başlamayı, P5.1 değerlendirmesinden sonra Haiku 5.5 ile Sonnet 5.5 arasında karar vermeyi öngörüyor. Anthropic'in genel varsayılan modeli `claude-opus-5-5`'tir.
 
 ### 6.2 Harcama limiti
 - **Organizasyon limiti:** Console › Settings › **Limits**. Aylık harcama limitini belirle; limite ulaşılınca API istekleri reddedilir.
 - **Workspace limiti:** Settings › Workspaces › `embedra-bot` › **Limits**. Bot workspace'ine organizasyon limitinden düşük bir aylık harcama limiti koy. Gerekirse hız limitini de (rate limit) düşür.
 - **Bildirim:** Limits sayfasında e-posta uyarı eşiklerini aç (ör. %50 ve %80).
-- **Uygulama içi sınır:** P2.4'te Bot Ayarları'na günlük maliyet sınırı ve acil durdurma anahtarı eklenecek. Bu sınır aşılınca bot hiç çağrılmaz, konuşmalar insana kalır. Console limiti son güvenlik ağıdır, uygulama içi sınır ise ilk.
+- **Uygulama içi sınır:** Bot › Ayarlar'da günlük maliyet sınırı (varsayılan 5 USD, İstanbul günü), konuşma başına tur sınırı (20) ve acil durdurma (P2.1). Sınır aşılınca ya da acil durdurma açıkken bot hiç çağrılmaz, konuşmalar insana devredilir. Her turun token / maliyet kaydı `bot_kullanim` tablosunda. Console limiti son güvenlik ağıdır, uygulama içi sınır ise ilk.
 
 ### 6.3 Test ve gerçek API
 - Testler gerçek API'ye gitmez: `test/sahte/anthropic.ts` sahte sunucusu `ANTHROPIC_BASE_URL` ile kullanılır, `test/kurulum.ts` localhost dışındaki her isteği durdurur.
@@ -307,7 +307,7 @@ Bu değerler derleme sırasında tarayıcı paketine gömülür, yani gizli değ
 | `CIHAZ_BILDIRIM_SIRRI` | `lib/cihaz-anahtari.ts`, `scripts/cihaz-simulator.mjs` | Cihaz anahtarlarını üretir ve doğrular. **Değiştirilirse sahadaki cihazların anahtarları geçersiz olur.** | Production'da hata; geliştirmede demo sırrı |
 | `CRON_SECRET` | `lib/cron.ts` (`/api/zamanlayici`, `/api/kampanya-zamanlayici`, `/api/konusma/isleyici`) | Zamanlayıcı ve kuyruk işleyicisi çağrısının doğrulaması | Bu adresler her isteğe 401 döner; Vercel'de zamanlı işler ve konuşma kuyruğu çalışmaz |
 | `RESEND_API_KEY` | `lib/ileti-gonder.ts` | Resend ile e-posta gönderimi | Demo modu |
-| `ANTHROPIC_API_KEY` | (P2.1'de `components/bot/`) | Claude API | Bot kapalı |
+| `ANTHROPIC_API_KEY` | `components/bot/claude.ts` | Claude API | Bot kapalı (bot açık konuşma gelen mesajda ekibe devredilir) |
 
 ### 8.3 Gizli olmayan sunucu ayarları
 Tarayıcıya gitmez ama sır da değildir. Vercel'de normal (Sensitive olmayan) değişken olarak girilebilir.
@@ -324,7 +324,7 @@ Production'da **tanımlanmamalı**.
 | Değişken | Kullanıldığı yer | Ne işe yarar |
 |---|---|---|
 | `META_GRAPH_URL` | `lib/ileti-gonder.ts`, `test/sahte/meta.ts` | Graph API adresini sahte sunucuya yönlendirir (varsayılan `https://graph.facebook.com`) |
-| `ANTHROPIC_BASE_URL` | `test/sahte/anthropic.ts` (Anthropic SDK'sı da okur) | Claude API adresini sahte sunucuya yönlendirir |
+| `ANTHROPIC_BASE_URL` | `components/bot/claude.ts`, `test/sahte/anthropic.ts` | Claude API adresini sahte sunucuya yönlendirir |
 | `CRM_ADRESI` | `scripts/cihaz-simulator.mjs` | `npm run cihaz-bildir` simülatörünün hedefi (varsayılan `http://localhost:3000`) |
 
 ### 8.5 Platformun kendi değişkenleri

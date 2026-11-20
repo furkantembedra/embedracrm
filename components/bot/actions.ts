@@ -14,6 +14,7 @@ import { devirSebebiMi } from "@/components/konusma/devir-sebepleri";
 import { getEkip } from "@/components/operasyon/queries";
 import { getFirsat } from "@/components/satis-hatti/queries";
 import { BOT_ROLLERI, BOT_YONETICI_ROLLERI } from "./erisim";
+import { BOT_MODLARI, botAyarlariYaz, type BotModu } from "./veri";
 import {
   firsatSorumlusuYaz, gelenKutusu, kanalAyariYaz, konusmaDetayi, okunduYaz, type GelenKutusuSatiri, type KonusmaDetayi,
 } from "./queries";
@@ -112,8 +113,31 @@ export async function konusmayiBotaVer(konusmaId: number, not: string): Promise<
 export async function yeniKonusmaBotuKaydet(kanal: string, acik: boolean): Promise<{ hata?: string }> {
   const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
   if (!(KONUSMA_KANALLARI as readonly string[]).includes(kanal)) return { hata: "Kanal bulunamadı." };
-  await kanalAyariYaz(kanal, acik === true, k ? kullaniciNo(k.id) : null);
+  await kanalAyariYaz(kanal, { yeniKonusmadaBot: acik === true }, k ? kullaniciNo(k.id) : null);
   revalidatePath("/bot/kanallar");
+  return {};
+}
+
+/** Bot › Kanallar: kanalın bot modu (kapali | golge | otomatik; yalnızca Yönetici). Gölge mod P2.5'te çalışır. */
+export async function kanalBotModuKaydet(kanal: string, mod: string): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (!(KONUSMA_KANALLARI as readonly string[]).includes(kanal)) return { hata: "Kanal bulunamadı." };
+  if (!(BOT_MODLARI as readonly string[]).includes(mod)) return { hata: "Bot modu geçersiz." };
+  await kanalAyariYaz(kanal, { botModu: mod as BotModu }, k ? kullaniciNo(k.id) : null);
+  revalidatePath("/bot/kanallar");
+  return {};
+}
+
+/** Bot › Ayarlar: acil durdurma, günlük maliyet sınırı, tur sınırı (yalnızca Yönetici; RLS de denetler) */
+export async function botAyarlariKaydet(a: { acilDurdurma: boolean; gunlukMaliyetSiniriUsd: number; turSiniri: number }): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  const maliyet = Number(a?.gunlukMaliyetSiniriUsd);
+  const tur = Number(a?.turSiniri);
+  if (!Number.isFinite(maliyet) || maliyet < 0 || maliyet > 10_000) return { hata: "Günlük maliyet sınırı 0 ile 10.000 USD arasında olmalı." };
+  if (!Number.isInteger(tur) || tur < 1 || tur > 200) return { hata: "Tur sınırı 1 ile 200 arasında bir tam sayı olmalı." };
+  await botAyarlariYaz({ acilDurdurma: a?.acilDurdurma === true, gunlukMaliyetSiniriUsd: Math.round(maliyet * 100) / 100, turSiniri: tur }, k ? kullaniciNo(k.id) : null);
+  revalidatePath("/bot/ayarlar");
+  revalidatePath("/bot");
   return {};
 }
 

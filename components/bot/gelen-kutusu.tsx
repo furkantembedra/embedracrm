@@ -6,7 +6,8 @@
 // yalnızca kullanıcıya yolu gösterir (./cevap-modu.ts).
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, ExternalLink, Mail, MessageCircle, Phone, Search, Send } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, ExternalLink, Mail, MessageCircle, Phone, Search, Send, Wrench } from "lucide-react";
+import { aracAdi, turSonucu, usd } from "./arac-gorunumu";
 import Chip from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import { tl } from "@/lib/format";
@@ -97,6 +98,12 @@ function Baloncuk({ m }: { m: SohbetMesaji }) {
     <li className={`flex max-w-[85%] flex-col gap-1 rounded-xl px-3 py-2 text-sm shadow-sm ${renk}`}>
       {kim && <span className="text-[11px] font-bold text-[#474A42]">{kim}{m.sablon && " · şablon"}{m.insanEtiketi && " · insan temsilci etiketi"}</span>}
       <span className="whitespace-pre-line break-words">{m.metin}</span>
+      {m.botAraclari && m.botAraclari.length > 0 && (
+        <span className="flex flex-wrap items-center gap-1 text-[11px] font-semibold text-[#474A42]" aria-label="Bu cevapta çağrılan araçlar">
+          <Wrench size={12} aria-hidden="true" />
+          {m.botAraclari.map((a, i) => <span key={`${a}-${i}`} className="rounded-full bg-white/70 px-1.5 py-0.5">{aracAdi(a)}</span>)}
+        </span>
+      )}
       <span className="flex items-center justify-end gap-1.5 text-[11px] text-muted">
         <time dateTime={m.zaman} suppressHydrationWarning>{tarihSaat(m.zaman)}</time>
         {!gelen && <TeslimIsareti m={m} />}
@@ -351,7 +358,42 @@ function FirsatPaneli({ d, ekip, onDegisti }: { d: KonusmaDetayi; ekip: { id: st
       )}
       {d.botNotu && <Uyari ton="info">Bota not (bot henüz okumadı): {d.botNotu}</Uyari>}
       <p className="text-xs text-muted">Aşama Satış Hattı&apos;nda değişir. Konuşmayı devralmak fırsatın sorumlusunu değiştirmez.</p>
+      <BotGecmisi turlar={d.botGecmisi} />
     </aside>
+  );
+}
+
+/** Sağ panel: botun bu konuşmadaki turları, çağrılan araçlar ve kullanım (mesaj metni yok) */
+function BotGecmisi({ turlar }: { turlar: KonusmaDetayi["botGecmisi"] }) {
+  return (
+    <section aria-label="Bot araç geçmişi" className="flex flex-col gap-2 border-t border-line pt-3">
+      <h3 className="text-xs font-bold tracking-[0.08em] text-muted">BOT ARAÇ GEÇMİŞİ</h3>
+      {!turlar.length ? (
+        <p className="text-xs text-muted">Bot bu konuşmada henüz çalışmadı.</p>
+      ) : (
+        <ol className="flex flex-col gap-1.5">
+          {turlar.map((t) => {
+            const s = turSonucu(t.sonuc);
+            return (
+              <li key={t.id} className="flex flex-col gap-1 rounded-lg bg-[#F4F5F0] px-2.5 py-1.5 text-xs">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <time dateTime={t.zaman} className="font-semibold text-[#474A42]" suppressHydrationWarning>{tarihSaat(t.zaman)}</time>
+                  <Chip ton={s.ton}>{s.ad}</Chip>
+                </span>
+                <span className="flex flex-wrap items-center gap-1">
+                  <Wrench size={12} aria-hidden="true" className="text-muted" />
+                  {t.araclar.length ? t.araclar.map((a, i) => <span key={`${a}-${i}`} className="rounded-full bg-white px-1.5 py-0.5 font-semibold">{aracAdi(a)}</span>) : <span className="text-muted">Araç çağrılmadı</span>}
+                </span>
+                <span className="text-[11px] text-muted tabular-nums">
+                  {t.apiCagrisi} çağrı · {t.token.toLocaleString("tr-TR")} token ({t.cacheOkuma.toLocaleString("tr-TR")} önbellekten) · {usd(t.maliyetUsd)} · istem {t.istemSurumu}
+                  {t.hataKodu && ` · ${t.hataKodu}`}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }
 

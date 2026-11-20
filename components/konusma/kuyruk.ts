@@ -3,8 +3,8 @@
 //   Webhook  → kuyrugaYaz(mesajlar): her mesaj tek SQL çağrısıyla kaydedilir + kuyruğa iş (public.gelen_mesaj_kaydet).
 //              Aynı dis_mesaj_id ikinci kez gelirse hiçbir şey yazılmaz.
 //   İşleyici → kuyruguIsle(): konuşma kilidini alır (FOR UPDATE SKIP LOCKED + süreli kilit), konuşmanın bekleyen işlerini
-//              sırayla işler (./isle.ts), tur bitince `turSonrasi`nı bir kez çağırır (P2.1: bot burada cevap verir),
-//              kilidi bırakır. Bu arada yeni iş geldiyse kilit bırakılmaz, aynı işleyici devam eder.
+//              sırayla işler (./isle.ts), tur bitince `turSonrasi`nı bir kez çağırır, bot turunun zamanı geldiyse
+//              (son müşteri mesajı + 6 sn, konusmalar.bot_cevap_zamani) `botTuru`nu bir kez çağırır (P2.1), kilidi bırakır. Bu arada yeni iş geldiyse kilit bırakılmaz, aynı işleyici devam eder.
 //
 // Aynı konuşmanın işleri asla paralel işlenmez: kilidi tek işleyici tutar; kilit süresi (KILIT_SN) her iş bitince uzar,
 // işleyici çökerse süre dolunca başka işleyici devralır. Hata veren iş 30 sn × 2^deneme sonra yeniden denenir (en çok 5),
@@ -18,7 +18,7 @@
 //   • Geliştirme / `next start`: instrumentation.ts döngüsü 5 saniyede bir çalıştırır.
 import { randomUUID } from "node:crypto";
 import {
-  bekleyenIsler, gelenMesajKaydet, konusmaIsiBitir, konusmaKilidiAl, konusmaKilidiBirak,
+  bekleyenIsler, gelenMesajKaydet, konusmaBotTuruAl, konusmaIsiBitir, konusmaKilidiAl, konusmaKilidiBirak,
 } from "@/components/konusma/queries";
 import type { GelenMesaj } from "./kanallar/tur";
 import { isiIsle, type IsSonucu } from "./isle";
@@ -47,12 +47,16 @@ export async function kuyrugaYaz(mesajlar: GelenMesaj[]): Promise<KaydedilenMesa
 }
 
 export type TurSonrasi = (konusmaId: number, sonuclar: IsSonucu[]) => Promise<void>;
+/** P2.1 bot turu (components/bot/dongu.ts): konuşmanın bot turunun zamanı geldiyse, işler bittikten sonra bir kez */
+export type BotTuru = (konusmaId: number) => Promise<unknown>;
 
 export type IsleyiciSonucu = {
   konusma: number;
   islenen: number;
   hatali: number;
   sonuclar: IsSonucu[];
+  /** Çalışan bot turu sayısı */
+  botTuru?: number;
 };
 
 /** Hata metni: yalnızca hata mesajı (müşteri metni içermez), kısa */
@@ -62,13 +66,13 @@ const hataMetni = (e: unknown) => (e instanceof Error ? e.message : String(e)).s
  * Kuyruğu işler. `konusmaId` verilirse yalnızca o konuşmaya bakar (simülasyon). `turSonrasi` her konuşma turunun
  * sonunda, kilit hâlâ elindeyken bir kez çağrılır.
  */
-export async function kuyruguIsle(o: { sureMs?: number; konusmaId?: number; turSonrasi?: TurSonrasi } = {}): Promise<IsleyiciSonucu> {
+export async function kuyruguIsle(o: { sureMs?: number; konusmaId?: number; turSonrasi?: TurSonrasi; botTuru?: BotTuru } = {}): Promise<IsleyiciSonucu> {
   const sahip = randomUUID();
   const bitis = Date.now() + (o.sureMs ?? VARSAYILAN_SURE_MS);
   const ozet: IsleyiciSonucu = { konusma: 0, islenen: 0, hatali: 0, sonuclar: [] };
 
   while (Date.now() < bitis) {
-    const konusmaId = await konusmaKilidiAl(sahip, KILIT_SN, o.konusmaId);
+    const konusmaId = await konusmaKilidiAl(sahip, KILIT_SN, o.konusmaId, !!o.botTuru);
     if (konusmaId === null) break;
     ozet.konusma++;
     const tur: IsSonucu[] = [];
@@ -117,10 +121,20 @@ export async function kuyruguIsle(o: { sureMs?: number; konusmaId?: number; turS
       }
       ozet.sonuclar.push(...tur);
       tur.length = 0;
+      // Bot turu: mesaj işleri bittikten sonra (fırsat eşleşmiş, echo işlendiyse bot kapanmış olur), zamanı geldiyse.
+      // Debounce SQL'de zaman damgasıyla: arka arkaya gelen mesajlar zamanı ileri iter, tur bir kez çalışır.
+      if (o.botTuru && (await konusmaBotTuruAl(konusmaId, sahip))) {
+        try {
+          await o.botTuru(konusmaId);
+          ozet.botTuru = (ozet.botTuru ?? 0) + 1;
+        } catch (e) {
+          console.error(`[konuşma kuyruğu] bot turu hata: ${hataMetni(e)}`);
+        }
+      }
       // Hatalı iş tekrar beklemesindeyse en eski iş "zamanı gelmemiş" olduğundan 'devam' dönmez, kilit bırakılır.
       // 'devam' yalnızca işlemeyi bitirmekle bırakmak arasına zamanı gelmiş yeni iş düştüyse (ya da hatalı iş son
       // denemesini tüketip 'hata'ya geçtiyse) döner: aynı kilitle devam edilir.
-      if ((await konusmaKilidiBirak(konusmaId, sahip, KILIT_SN)) !== "devam") break;
+      if ((await konusmaKilidiBirak(konusmaId, sahip, KILIT_SN, !!o.botTuru)) !== "devam") break;
     }
     if (o.konusmaId !== undefined) break;
   }

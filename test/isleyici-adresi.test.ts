@@ -53,9 +53,11 @@ describe("/api/konusma/isleyici", () => {
     for (const f of [POST, GET]) {
       const r = await f(istek(`Bearer ${SIR}`));
       expect(r.status).toBe(200);
-      expect(await r.json()).toEqual({ ok: true, konusma: 2, islenen: 3, hatali: 1 });
+      expect(await r.json()).toEqual({ ok: true, konusma: 2, islenen: 3, hatali: 1, botTuru: 0 });
     }
-    expect(maxDuration).toBe(60);
+    // P2.1: işleyici bot turunu da çalıştırır (components/bot/isleyici.ts); bot turu için süre payı
+    expect(kuyruguIsle).toHaveBeenCalledWith({ botTuru: expect.any(Function) });
+    expect(maxDuration).toBe(120);
   });
 
   it("işleyici hata verirse 500, hata metni yanıtta yok", async () => {
