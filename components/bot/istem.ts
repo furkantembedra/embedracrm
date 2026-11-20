@@ -12,9 +12,10 @@ import { OZELLIK_KATALOGU, PLAN_SIRASI } from "@/lib/urun-bilgisi";
 import { CIHAZ_MODELLERI, LISANS_PAKETLERI, URUN_BILGI } from "@/lib/urunler";
 import type { BicimSinirlari } from "@/components/konusma/kanallar/tur";
 import { BOT_MESAJ_KIRP } from "./yapilandirma";
+import { ALAN_ADI, BILGI_ALANLARI, LEAD_SKORU_ADI, alanMetni, eksikAlanlar, type LeadKarti } from "./lead-karti";
 
 /** İstem sürümü: sabit kısımda bir şey değişince artırılır; her bot turuyla bot_kullanim'e yazılır */
-export const ISTEM_SURUMU = "p2.1-1";
+export const ISTEM_SURUMU = "p2.2-1";
 
 function katalogMetni(): string {
   const cihazlar = CIHAZ_MODELLERI.map((m) => `- ${URUN_BILGI[m].ad}: ${URUN_BILGI[m].ekran} test cihazı`).join("\n");
@@ -51,9 +52,20 @@ const YAZIM = `## Yazım
 - Biçimlendirmeyi yalnızca <baglam> içindeki kanal biçim notunun izin verdiği kadar kullan.
 - Cevabın doğrudan müşteriye gönderilir: açıklama, etiket, tırnak ya da "Cevap:" gibi önek yazma.`;
 
+const ARACLAR = `## Araçlar ve lead kartı
+- <baglam> içindeki lead kartı şu ana kadar toplananları ve eksikleri gösterir. Orada olanı tekrar sorma; eksikleri sohbetin doğal akışında, form gibi sırayla değil topla.
+- Müşteri yeni bir bilgi verdiğinde (firma, kişi, şehir / ülke, kullanım alanı, cihaz adedi, ekran tercihi, lisans, aciliyet, bütçe, telefon, e-posta) ihtiyac_kaydet'i yalnızca o bilgilerle çağır.
+- Telefon ve e-posta her kanalda olmayabilir; teklif ya da demo için gerektiğinde gerekçesini söyleyerek iste, vermek istemezse ısrar etme.
+- Müşteri yapacağı işleri anlattığında plan_oner'ı çağır; planı ve varsa tutarı yalnızca aracın sonucundan söyle.
+- Lead'in sıcaklığını değiştiren bir bilgi çıktığında lead_skoru_ver'i çağır. Demo isterse demo_talep_et'i çağır.
+- izin_kaydet'i yalnızca müşteri pazarlama mesajı almayı açıkça kabul ederse çağır.
+- Bir aracın sonucundaki yönerge (ör. bölgedeki bayi hakkında) bu bölümle çelişmiyorsa ona uy.`;
+
 const SABIT_ISTEM = `Sen Embedra'nın mesajlaşma kanallarındaki (WhatsApp, Instagram, Messenger) satış asistanısın. Müşterinin işini ve ihtiyacını anlar, doğru ürünü ve planı bulmasına yardım eder, konuşmayı demo, teklif ya da satış ekibiyle görüşme gibi bir sonraki adıma taşırsın.
 
 ${KURALLAR}
+
+${ARACLAR}
 
 ${YAZIM}
 
@@ -66,17 +78,21 @@ export function sabitSistemIstemi(): string {
 
 export type IstemMesaji = { gonderen: "musteri" | "bot" | "temsilci"; metin: string; zaman: string; tur: string };
 
-export type LeadKarti = {
+export type LeadOzeti = {
   firma: string | null;
   konum: string | null;
   asama: string | null;
   ilgi: string | null;
+  /** Fırsatın lead kartı (P2.2; ihtiyac_kaydet vb. araçların topladığı) */
+  kart?: LeadKarti;
+  /** Kanal müşterinin telefonunu veriyor mu (WhatsApp); öyleyse telefon eksik sayılmaz */
+  kanalTelefonu?: boolean;
 };
 
 export type DegiskenBaglam = {
   kanalAd: string;
   sinirlar: BicimSinirlari;
-  lead: LeadKarti | null;
+  lead: LeadOzeti | null;
   /** Bota geri verirken ekibin yazdığı not (bir kez) */
   ekipNotu: string | null;
   /** Son mesajlar, eskiden yeniye */
@@ -95,17 +111,42 @@ function zamanMetni(iso: string): string {
   return new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 }
 
+/**
+ * Lead kartı metni (değişken kısım). Kişisel veri en aza (değişmez kural 7): telefon ve e-posta değeri değil yalnızca
+ * "alındı" bilgisi gider; bot eksikleri bilir, tekrar sormaz.
+ */
+export function leadMetni(l: LeadOzeti): string {
+  const k: LeadKarti = l.kart ?? {};
+  const satirlar: string[] = [];
+  const firma = k.firma ?? l.firma;
+  if (firma) satirlar.push(`Firma: ${veriKacir(firma, 200)}`);
+  if (!k.sehir && !k.ulke_kodu && l.konum) satirlar.push(`Konum: ${veriKacir(l.konum, 200)}`);
+  if (l.asama) satirlar.push(`Satış aşaması: ${veriKacir(l.asama, 60)}`);
+  if (l.ilgi) satirlar.push(`İlgilendiği ürün: ${veriKacir(l.ilgi, 200)}`);
+  for (const a of BILGI_ALANLARI) {
+    if (a === "firma") continue;
+    if (a === "telefon" || a === "eposta") {
+      if (k[a]) satirlar.push(`${ALAN_ADI[a]}: alındı`);
+      else if (a === "telefon" && l.kanalTelefonu) satirlar.push("Telefon: kanal üzerinden biliniyor");
+      continue;
+    }
+    const m = alanMetni(k, a);
+    if (m) satirlar.push(`${ALAN_ADI[a]}: ${veriKacir(m, 300)}`);
+  }
+  if (k.skor) satirlar.push(`Lead skoru: ${LEAD_SKORU_ADI[k.skor.deger]}`);
+  if (k.plan) satirlar.push(`Önerilen plan (plan_oner): ${k.plan.plan} × ${k.plan.lisans_adedi}, ${k.plan.cihaz_adedi} cihaz`);
+  if (k.demo) satirlar.push(`Demo talebi iletildi (tercih: ${veriKacir(k.demo.not, 200)})`);
+  if (k.bayi) satirlar.push("Bölgede yetkili bayi var: satış ekibi değerlendirecek; müşteriyi bayiye yönlendirme, söz verme");
+  if (k.izinler?.length) satirlar.push(`Pazarlama izni alındı: ${k.izinler!.map((i) => i.kanal).join(", ")}`);
+  const eksik = eksikAlanlar(k, !!l.kanalTelefonu).filter((a) => !(a === "firma" && firma));
+  satirlar.push(eksik.length ? `Eksik (sohbetin akışında, form gibi değil, sırayla sorma): ${eksik.map((a) => ALAN_ADI[a]).join(", ")}` : "Eksik önemli bilgi yok.");
+  return satirlar.join("\n");
+}
+
 /** Değişken kısım: tek kullanıcı mesajının metni (en sonda; önbelleğe alınmaz) */
 export function degiskenIstem(b: DegiskenBaglam): string {
   const birim = b.sinirlar.birim === "utf8_bayt" ? "bayt" : "karakter";
-  const lead = b.lead
-    ? [
-        b.lead.firma && `Firma: ${veriKacir(b.lead.firma, 200)}`,
-        b.lead.konum && `Konum: ${veriKacir(b.lead.konum, 200)}`,
-        b.lead.asama && `Satış aşaması: ${veriKacir(b.lead.asama, 60)}`,
-        b.lead.ilgi && `İlgilendiği ürün: ${veriKacir(b.lead.ilgi, 200)}`,
-      ].filter(Boolean).join("\n") || "Henüz bilgi yok."
-    : "Henüz bilgi yok.";
+  const lead = b.lead ? leadMetni(b.lead) : "Henüz bilgi yok. Konuşma bir fırsata bağlı değil; araçlar bilgi kaydedemez.";
   const mesajlar = b.mesajlar
     .map((m) => `[${zamanMetni(m.zaman)}] ${GONDEREN_ADI[m.gonderen]}${m.tur !== "metin" ? ` (${m.tur})` : ""}: ${veriKacir(m.metin)}`)
     .join("\n");

@@ -21,6 +21,8 @@ const v = vi.hoisted(() => ({
   kullanimlar: [] as BotKullanimKaydi[],
   baglanan: [] as [number[], number][],
   devirler: [] as unknown[][],
+  kartYamalari: [] as [number, Record<string, unknown>][],
+  firsatYamalari: [] as [number, unknown][],
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -53,6 +55,24 @@ vi.mock("@/components/bot/veri", () => ({
   botKullanimYaz: async (k: BotKullanimKaydi) => (v.kullanimlar.push(k), 900 + v.kullanimlar.length),
   botMesajlariniBagla: async (ids: number[], id: number) => void v.baglanan.push([ids, id]),
 }));
+// Araçların veri erişimi (P2.2): döngü testinde yalnızca kartın yazıldığı görülür; araçların kendisi test/bot-araclar.test.ts'te
+vi.mock("@/components/bot/arac-deposu", () => ({
+  supabaseAracDeposu: {
+    konusma: async (id: number) => ({
+      konusmaId: id, kanal: "whatsapp", disKullaniciId: "+905321112233", profilAdi: null, musteriId: null,
+      firsat: { id: 77, firma: "+90 532 111 22 33", konum: "Türkiye", telefon: "+905321112233", musteriId: null, sorumluId: null, kart: {} },
+    }),
+    kartBirlestir: async (firsatId: number, yama: Record<string, unknown>) => (v.kartYamalari.push([firsatId, yama]), yama),
+    firsatGuncelle: async (firsatId: number, y: unknown) => void v.firsatYamalari.push([firsatId, y]),
+    yetkiliEslestir: async () => [],
+    musteriyeBagla: async () => {},
+    munhasirBayiler: async () => [],
+    firsatNotu: async () => {},
+    hatirlatma: async () => {},
+    izinYaz: async () => {},
+    fiyatListesi: async () => (await import("@/lib/urunler")).VARSAYILAN_FIYAT,
+  },
+}));
 // Testte zaman aşımı kısa
 vi.mock("@/components/bot/yapilandirma", async (asil) => ({ ...(await asil<typeof import("@/components/bot/yapilandirma")>()), BOT_ZAMAN_ASIMI_MS: 400 }));
 
@@ -75,7 +95,7 @@ afterAll(async () => {
 beforeEach(() => {
   depoyuSifirla();
   Object.assign(v, {
-    baglam: null, botAktif: true, mod: "otomatik", maliyet: 0, tur: 0, not: null, kullanimlar: [], baglanan: [], devirler: [],
+    baglam: null, botAktif: true, mod: "otomatik", maliyet: 0, tur: 0, not: null, kullanimlar: [], baglanan: [], devirler: [], kartYamalari: [], firsatYamalari: [],
     ayarlar: { acilDurdurma: false, gunlukMaliyetSiniriUsd: 5, turSiniri: 20, guncelleme: null },
   });
   vi.stubEnv("META_GRAPH_URL", meta.adres);
@@ -130,7 +150,9 @@ describe("bot turu: mutlu yol", () => {
     expect(BOT_EFFORT).toBe("low");
     expect(i.thinking).toBeUndefined(); // Haiku 5.5: adaptive varsayılan; budget_tokens 400 döner
     expect(i.tool_choice).toEqual({ type: "auto" });
-    expect(i.tools.map((t) => [t.name, t.strict])).toEqual([["insana_devret", true]]);
+    expect(i.tools.map((t) => [t.name, t.strict])).toEqual([
+      ["ihtiyac_kaydet", true], ["lead_skoru_ver", true], ["demo_talep_et", true], ["insana_devret", true], ["plan_oner", true], ["izin_kaydet", true],
+    ]);
 
     // Gönderim: WhatsApp adaptörü, gonderen: bot; thinking bloğu müşteriye gitmez
     expect(meta.gonderilenler()).toHaveLength(1);
@@ -238,6 +260,30 @@ describe("araç döngüsü", () => {
     expect(meta.gonderilenler()).toHaveLength(1);
     expect(JSON.stringify(meta.gonderilenler())).not.toContain("Bir saniye");
     expect(v.kullanimlar[0]).toMatchObject({ sonuc: "devir", apiCagrisi: 2, araclar: ["insana_devret"], girdi: 250, cikti: 50, cacheOkuma: 500 });
+  });
+
+  it("ihtiyac_kaydet: lead kartı turun konuşmasının fırsatına yazılır, geçici firma adı güncellenir; kart bir sonraki turda istemde", async () => {
+    const id = await hazirla({ metin: "Usta Oto'dan yazıyorum, 2 cihaz lazım" });
+    claude.aracCagrisi("ihtiyac_kaydet", { firma: "Usta Oto Servis", cihaz_adedi: 2 }, "", {});
+    claude.metin("Teşekkürler! Cihazları hangi araçlarda kullanacaksınız?");
+    const r = await botTuru(id);
+    expect(r).toMatchObject({ durum: "cevap" });
+    expect(v.kartYamalari[0]).toEqual([77, expect.objectContaining({ firma: "Usta Oto Servis", cihaz_adedi: 2 })]);
+    expect(v.firsatYamalari[0]).toEqual([77, { firma: "Usta Oto Servis" }]);
+    const sonuc = (istekler()[1].messages[2].content as { type: string; content: string; is_error?: boolean }[])[0];
+    expect(sonuc.is_error).toBeUndefined();
+    expect(sonuc.content).toMatch(/^Kaydedildi: Firma, Cihaz adedi\. .*Eksik: /);
+    expect(v.kullanimlar[0].araclar).toEqual(["ihtiyac_kaydet"]);
+
+    // Bir sonraki tur: kart istemde, telefon değeri yerine "kanal üzerinden biliniyor"
+    const id2 = await hazirla({ metin: "Servis için" });
+    v.baglam!.lead = { firma: null, konum: "Konya, Türkiye", asama: "Yeni lead", ilgi: null, kanalTelefonu: true, kart: { firma: "Usta Oto Servis", cihaz_adedi: 2, eposta: "a@b.com" } };
+    claude.metin("Anladım.");
+    await botTuru(id2);
+    const m = kullaniciMetni(2);
+    expect(m).toMatch(/Firma: Usta Oto Servis\nKonum: Konya, Türkiye[\s\S]*Cihaz adedi: 2[\s\S]*Telefon: kanal üzerinden biliniyor\nE-posta: alındı/);
+    expect(m).toMatch(/Eksik \(.*\): Yetkili, Ülke, Kullanım alanı, Ekran tercihi, Aciliyet/);
+    expect(m).not.toContain("a@b.com");
   });
 
   it("geçersiz araç girdisi sunucuda reddedilir (is_error), devir olmaz; bilinmeyen araç da hata olarak döner", async () => {

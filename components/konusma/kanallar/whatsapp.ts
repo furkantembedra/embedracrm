@@ -281,6 +281,7 @@ export const whatsappAdaptoru: KanalAdaptoru = {
   webhookObject: "whatsapp_business_account",
   ad: "WhatsApp",
   leadKaynagi: "WhatsApp",
+  izinKaynagi: "WhatsApp bot",
   sonrakiAdim: "WhatsApp'tan dönüş yap",
   kimlikAlani: { etiket: "Telefon", ornek: "+90 532 111 22 33" },
   kimlikCoz: (girdi) => telefonNormalize(girdi) || null,

@@ -14,6 +14,7 @@ export const IZIN_KAYNAKLARI = [
   // AI satış botunun konuşmada açıkça sorup aldığı izin; kaynak konuşmanın kanalıdır (P2.2 izin_kaydet)
   "WhatsApp bot", "Instagram bot", "Messenger bot",
 ] as const;
+export type IzinKaynagi = (typeof IZIN_KAYNAKLARI)[number];
 /** Bir kanaldaki izin: ne zaman, nereden verildi; geri çekildiyse ne zaman. Kayıt silinmez, kanıt olarak kalır. */
 export type IzinKaydi = { verildi: boolean; tarih: string; kaynak: string; cekilme: string | null }; // tarihler "2026-03-14"
 

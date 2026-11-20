@@ -7,6 +7,7 @@ import type { KapaliPencereYolu, PencereDurumu } from "@/components/konusma/kana
 import type { Gonderen, Kanal, MesajEki } from "@/components/konusma/queries";
 import { ASAMA_BILGI, type Asama } from "@/components/satis-hatti/sabitler";
 import type { BotModu } from "./veri";
+import { leadKartiOku, type LeadKarti } from "./lead-karti";
 
 export type KanalBilgisi = { kanal: Kanal; ad: string; bagli: boolean };
 
@@ -154,6 +155,8 @@ export type KonusmaDetayi = {
     id: string; firma: string; asama: Asama; asamaAd: string; tutar: number; icerik: string;
     sorumluId: string | null; sorumluAd: string | null; telefon: string | null;
     notlar: { id: number; tur: string; metin: string; zaman: string }[];
+    /** Botun topladığı lead kartı (P2.2) */
+    leadKarti: LeadKarti;
   } | null;
   musteriId: string | null;
 };
@@ -174,6 +177,7 @@ type DetaySatiri = {
   son_musteri_mesaji_zamani: string | null; musteri_id: number | null;
   firsat: {
     id: number; f_firma: string; f_tutar: number | string | null; f_icerik: string | null; f_telefon: string | null; sorumlu_id: number | null;
+    lead_karti: unknown;
     asama: { kod: Asama } | null; sorumlu: { k_ad: string } | null;
     notlar: { id: number; tur: string; metin: string; created_at: string }[] | null;
   } | null;
@@ -196,7 +200,7 @@ export async function konusmaDetayi(id: number, simdi = new Date()): Promise<Kon
     s.from("konusmalar")
       .select(`id, kanal, dis_kullanici_id, dis_profil_adi, bot_aktif, devir_sebebi, devralan_id, bot_notu, son_musteri_mesaji_zamani, musteri_id,
         devralan:kullanicilar!konusmalar_devralan_id_fkey(k_ad),
-        firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(id, f_firma, f_tutar, f_icerik, f_telefon, sorumlu_id,
+        firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(id, f_firma, f_tutar, f_icerik, f_telefon, sorumlu_id, lead_karti,
           asama:asama!satis_hatti_asama_id_fkey(kod), sorumlu:kullanicilar!satis_hatti_sorumlu_id_fkey(k_ad),
           notlar:firsat_notlari(id, tur, metin, created_at))`)
       .eq("id", id)
@@ -274,6 +278,7 @@ export async function konusmaDetayi(id: number, simdi = new Date()): Promise<Kon
           id: String(f.id), firma: f.f_firma, asama, asamaAd: ASAMA_BILGI[asama].ad, tutar: Number(f.f_tutar ?? 0), icerik: f.f_icerik ?? "",
           sorumluId: f.sorumlu_id != null ? `u${f.sorumlu_id}` : null, sorumluAd: f.sorumlu?.k_ad ?? null, telefon: f.f_telefon,
           notlar: (f.notlar ?? []).map((n) => ({ id: Number(n.id), tur: n.tur, metin: n.metin, zaman: new Date(n.created_at).toISOString() })),
+          leadKarti: leadKartiOku(f.lead_karti),
         }
       : null,
     musteriId: ks.musteri_id != null ? String(ks.musteri_id) : null,

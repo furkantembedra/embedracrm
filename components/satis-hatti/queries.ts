@@ -3,6 +3,7 @@
 // konusma_mesajlari (salt okunur özet; yazışma Bot › Gelen kutusu'nda, yalnızca components/konusma üzerinden yazılır).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, sonuc } from "@/lib/supabase/db";
+import { leadKartiOku, type LeadKarti } from "@/components/bot/lead-karti";
 import { ASAMALAR, KAYNAKLAR, type Asama, type KayipBilgisi, type KayipNedeni, type Kaynak } from "./sabitler";
 
 export * from "./sabitler";
@@ -36,9 +37,10 @@ export type Firsat = {
   sorumluAd?: string | null;
   sonHareket?: string; // "2026-11-06" son aşama / bilgi değişikliği (hatırlatmalardaki "hareketsiz" kuralı)
   notlar?: FirsatNotu[]; // salt okunur, en yeni önce (ör. "Bot devretti: Fiyat pazarlığı")
+  leadKarti?: LeadKarti; // salt okunur: botun topladığı bilgiler (P2.2; yalnızca bot araçları yazar)
 };
 
-export type FirsatNotu = { id: number; tur: "not" | "bot_devretti"; metin: string; zaman: string }; // zaman: ISO
+export type FirsatNotu = { id: number; tur: "not" | "bot_devretti" | "bot"; metin: string; zaman: string }; // zaman: ISO
 
 
 /* ---------- Satır ↔ domain ---------- */
@@ -66,11 +68,12 @@ type FirsatSatiri = {
   sorumlu_id: number | null;
   sorumlu: { k_ad: string } | null;
   konusmalar: KonusmaSatiri[];
+  lead_karti: unknown;
   notlar: { id: number; tur: FirsatNotu["tur"]; metin: string; created_at: string }[] | null;
 };
 
 const FIRSAT_SECIMI = `id, f_firma, f_konum, f_icerik, f_tutar, f_sonraki_adim, f_sonraki_tarih, f_kayip_nedeni, f_kayip_aciklama,
-  kampanya_id, f_telefon, f_son_hareket, f_sira, sorumlu_id,
+  kampanya_id, f_telefon, f_son_hareket, f_sira, sorumlu_id, lead_karti,
   asama:asama!satis_hatti_asama_id_fkey(kod),
   kaynak:kaynak!satis_hatti_kaynak_id_fkey(f_kaynak),
   sorumlu:kullanicilar!satis_hatti_sorumlu_id_fkey(k_ad),
@@ -114,6 +117,7 @@ function satirdanFirsat(r: FirsatSatiri): Firsat {
     sorumluAd: r.sorumlu?.k_ad ?? null,
     sonHareket: r.f_son_hareket,
     notlar: (r.notlar ?? []).map((n) => ({ id: Number(n.id), tur: n.tur, metin: n.metin, zaman: new Date(n.created_at).toISOString() })),
+    leadKarti: leadKartiOku(r.lead_karti),
   };
 }
 

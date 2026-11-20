@@ -4,6 +4,7 @@
 // aynı arayüzü uygulayıp ./index.ts'teki listeye eklenir ve test/kanal-adaptoru.test.ts sözleşme testlerinden geçer.
 import type { Kanal, MesajEki, MesajTuru } from "@/components/konusma/queries";
 import type { LeadKaynagi } from "@/lib/constants";
+import type { IzinKaynagi } from "@/components/musteriler/izin";
 
 /** Webhook'tan gelen bir mesajın kanaldan bağımsız hâli */
 export type GelenMesaj = {
@@ -96,6 +97,8 @@ export interface KanalAdaptoru {
   ad: string;
   /** Yeni lead'in kaynağı (lib/constants.ts › LEAD_KAYNAKLARI'ndan biri) */
   leadKaynagi: LeadKaynagi;
+  /** Botun bu kanalda açıkça aldığı pazarlama izninin kaynağı ("WhatsApp bot"; değişmez kural 11, P2.2 izin_kaydet) */
+  izinKaynagi: IzinKaynagi;
   /** Mesaj gelince fırsata yazılan sonraki adım ("WhatsApp'tan dönüş yap") */
   sonrakiAdim: string;
   /** Simülasyon / elle giriş formunda kimlik alanının etiketi ve örneği */

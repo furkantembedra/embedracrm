@@ -1,10 +1,13 @@
 // Bot döngüsünün veri katmanı (Supabase). İşleyici gizli anahtarla (sistemOlarak), geliştirme simülasyonu CRM
 // kullanıcısıyla çalışır; ikisinde de aynı sorgular. Modele gidecek veri burada en aza indirilir (değişmez kural 7):
-// telefon, dış kullanıcı kimliği, profil adı okunmaz; lead kartında firma adı telefon gibi görünüyorsa atılır.
+// telefon ve profil adı modele gitmez (dış kullanıcı kimliği yalnızca "kanal telefon veriyor mu" için okunur); lead
+// kartında firma adı telefon gibi görünüyorsa atılır, kartın telefon / e-postası istemde yalnızca "alındı" olur.
 import { db, sonuc } from "@/lib/supabase/db";
 import type { Kanal } from "@/components/konusma/queries";
 import { ASAMA_BILGI, type Asama } from "@/components/satis-hatti/sabitler";
-import type { IstemMesaji, LeadKarti } from "./istem";
+import type { IstemMesaji, LeadOzeti } from "./istem";
+import { adaptorBul } from "@/components/konusma/kanallar";
+import { kimlikGibi, leadKartiOku } from "./lead-karti";
 import { BOT_SON_MESAJ, VARSAYILAN_GUNLUK_MALIYET_USD, VARSAYILAN_TUR_SINIRI } from "./yapilandirma";
 
 export type BotModu = "kapali" | "golge" | "otomatik";
@@ -19,24 +22,22 @@ export type BotBaglami = {
   sonMusteriMesaji: string | null;
   /** Son mesajlar, eskiden yeniye; olusturma: sunucunun mesajı kaydettiği an */
   mesajlar: (IstemMesaji & { id: number; olusturma: string })[];
-  lead: LeadKarti | null;
+  lead: LeadOzeti | null;
 };
 
 type KonusmaSatiri = {
-  id: number; kanal: Kanal; bot_aktif: boolean; bot_durumu_zamani: string; son_musteri_mesaji_zamani: string | null;
-  firsat: { f_firma: string | null; f_konum: string | null; f_icerik: string | null; asama: { kod: Asama } | null } | null;
+  id: number; kanal: Kanal; bot_aktif: boolean; bot_durumu_zamani: string; son_musteri_mesaji_zamani: string | null; dis_kullanici_id: string;
+  firsat: { f_firma: string | null; f_konum: string | null; f_icerik: string | null; lead_karti: unknown; asama: { kod: Asama } | null } | null;
 };
 type MesajSatiri = { id: number; gonderen: IstemMesaji["gonderen"]; metin: string; tur: string; zaman: string; created_at: string };
 
-/** Telefon / kimlik gibi görünen değer (ör. yeni lead'de firma adı yerine "+90 532 …"): modele gönderilmez */
-const kimlikGibi = (x: string) => (x.match(/\d/g)?.length ?? 0) >= 7;
 
 export async function botBaglamiOku(konusmaId: number): Promise<BotBaglami | null> {
   const s = await db();
   const [k, m] = await Promise.all([
     s.from("konusmalar")
-      .select(`id, kanal, bot_aktif, bot_durumu_zamani, son_musteri_mesaji_zamani,
-        firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(f_firma, f_konum, f_icerik, asama:asama!satis_hatti_asama_id_fkey(kod))`)
+      .select(`id, kanal, bot_aktif, bot_durumu_zamani, son_musteri_mesaji_zamani, dis_kullanici_id,
+        firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(f_firma, f_konum, f_icerik, lead_karti, asama:asama!satis_hatti_asama_id_fkey(kod))`)
       .eq("id", konusmaId).maybeSingle(),
     s.from("konusma_mesajlari").select("id, gonderen, metin, tur, zaman, created_at")
       .eq("konusma_id", konusmaId).order("zaman", { ascending: false }).order("id", { ascending: false }).limit(BOT_SON_MESAJ),
@@ -63,6 +64,9 @@ export async function botBaglamiOku(konusmaId: number): Promise<BotBaglami | nul
           konum: konum && konum !== "—" ? konum : null,
           asama: f.asama?.kod ? ASAMA_BILGI[f.asama.kod]?.ad ?? null : null,
           ilgi: f.f_icerik?.trim() && f.f_icerik.trim() !== "Ürün belirlenmedi" ? f.f_icerik.trim() : null,
+          kart: leadKartiOku(f.lead_karti),
+          // Telefonun kendisi modele gitmez; yalnızca kanalın verip vermediği (eksikler listesi için)
+          kanalTelefonu: !!adaptorBul(ks.kanal)?.telefon(ks.dis_kullanici_id),
         }
       : null,
   };

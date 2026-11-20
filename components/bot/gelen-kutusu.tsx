@@ -5,6 +5,7 @@
 // (./canli.ts). Okundu bilgisi kullanıcı başınadır. Gönderimde pencere sunucuda adaptöre sorulur; buradaki cevap kutusu
 // yalnızca kullanıcıya yolu gösterir (./cevap-modu.ts).
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import LeadKartiGorunumu, { leadKartiDolu } from "./lead-karti-gorunumu";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Check, CheckCheck, Clock, ExternalLink, Mail, MessageCircle, Phone, Search, Send, Wrench } from "lucide-react";
 import { aracAdi, turSonucu, usd } from "./arac-gorunumu";
@@ -333,12 +334,17 @@ function FirsatPaneli({ d, ekip, onDegisti }: { d: KonusmaDetayi; ekip: { id: st
             </dd>
           </dl>
           {hata && <Uyari ton="err">{hata}</Uyari>}
+          {leadKartiDolu(f.leadKarti) ? (
+            <LeadKartiGorunumu k={f.leadKarti} kanalTelefonu={!!d.telefon} />
+          ) : (
+            <p className="text-xs text-muted">Lead kartı boş: bot konuşmada bilgi topladıkça burada birikir.</p>
+          )}
           {f.notlar.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <h4 className="text-xs font-bold text-muted">Notlar</h4>
               <ul className="flex flex-col gap-1.5">
                 {f.notlar.map((n) => (
-                  <li key={n.id} className={`rounded-lg px-2.5 py-1.5 text-xs ${n.tur === "bot_devretti" ? "bg-err-bg text-err" : "bg-[#F4F5F0] text-[#474A42]"}`}>
+                  <li key={n.id} className={`rounded-lg px-2.5 py-1.5 text-xs ${n.tur === "bot_devretti" ? "bg-err-bg text-err" : n.tur === "bot" ? "bg-info-bg text-info" : "bg-[#F4F5F0] text-[#474A42]"}`}>
                     <span className="break-words font-semibold">{n.metin}</span>
                     <time dateTime={n.zaman} className="block text-[11px] opacity-80" suppressHydrationWarning>{tarihSaat(n.zaman)}</time>
                   </li>

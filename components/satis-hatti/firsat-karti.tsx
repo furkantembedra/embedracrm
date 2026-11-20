@@ -6,6 +6,7 @@ import { Bell, ChevronDown, ChevronUp, FileText, Pencil } from "lucide-react";
 import { BotRozeti, KanalSimgesi, botDurumu, kanalAdi, kisaZaman } from "@/components/bot/kanal-gorunumu";
 import { devirSebebiAdi } from "@/components/konusma/devir-sebepleri";
 import Chip from "@/components/ui/chip";
+import LeadKartiGorunumu, { leadKartiDolu } from "@/components/bot/lead-karti-gorunumu";
 import { tl } from "@/lib/format";
 import { ASAMALAR, ASAMA_BILGI, KAPALI_ASAMALAR, type Asama } from "./sabitler";
 import type { Firsat } from "./queries";
@@ -75,6 +76,12 @@ export default function FirsatKarti({
         <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-err-bg px-2.5 py-2 text-xs text-err">
           <b>Neden: {f.kayipNedeni}</b>
           {f.kayipAciklama && <span className="break-words text-[#7A2020]">{f.kayipAciklama}</span>}
+        </div>
+      )}
+
+      {leadKartiDolu(f.leadKarti) && (
+        <div className="rounded-xl border border-line px-2.5 py-2">
+          <LeadKartiGorunumu k={f.leadKarti} kisa kanalTelefonu={!!f.telefon} />
         </div>
       )}
 
