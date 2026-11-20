@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:izle": "vitest",
-    "cihaz-bildir": "node scripts/cihaz-simulator.mjs"
+    "cihaz-bildir": "node scripts/cihaz-simulator.mjs",
+    "bot:istem-kaynaklari": "node scripts/bot-istem-kaynaklari.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.11.0",

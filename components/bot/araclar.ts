@@ -91,7 +91,7 @@ const ihtiyacKaydet: BotAraci = {
   tanim: {
     name: "ihtiyac_kaydet",
     description:
-      "Müşterinin konuşmada söylediği bilgileri fırsatın lead kartına kaydeder. Müşteri yeni bir bilgi verdiği her seferde, yalnızca o turda öğrendiğin alanlarla çağır; bilmediğin alanı gönderme, tahmin etme ya da uydurma. Kart <baglam> içinde sana her turda gösterilir; orada yazan bilgiyi tekrar sorma. Telefon ve e-postayı teklif ya da demo için gerekçesini söyleyerek iste, ısrar etme. Ülke kodu yazıldığında sistem bölgedeki bayi durumunu kontrol eder; sonuçtaki yönergeye uy.",
+      "Müşterinin konuşmada söylediği bilgileri fırsatın lead kartına kaydeder. Müşteri yeni bir bilgi verdiği her seferde, yalnızca o turda öğrendiğin alanlarla çağır; bilmediğin alanı gönderme, tahmin etme ya da uydurma. Kart <baglam> içinde sana her turda gösterilir; orada yazan bilgiyi tekrar sorma. Telefon ve e-postayı teklif ya da demo için gerekçesini söyleyerek iste, ısrar etme. Ülke kodu yazıldığında sistem bölgedeki bayi durumunu kontrol eder; sonuçtaki yönergeye uy. Serbest metin alanlarını (kullanım alanı, lisans, bütçe notu) satış ekibi için Türkçe yaz; firma ve kişi adlarını olduğu gibi bırak.",
     input_schema: {
       type: "object",
       properties: {
@@ -186,7 +186,7 @@ const leadSkoruVer: BotAraci = {
       type: "object",
       properties: {
         skor: { type: "string", enum: [...LEAD_SKORLARI] },
-        gerekce: { type: "string", description: "Satışçı için tek cümle gerekçe (en çok 200 karakter); kişisel bilgi ve müşteri mesajı kopyası yazma" },
+        gerekce: { type: "string", description: "Satışçı için Türkçe, tek cümle gerekçe (en çok 200 karakter); kişisel bilgi ve müşteri mesajı kopyası yazma" },
       },
       required: ["skor", "gerekce"],
       additionalProperties: false,
@@ -221,7 +221,7 @@ const demoTalepEt: BotAraci = {
       properties: {
         zaman_notu: {
           type: "string",
-          description: "Müşterinin tercih ettiği zaman, söylediği gibi kısaca (\"perşembe öğleden sonra\", \"gelecek hafta\"); söylemediyse \"belirtilmedi\" (en çok 200 karakter)",
+          description: "Müşterinin tercih ettiği zaman, Türkçe ve kısaca (\"perşembe öğleden sonra\", \"gelecek hafta\"); söylemediyse \"belirtilmedi\" (en çok 200 karakter)",
         },
       },
       required: ["zaman_notu"],
@@ -255,21 +255,23 @@ const demoTalepEt: BotAraci = {
 
 /** insana_devret'in modelin seçebileceği sebepleri (bot_hatasi ve tur_siniri döngünün kendi sebepleridir) */
 export const ARAC_DEVIR_SEBEPLERI = [
-  "fiyat_pazarligi", "sikayet", "ozel_fiyat", "emin_degil", "musteri_istedi", "bayi_bolgesi", "desteklenmeyen_dil", "veri_silme", "diger",
+  "fiyat_pazarligi", "sikayet", "ozel_fiyat", "emin_degil", "musteri_istedi", "bayi_bolgesi", "veri_silme", "diger",
 ] as const satisfies readonly DevirSebebi[];
+// desteklenmeyen_dil SQL listesinde duruyor ama araçta yok: kullanıcı kararı (P2.3) bot her dilde müşterinin diliyle
+// cevap verir, dil yüzünden devretmez.
 
 const insanaDevret: BotAraci = {
   tanim: {
     name: "insana_devret",
     description:
-      "Konuşmayı Embedra satış ekibine devreder; bundan sonra sen cevap vermezsin. Müşteri insanla görüşmek isterse, fiyat pazarlığı ya da özel fiyat isterse, şikâyet ederse, verilerinin silinmesini isterse, desteklemediğin bir dilde yazarsa, plan_oner bilinmeyen bir özellik bildirirse ya da emin olmadığın bir şey sorulursa çağır. Çağırdıktan sonra müşteriye tek kısa cümleyle bir ekip arkadaşının döneceğini söyleyebilirsin.",
+      "Konuşmayı Embedra satış ekibine devreder; bundan sonra sen cevap vermezsin. Müşteri insanla görüşmek isterse, fiyat pazarlığı ya da özel fiyat isterse, şikâyet ederse, verilerinin silinmesini isterse, teknik destek gereken bir arıza anlatırsa (diger), plan_oner bilinmeyen bir özellik bildirirse ya da emin olmadığın bir şey sorulursa çağır. Dil hiçbir zaman devretme sebebi değildir. Çağırdıktan sonra müşteriye tek kısa cümleyle bir ekip arkadaşının döneceğini söyleyebilirsin.",
     input_schema: {
       type: "object",
       properties: {
         sebep: { type: "string", enum: [...ARAC_DEVIR_SEBEPLERI], description: "Devretme sebebi" },
         aciklama: {
           type: "string",
-          description: "Satışçı için tek cümlelik kısa gerekçe (en çok 200 karakter). Müşterinin mesajını kopyalama; telefon, e-posta, ad gibi kişisel bilgi yazma.",
+          description: "Satışçı için Türkçe, tek cümlelik kısa gerekçe (en çok 200 karakter); müşteri başka dilde yazsa da Türkçe. Müşterinin mesajını kopyalama; telefon, e-posta, ad gibi kişisel bilgi yazma.",
         },
       },
       required: ["sebep", "aciklama"],

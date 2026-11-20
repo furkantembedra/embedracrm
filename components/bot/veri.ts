@@ -3,7 +3,7 @@
 // telefon ve profil adı modele gitmez (dış kullanıcı kimliği yalnızca "kanal telefon veriyor mu" için okunur); lead
 // kartında firma adı telefon gibi görünüyorsa atılır, kartın telefon / e-postası istemde yalnızca "alındı" olur.
 import { db, sonuc } from "@/lib/supabase/db";
-import type { Kanal } from "@/components/konusma/queries";
+import type { Kanal, MesajEki } from "@/components/konusma/queries";
 import { ASAMA_BILGI, type Asama } from "@/components/satis-hatti/sabitler";
 import type { IstemMesaji, LeadOzeti } from "./istem";
 import { adaptorBul } from "@/components/konusma/kanallar";
@@ -29,7 +29,7 @@ type KonusmaSatiri = {
   id: number; kanal: Kanal; bot_aktif: boolean; bot_durumu_zamani: string; son_musteri_mesaji_zamani: string | null; dis_kullanici_id: string;
   firsat: { f_firma: string | null; f_konum: string | null; f_icerik: string | null; lead_karti: unknown; asama: { kod: Asama } | null } | null;
 };
-type MesajSatiri = { id: number; gonderen: IstemMesaji["gonderen"]; metin: string; tur: string; zaman: string; created_at: string };
+type MesajSatiri = { id: number; gonderen: IstemMesaji["gonderen"]; metin: string; tur: string; zaman: string; created_at: string; ek: MesajEki | null };
 
 
 export async function botBaglamiOku(konusmaId: number): Promise<BotBaglami | null> {
@@ -39,7 +39,7 @@ export async function botBaglamiOku(konusmaId: number): Promise<BotBaglami | nul
       .select(`id, kanal, bot_aktif, bot_durumu_zamani, son_musteri_mesaji_zamani, dis_kullanici_id,
         firsat:satis_hatti!konusmalar_satis_hatti_id_fkey(f_firma, f_konum, f_icerik, lead_karti, asama:asama!satis_hatti_asama_id_fkey(kod))`)
       .eq("id", konusmaId).maybeSingle(),
-    s.from("konusma_mesajlari").select("id, gonderen, metin, tur, zaman, created_at")
+    s.from("konusma_mesajlari").select("id, gonderen, metin, tur, zaman, created_at, ek")
       .eq("konusma_id", konusmaId).order("zaman", { ascending: false }).order("id", { ascending: false }).limit(BOT_SON_MESAJ),
   ]);
   const ks = sonuc(k, "Bot için konuşma okunurken") as unknown as KonusmaSatiri | null;
@@ -55,7 +55,7 @@ export async function botBaglamiOku(konusmaId: number): Promise<BotBaglami | nul
     botDurumuZamani: new Date(ks.bot_durumu_zamani).toISOString(),
     sonMusteriMesaji: ks.son_musteri_mesaji_zamani,
     mesajlar: satirlar.reverse().map((x) => ({
-      id: Number(x.id), gonderen: x.gonderen, metin: x.metin, tur: x.tur,
+      id: Number(x.id), gonderen: x.gonderen, metin: x.metin, tur: x.tur, ek: x.ek,
       zaman: new Date(x.zaman).toISOString(), olusturma: new Date(x.created_at).toISOString(),
     })),
     lead: f

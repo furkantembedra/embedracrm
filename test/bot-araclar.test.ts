@@ -120,10 +120,10 @@ describe("araç şemaları", () => {
     for (const a of alanlar) expect(a).not.toMatch(/iskonto|indirim|fiyat|tutar|kdv|firsat|musteri_id|konusma|yetkili_id/i);
   });
 
-  it("insana_devret sebepleri yol haritasındaki dokuz kod", () => {
+  it("insana_devret sebepleri: yol haritasındaki kodlar, dil kararı gereği desteklenmeyen_dil hariç (P2.3)", () => {
     const t = BOT_ARACLARI.find((a) => a.tanim.name === "insana_devret")!.tanim;
     expect((t.input_schema.properties as { sebep: { enum: string[] } }).sebep.enum).toEqual(
-      ["fiyat_pazarligi", "sikayet", "ozel_fiyat", "emin_degil", "musteri_istedi", "bayi_bolgesi", "desteklenmeyen_dil", "veri_silme", "diger"],
+      ["fiyat_pazarligi", "sikayet", "ozel_fiyat", "emin_degil", "musteri_istedi", "bayi_bolgesi", "veri_silme", "diger"],
     );
   });
 });

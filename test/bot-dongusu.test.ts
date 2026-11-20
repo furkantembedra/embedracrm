@@ -9,6 +9,7 @@ import { botBekleme, depo, depoyuSifirla, konusmaModulu } from "./sahte/depo";
 import { sahteMetaBaslat, VARSAYILAN_TOKENLAR, type SahteMeta } from "./sahte/meta";
 import { sahteAnthropicBaslat, type SahteAnthropic } from "./sahte/anthropic";
 import type { BotAyarlari, BotBaglami, BotKullanimKaydi, BotModu } from "@/components/bot/veri";
+import type { MesajEki, MesajTuru } from "@/components/konusma/queries";
 
 const v = vi.hoisted(() => ({
   baglam: null as BotBaglami | null,
@@ -111,16 +112,16 @@ afterEach(() => {
 });
 
 /** Depoda müşteri yazmış konuşma + botun okuyacağı bağlam. dakika: son müşteri mesajı kaç dakika önce. */
-async function hazirla(o: { metin?: string; dakika?: number; once?: { gonderen: "musteri" | "bot" | "temsilci"; metin: string }[] } = {}) {
+async function hazirla(o: { metin?: string; dakika?: number; once?: { gonderen: "musteri" | "bot" | "temsilci"; metin: string }[]; tur?: string; ek?: MesajEki } = {}) {
   const zaman = new Date(Date.now() - (o.dakika ?? 0.2) * 60_000).toISOString();
   const r = await konusmaModulu.gelenMesajKaydet({
     kanal: "whatsapp", kanalHesapId: "PNID-1", disKullaniciId: TELEFON, disMesajId: `wamid.G${Math.random()}`, gonderen: "musteri",
-    metin: o.metin ?? "Merhaba, direksiyon test cihazı arıyorum", tur: "metin", ek: {}, zaman,
+    metin: o.metin ?? "Merhaba, direksiyon test cihazı arıyorum", tur: (o.tur ?? "metin") as MesajTuru, ek: o.ek ?? {}, zaman,
   });
   const once = (o.once ?? []).map((m, i) => ({ id: i + 1, ...m, tur: "metin", zaman: new Date(Date.now() - 600_000 + i).toISOString(), olusturma: new Date(Date.now() - 600_000 + i).toISOString() }));
   v.baglam = {
     id: r!.konusmaId, kanal: "whatsapp", botAktif: true, botDurumuZamani: new Date(Date.now() - 3_600_000).toISOString(), sonMusteriMesaji: zaman,
-    mesajlar: [...once, { id: r!.mesajId, gonderen: "musteri", metin: o.metin ?? "Merhaba, direksiyon test cihazı arıyorum", tur: "metin", zaman, olusturma: new Date().toISOString() }],
+    mesajlar: [...once, { id: r!.mesajId, gonderen: "musteri", metin: o.metin ?? "Merhaba, direksiyon test cihazı arıyorum", tur: o.tur ?? "metin", ek: o.ek ?? {}, zaman, olusturma: new Date().toISOString() }],
     lead: { firma: "Usta Oto", konum: "Konya, Türkiye", asama: "Yeni lead", ilgi: null },
   };
   return r!.konusmaId;
@@ -193,6 +194,31 @@ describe("bot turu: mutlu yol", () => {
     expect(kullaniciMetni(0)).toContain("Kanal: WhatsApp");
     expect(kullaniciMetni(0)).toContain("Tek mesaj en çok 4096 karakter");
     expect(kullaniciMetni(0)).toContain("Firma: Usta Oto");
+  });
+
+  it("P2.3: reklamdan yabancı dilde gelen ilk mesaj → istemde asistan beyanı bayrağı ve reklam bağlamı; tur yeni istem sürümüyle kaydedilir", async () => {
+    const ek: MesajEki = { yonlendirme: { kaynak_turu: "ad", reklam_id: "1201", baslik: "ONE ile direksiyon testi", govde: "Bilgi almak için yazın" } };
+    const id = await hazirla({ metin: "Hallo, können Sie mehr Informationen schicken?", ek });
+    claude.metin("Hallo! Ich bin der KI-Assistent von Embedra. Welche Lenkgetriebe reparieren Sie meistens?");
+    const r = await botTuru(id);
+    expect(r.durum).toBe("cevap");
+    const t = kullaniciMetni();
+    expect(t).toContain("İlk cevabın: evet");
+    expect(t).toContain('Müşteri (reklamdan geldi: başlık "ONE ile direksiyon testi", metin "Bilgi almak için yazın"): Hallo, können Sie');
+    expect(t).toMatch(/müşterinin son mesajının dilinde cevap ver\.$/);
+    expect(istekler()[0].system[0].text).toMatch(/hangi dilde yazıyorsa o dilde cevap ver/);
+    expect(JSON.stringify(istekler()[0].tools)).not.toContain("desteklenmeyen_dil");
+    expect(v.kullanimlar[0]).toMatchObject({ istemSurumu: "p2.3-1", sonuc: "cevap" });
+    expect(v.devirler).toEqual([]);
+  });
+
+  it("P2.3: botun yazdığı konuşmada sesli mesaj → tanıtım tekrarlanmaz, içeriğin iletilmediği istemde yazar", async () => {
+    const id = await hazirla({ metin: "", tur: "ses", once: [{ gonderen: "musteri", metin: "Merhaba" }, { gonderen: "bot", metin: "Merhaba, ben Embedra'nın yapay zekâ asistanıyım." }] });
+    claude.metin("Sesli mesajları şu an dinleyemiyorum, kısaca yazabilir misiniz?");
+    await botTuru(id);
+    const t = kullaniciMetni();
+    expect(t).toContain("İlk cevabın: hayır");
+    expect(t).toMatch(/Müşteri \(sesli mesaj; içeriği sana iletilmedi\): $/m);
   });
 
   it("müşteri metni ayrılmış veri: <konusma> içinde, açılı ayraçlar etkisiz; telefon / kimlik modele gitmez", async () => {
