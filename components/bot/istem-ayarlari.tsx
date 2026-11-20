@@ -22,6 +22,8 @@ export type SurumSatiri = {
   geriDonulen: number | null;
   uzunluk: number;
   ayarlar: IstemAyarlari;
+  /** P2.4b: bu sürümdeki bilgi kaynağı sayısı */
+  kaynakSayisi: number;
 };
 
 const ZAMAN = new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -104,7 +106,7 @@ function Surumler({ surumler, aktifNo, duzenleyebilir }: { surumler: SurumSatiri
               <b className="tabular-nums">Sürüm {s.surumNo}</b>
               {s.surumNo === aktifNo && <Chip ton="ok">Aktif</Chip>}
               {s.geriDonulen != null && <Chip ton="gray">Sürüm {s.geriDonulen}&apos;e dönüş</Chip>}
-              <span className="text-xs tabular-nums text-muted">{ZAMAN.format(new Date(s.zaman))}{s.olusturan ? ` · ${s.olusturan}` : ""} · {s.uzunluk.toLocaleString("tr-TR")} karakter</span>
+              <span className="text-xs tabular-nums text-muted">{ZAMAN.format(new Date(s.zaman))}{s.olusturan ? ` · ${s.olusturan}` : ""} · {s.uzunluk.toLocaleString("tr-TR")} karakter{s.kaynakSayisi ? ` · ${s.kaynakSayisi} bilgi kaynağı` : ""}</span>
               {duzenleyebilir && s.surumNo !== aktifNo && (
                 <button
                   type="button"

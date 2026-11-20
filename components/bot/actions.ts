@@ -178,7 +178,8 @@ export async function surumeDon(surumNo: number): Promise<SurumKaydiSonucu> {
   if (!Number.isSafeInteger(surumNo) || surumNo < 1) return { hata: "Sürüm bulunamadı." };
   const eski = (await surumListesi(200)).find((x) => x.surumNo === surumNo);
   if (!eski) return { hata: "Sürüm bulunamadı." };
-  const d = ayarlariDenetle(eski.ayarlar, (await aktifIstemAyari()).kaynaklar);
+  // Geri dönülen sürüm kendi bilgi kaynaklarını da geri getirir (P2.4b): sınır onlarla denetlenir
+  const d = ayarlariDenetle(eski.ayarlar, eski.kaynaklar);
   if (Object.keys(d.hatalar).length) return { hata: `Sürüm ${surumNo} bugünkü sınırları aşıyor: ${Object.values(d.hatalar)[0]}`, hatalar: d.hatalar };
   const yeni = await surumKaydet(null, null, k ? kullaniciNo(k.id) : null, surumNo);
   console.info(`[bot] ayar sürümü ${surumNo}'e dönüldü (yeni sürüm ${yeni})`);

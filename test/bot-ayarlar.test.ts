@@ -178,7 +178,7 @@ describe("sürümlü ayarlar sabit istemde", () => {
     expect(sabitSistemIstemi({ ...dolu, mesaiSaatleri: { ...dolu.mesaiSaatleri } })).toBe(a);
     expect(sabitSistemIstemi({ ...dolu, tonNotu: "Sen diye hitap et." })).not.toBe(a);
     const k = sabitSistemIstemi(BOS, [{ id: 1, baslik: "SSS", hedef: "bilgi_bankasi", metin: "Kurulum 1 gün sürer." }]);
-    expect(k).toContain("<bilgi_bankasi>\nKurulum 1 gün sürer.\n</bilgi_bankasi>");
+    expect(k).toContain('<bilgi_bankasi>\n<yuklenen_kaynak baslik="SSS">\nKurulum 1 gün sürer.\n</yuklenen_kaynak>\n</bilgi_bankasi>');
   });
 
   it("mesai durumu yalnızca değişken kısımda", () => {

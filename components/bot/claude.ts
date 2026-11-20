@@ -53,6 +53,23 @@ export async function claudeCagir(i: ClaudeIstegi): Promise<Anthropic.Message> {
   });
 }
 
+/**
+ * P2.4b bilgi kaynağı çıkarımı: tek PDF (document) ya da görsel (image) bloğu + talimat, araçsız. Bot turundan ayrı
+ * zaman aşımı (belge okumak uzun sürebilir) ve çıktı sınırı; model ve effort aynı yapılandırmadan.
+ */
+export async function claudeIcerikCikar(i: { sistem: string; icerik: Anthropic.ContentBlockParam[]; azamiCikti: number; zamanAsimiMs: number }): Promise<Anthropic.Message> {
+  return istemci().messages.create(
+    {
+      model: BOT_MODELI,
+      max_tokens: i.azamiCikti,
+      output_config: { effort: BOT_EFFORT },
+      system: i.sistem,
+      messages: [{ role: "user", content: i.icerik }],
+    },
+    { timeout: i.zamanAsimiMs },
+  );
+}
+
 /** Yanıtın kullanımı (null alanlar 0) */
 export function kullanim(m: Anthropic.Message): TokenKullanimi {
   const u = m.usage;

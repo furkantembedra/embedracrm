@@ -219,7 +219,7 @@ describe("bot turu: mutlu yol", () => {
     expect(t).toMatch(/müşterinin son mesajının dilinde cevap ver\.$/);
     expect(istekler()[0].system[0].text).toMatch(/hangi dilde yazıyorsa o dilde cevap ver/);
     expect(JSON.stringify(istekler()[0].tools)).not.toContain("desteklenmeyen_dil");
-    expect(v.kullanimlar[0]).toMatchObject({ istemSurumu: "p2.4-1/a0", sonuc: "cevap" });
+    expect(v.kullanimlar[0]).toMatchObject({ istemSurumu: "p2.4b-1/a0", sonuc: "cevap" });
     expect(v.devirler).toEqual([]);
   });
 

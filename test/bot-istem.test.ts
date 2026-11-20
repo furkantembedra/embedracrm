@@ -24,7 +24,7 @@ describe("sabit sistem istemi", () => {
   const t = sabitSistemIstemi();
 
   it("sürüm p2.4 (P2.4: ayar sürümüyle etiketlenir); her çağrıda bayt bayt aynı (önbellek)", () => {
-    expect(ISTEM_SURUMU).toBe("p2.4-1");
+    expect(ISTEM_SURUMU).toBe("p2.4b-1");
     expect(sabitSistemIstemi()).toBe(t);
   });
 

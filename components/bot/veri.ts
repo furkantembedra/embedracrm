@@ -218,6 +218,8 @@ export type SurumOzeti = {
   /** İsteme giren ek metin uzunluğu (bu sürümün ayar metinleri) */
   uzunluk: number;
   ayarlar: IstemAyarlari;
+  /** P2.4b: bu sürümdeki onaylı bilgi kaynakları (geri dönüşte sınır bunlarla denetlenir; istemciye gönderilmez) */
+  kaynaklar: BilgiKaynagi[];
 };
 
 /** Son sürümler (yeniden eskiye) */
@@ -239,6 +241,7 @@ export async function surumListesi(limit = 30): Promise<SurumOzeti[]> {
       geriDonulen: x.geri_donulen_surum != null ? Number(x.geri_donulen_surum) : null,
       uzunluk: Object.values(ayarlar).reduce((t: number, v) => t + (typeof v === "string" ? v.length : 0), 0),
       ayarlar,
+      kaynaklar: bilgiKaynaklariOku(x.bilgi_kaynaklari),
     };
   });
 }
