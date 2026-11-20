@@ -299,13 +299,16 @@ export async function firsatSorumlusuYaz(firsatId: number, kullaniciId: number |
 
 /* ---------------- Bot › Kanallar (P1.3: yeni konuşmada bot; P2.4 bot modu vb. ekler) ---------------- */
 
-export type KanalAyari = { kanal: Kanal; yeniKonusmadaBot: boolean; botModu: BotModu; guncelleme: string | null };
+export type KanalAyari = { kanal: Kanal; yeniKonusmadaBot: boolean; botModu: BotModu; guncelleme: string | null; sonWebhook: string | null };
 
 export async function kanalAyarlari(): Promise<KanalAyari[]> {
   const s = await db();
-  const r = (sonuc(await s.from("kanal_ayarlari").select("kanal, yeni_konusmada_bot, bot_modu, updated_at").order("kanal"), "Kanal ayarları okunurken") ?? []) as
-    { kanal: Kanal; yeni_konusmada_bot: boolean; bot_modu: BotModu; updated_at: string | null }[];
-  return r.map((x) => ({ kanal: x.kanal, yeniKonusmadaBot: x.yeni_konusmada_bot, botModu: x.bot_modu ?? "kapali", guncelleme: x.updated_at }));
+  const r = (sonuc(await s.from("kanal_ayarlari").select("kanal, yeni_konusmada_bot, bot_modu, updated_at, son_webhook_zamani").order("kanal"), "Kanal ayarları okunurken") ?? []) as
+    { kanal: Kanal; yeni_konusmada_bot: boolean; bot_modu: BotModu; updated_at: string | null; son_webhook_zamani: string | null }[];
+  return r.map((x) => ({
+    kanal: x.kanal, yeniKonusmadaBot: x.yeni_konusmada_bot, botModu: x.bot_modu ?? "kapali", guncelleme: x.updated_at,
+    sonWebhook: x.son_webhook_zamani ? new Date(x.son_webhook_zamani).toISOString() : null,
+  }));
 }
 
 /** Kanal ayarı: yeni konuşmada bot ve / veya bot modu (yalnızca Yönetici; RLS de denetler: başkası güncelleyemez → hata) */

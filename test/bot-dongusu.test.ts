@@ -24,6 +24,8 @@ const v = vi.hoisted(() => ({
   devirler: [] as unknown[][],
   kartYamalari: [] as [number, Record<string, unknown>][],
   firsatYamalari: [] as [number, unknown][],
+  istemAyari: null as null | { surumNo: number | null; ayarlar: Record<string, unknown>; kaynaklar: unknown[] },
+  maliyetBildirimleri: [] as unknown[][],
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -55,6 +57,14 @@ vi.mock("@/components/bot/veri", () => ({
   turSayisi: async () => v.tur,
   botKullanimYaz: async (k: BotKullanimKaydi) => (v.kullanimlar.push(k), 900 + v.kullanimlar.length),
   botMesajlariniBagla: async (ids: number[], id: number) => void v.baglanan.push([ids, id]),
+  // P2.4: aktif ayar sürümü (null: hiç kaydedilmedi → varsayılan istem)
+  aktifIstemAyari: async () => v.istemAyari ?? {
+    surumNo: null, ayarlar: (await import("@/components/bot/ayar-surumu")).VARSAYILAN_AYARLAR, kaynaklar: [],
+  },
+}));
+// P2.4: maliyet sınırı bildirimi (günde bir kez; ayrıntısı test/bot-ayarlar.test.ts'te)
+vi.mock("@/components/bot/maliyet", () => ({
+  maliyetSiniriBildir: async (...a: unknown[]) => (v.maliyetBildirimleri.push(a), ["u1"]),
 }));
 // Araçların veri erişimi (P2.2): döngü testinde yalnızca kartın yazıldığı görülür; araçların kendisi test/bot-araclar.test.ts'te
 vi.mock("@/components/bot/arac-deposu", () => ({
@@ -78,7 +88,8 @@ vi.mock("@/components/bot/arac-deposu", () => ({
 vi.mock("@/components/bot/yapilandirma", async (asil) => ({ ...(await asil<typeof import("@/components/bot/yapilandirma")>()), BOT_ZAMAN_ASIMI_MS: 400 }));
 
 const { botTuru } = await import("@/components/bot/dongu");
-const { sabitSistemIstemi, ISTEM_SURUMU, veriKacir } = await import("@/components/bot/istem");
+const { sabitSistemIstemi, istemSurumuEtiketi, veriKacir } = await import("@/components/bot/istem");
+const ISTEM_SURUMU = istemSurumuEtiketi(null);
 const { maliyetHesapla, BOT_MODELI, BOT_EFFORT } = await import("@/components/bot/yapilandirma");
 const { istanbulGunBasi } = await vi.importActual<typeof import("@/components/bot/veri")>("@/components/bot/veri");
 const { kuyrugaYaz, kuyruguIsle } = await import("@/components/konusma/kuyruk");
@@ -96,7 +107,7 @@ afterAll(async () => {
 beforeEach(() => {
   depoyuSifirla();
   Object.assign(v, {
-    baglam: null, botAktif: true, mod: "otomatik", maliyet: 0, tur: 0, not: null, kullanimlar: [], baglanan: [], devirler: [], kartYamalari: [], firsatYamalari: [],
+    baglam: null, botAktif: true, mod: "otomatik", maliyet: 0, tur: 0, not: null, kullanimlar: [], baglanan: [], devirler: [], kartYamalari: [], firsatYamalari: [], istemAyari: null, maliyetBildirimleri: [],
     ayarlar: { acilDurdurma: false, gunlukMaliyetSiniriUsd: 5, turSiniri: 20, guncelleme: null },
   });
   vi.stubEnv("META_GRAPH_URL", meta.adres);
@@ -208,7 +219,7 @@ describe("bot turu: mutlu yol", () => {
     expect(t).toMatch(/müşterinin son mesajının dilinde cevap ver\.$/);
     expect(istekler()[0].system[0].text).toMatch(/hangi dilde yazıyorsa o dilde cevap ver/);
     expect(JSON.stringify(istekler()[0].tools)).not.toContain("desteklenmeyen_dil");
-    expect(v.kullanimlar[0]).toMatchObject({ istemSurumu: "p2.3-1", sonuc: "cevap" });
+    expect(v.kullanimlar[0]).toMatchObject({ istemSurumu: "p2.4-1/a0", sonuc: "cevap" });
     expect(v.devirler).toEqual([]);
   });
 

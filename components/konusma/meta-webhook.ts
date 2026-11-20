@@ -14,6 +14,7 @@
 //            mesajlar kaydedilir + kuyruğa yazılır (components/konusma/kuyruk.ts) ve HEMEN 200 döner; fırsat / lead işini
 //            işleyici yapar (/api/konusma/isleyici, pg_cron; ayrıca after() ile hemen bir kez dürtülür)
 //          instagram / page (adaptörleri P4.1 / P4.2) → 200, yalnızca olay türleri loglanır
+//        Tanınan her kanal için son bildirim zamanı yazılır (Bot › Kanallar, P2.4).
 //        Loglara yalnızca kanal ve olay türü sayıları yazılır; mesaj içeriği, kullanıcı / sayfa kimliği yazılmaz.
 // Meta 200 dönmeyen bildirimi tekrar gönderir (WhatsApp 7 güne kadar; Messenger / Instagram 5 sn içinde 200 bekler);
 // aynı mesaj kimliği ikinci kez yazılmaz (konusma_mesajlari.dis_mesaj_id). Kayıt hatasında 500 döner ki Meta yeniden göndersin.
@@ -21,7 +22,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { webhookAdaptoru } from "@/components/konusma/kanallar";
 import { kuyrugaYaz, kuyruguIsle } from "@/components/konusma/kuyruk";
-import { teslimDurumlariYaz } from "@/components/konusma/queries";
+import { kanalWebhookIsaretle, teslimDurumlariYaz, type Kanal } from "@/components/konusma/queries";
 import { sistemOlarak } from "@/lib/supabase/db";
 
 /** Meta uygulamasının App Secret'ı; eski kurulumlarla uyum için WHATSAPP_APP_SECRET'e düşer */
@@ -81,6 +82,9 @@ export async function metaWebhookAl(istek: NextRequest) {
   const girdiler = Array.isArray(veri?.entry) ? (veri.entry as MetaGirdi[]) : [];
 
   const adaptor = webhookAdaptoru(veri.object);
+  const kanal = adaptor?.kanal
+    ?? (typeof veri.object === "string" && Object.hasOwn(ADAPTORU_OLMAYAN, veri.object) ? ADAPTORU_OLMAYAN[veri.object] : null);
+  if (kanal) await sonWebhookYaz(kanal);
   if (adaptor) {
     const { mesajlar, durumlar } = adaptor.webhookCevir(veri);
     let kaydedilen = 0;
@@ -107,7 +111,6 @@ export async function metaWebhookAl(istek: NextRequest) {
     if (kaydedilen) isleyiciyiDurt();
     return NextResponse.json({ ok: true, kaydedilen, durum });
   }
-  const kanal = typeof veri.object === "string" && Object.hasOwn(ADAPTORU_OLMAYAN, veri.object) ? ADAPTORU_OLMAYAN[veri.object] : null;
   if (kanal) {
     olaylariLogla(kanal, girdiler);
     return NextResponse.json({ ok: true, kaydedilen: 0 });
@@ -131,7 +134,16 @@ function isleyiciyiDurt() {
 }
 
 /** Adaptörü henüz yazılmamış Meta kanalları: yalnızca olay türleri loglanır (P4.1 Instagram, P4.2 Messenger) */
-const ADAPTORU_OLMAYAN: Record<string, string> = { instagram: "instagram", page: "messenger" };
+const ADAPTORU_OLMAYAN: Record<string, Kanal> = { instagram: "instagram", page: "messenger" };
+
+/** Bot › Kanallar'daki "son webhook" zamanı (imza geçtikten sonra). Yazılamazsa bildirimi düşürmez, yalnızca loglar. */
+async function sonWebhookYaz(kanal: Kanal) {
+  try {
+    await sistemOlarak(() => kanalWebhookIsaretle(kanal));
+  } catch (e) {
+    console.error(`[meta-webhook] ${kanal} son webhook zamanı yazılamadı: ${(e as Error).message?.slice(0, 200)}`);
+  }
+}
 
 /* ---------------- Instagram / Messenger: yalnızca olay türü ---------------- */
 

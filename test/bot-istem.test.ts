@@ -23,8 +23,8 @@ const DUZ_METIN: BicimSinirlari = { azamiUzunluk: 1000, birim: "utf8_bayt", bici
 describe("sabit sistem istemi", () => {
   const t = sabitSistemIstemi();
 
-  it("sürüm p2.3; her çağrıda bayt bayt aynı (önbellek)", () => {
-    expect(ISTEM_SURUMU).toBe("p2.3-1");
+  it("sürüm p2.4 (P2.4: ayar sürümüyle etiketlenir); her çağrıda bayt bayt aynı (önbellek)", () => {
+    expect(ISTEM_SURUMU).toBe("p2.4-1");
     expect(sabitSistemIstemi()).toBe(t);
   });
 

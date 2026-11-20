@@ -58,7 +58,7 @@ Hazır olanlar:
 Eksik olanlar:
 - Araç / ECU uyumluluk listesi (`docs/bot/uyumluluk.md`) ve SSS (`docs/bot/sss.md`) yok; ONEAssist'in ONE Lite'ta çalışıp çalışmadığı ve test raporunun hangi planda olduğu cevap bekliyor. Müşteri ifadeleri taslak.
 - Konuşma işleyicisinin üretim tetikleyicisi (Supabase pg_cron + pg_net, `docs/BOT_KURULUM.md` 9.4) henüz kurulmadı; kurulana kadar canlıda yalnızca webhook'taki `after()` hızlandırıcısı çalışır.
-- Bot döngüsü (P2.1), araçlar (P2.2) ve satışçı kişiliği (P2.3) var; ayar sayfalarının geri kalanı (P2.4) ve gölge mod (P2.5) yok. Gerçek satış konuşmaları (`docs/bot/ornek-konusmalar/`) ve itirazlar (`docs/bot/itirazlar.md`) henüz eklenmedi; eklenince `npm run bot:istem-kaynaklari`. Instagram ve Messenger kanalları yok.
+- Bot döngüsü (P2.1), araçlar (P2.2), satışçı kişiliği (P2.3) ve Bot › Kanallar / Ayarlar (P2.4: sürümlü istem ayarları, Botu dene) var; bilgi kaynağı yükleme (P2.4b) ve gölge mod (P2.5) yok. Gerçek satış konuşmaları (`docs/bot/ornek-konusmalar/`) ve itirazlar (`docs/bot/itirazlar.md`) henüz eklenmedi; eklenince `npm run bot:istem-kaynaklari`. Instagram ve Messenger kanalları yok.
 - **Çok kanalda kalanlar:** Instagram ve Messenger bildirimleri henüz işlenmiyor (adaptörleri P4.1 / P4.2). Kullanıcı adı kullanan WhatsApp kullanıcıları (BSUID, `from_user_id`) P1.1'den beri işleniyor; bunlarda telefon olmadığı için telefonla fırsat / yetkili eşleştirmesi yapılmaz. Instagram / Messenger değişkenleri (`META_SAYFA_ID`, `META_SAYFA_TOKEN`, `INSTAGRAM_*`) belgede tanımlı, kod henüz okumuyor; birden fazla sayfa/hesap için hesap tablosu P4'te. Doğrulanamayan Meta ayrıntıları `docs/BOT_KURULUM.md`'de "(doğrulanmadı)" diye işaretli.
 - Testleri her push'ta çalıştıran CI yok.
 
@@ -294,7 +294,8 @@ Tamamlanan adımların ayrıntılı notları (şema, dosyalar, testler, doğrula
 | P2.1 | Tamam, canlı DB'de (20 Kas) | Claude adaptörü (Haiku 5.5) ve bot döngüsü, kapılar, maliyet hesabı, araç geçmişi. Migration SQL Editor'den uygulandı. |
 | P2.2 | Tamam, canlı DB'de (20 Kas) | Araçlar (`ihtiyac_kaydet`, `lead_skoru_ver`, `demo_talep_et`, `insana_devret`, `plan_oner`, `izin_kaydet`) ve lead kartı. Migration SQL Editor'den uygulandı. |
 | P2.3 | Tamam, kod (20 Kas) | Satışçı istemi (`p2.3-1`), dil ve kanal kuralları, 22 test senaryosu. Gerçek Claude API ile denenmedi. |
-| P2.4 – P2.5 (P2.4b dahil) | Başlanmadı | |
+| P2.4 | Tamam, canlı DB'de (20 Kas) | Bot › Kanallar (değişken / son webhook / hesap / Kurulum gerekli) ve Ayarlar (sürümlü kişilik ve bilgi, geri dönüş, Botu dene, acil durdurma Gelen kutusu'nda da, maliyet sınırı bildirimi). Migration SQL Editor'den uygulandı. |
+| P2.4b – P2.5 | Başlanmadı | |
 | P5.1 | Başlanmadı | P2.5'ten sonra |
 | P3.1 – P3.3 | Başlanmadı | |
 | P4.1 – P4.4 | Başlanmadı | Instagram, Messenger, yorum/reklam (isteğe bağlı), kanal birleştirme. App Review başvurusu P1.0 sırasında başlatılacak |

@@ -325,3 +325,12 @@ export async function mesajiBagla(
   sonuc(m, "Mesaj fırsata bağlanırken");
   sonuc(k, "Konuşma güncellenirken");
 }
+
+/**
+ * Kanala Meta bildirimi geldi (Bot › Kanallar "son webhook"). Webhook gizli anahtarla çağırır; SQL en çok 30 sn'de
+ * bir yazar. Kimlik ya da içerik yazılmaz, yalnızca zaman.
+ */
+export async function kanalWebhookIsaretle(kanal: Kanal): Promise<void> {
+  const s = await db();
+  sonuc(await s.rpc("kanal_webhook_isaretle", { p_kanal: kanal }), "Son webhook zamanı yazılırken");
+}

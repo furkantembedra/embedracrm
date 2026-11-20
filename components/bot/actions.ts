@@ -14,7 +14,9 @@ import { devirSebebiMi } from "@/components/konusma/devir-sebepleri";
 import { getEkip } from "@/components/operasyon/queries";
 import { getFirsat } from "@/components/satis-hatti/queries";
 import { BOT_ROLLERI, BOT_YONETICI_ROLLERI } from "./erisim";
-import { BOT_MODLARI, botAyarlariYaz, type BotModu } from "./veri";
+import { acilDurdurmaYaz, aktifIstemAyari, BOT_MODLARI, botAyarlariYaz, surumKaydet, surumListesi, type BotModu } from "./veri";
+import { ayarlariDenetle, type AyarDenetimi } from "./ayar-surumu";
+import { DENEME_AZAMI_MESAJ, denemeTuru, type DenemeMesaji, type DenemeSonucu } from "./deneme";
 import {
   firsatSorumlusuYaz, gelenKutusu, kanalAyariYaz, konusmaDetayi, okunduYaz, type GelenKutusuSatiri, type KonusmaDetayi,
 } from "./queries";
@@ -128,17 +130,84 @@ export async function kanalBotModuKaydet(kanal: string, mod: string): Promise<{ 
   return {};
 }
 
-/** Bot › Ayarlar: acil durdurma, günlük maliyet sınırı, tur sınırı (yalnızca Yönetici; RLS de denetler) */
-export async function botAyarlariKaydet(a: { acilDurdurma: boolean; gunlukMaliyetSiniriUsd: number; turSiniri: number }): Promise<{ hata?: string }> {
+/** Bot › Ayarlar: günlük maliyet sınırı ve tur sınırı (yalnızca Yönetici; RLS de denetler). Acil durdurma ayrı (acilDurdurmaAyarla). */
+export async function botAyarlariKaydet(a: { gunlukMaliyetSiniriUsd: number; turSiniri: number }): Promise<{ hata?: string }> {
   const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
   const maliyet = Number(a?.gunlukMaliyetSiniriUsd);
   const tur = Number(a?.turSiniri);
   if (!Number.isFinite(maliyet) || maliyet < 0 || maliyet > 10_000) return { hata: "Günlük maliyet sınırı 0 ile 10.000 USD arasında olmalı." };
   if (!Number.isInteger(tur) || tur < 1 || tur > 200) return { hata: "Tur sınırı 1 ile 200 arasında bir tam sayı olmalı." };
-  await botAyarlariYaz({ acilDurdurma: a?.acilDurdurma === true, gunlukMaliyetSiniriUsd: Math.round(maliyet * 100) / 100, turSiniri: tur }, k ? kullaniciNo(k.id) : null);
+  await botAyarlariYaz({ gunlukMaliyetSiniriUsd: Math.round(maliyet * 100) / 100, turSiniri: tur }, k ? kullaniciNo(k.id) : null);
   revalidatePath("/bot/ayarlar");
   revalidatePath("/bot");
   return {};
+}
+
+/** Acil durdurma anahtarı (Bot › Ayarlar ve Gelen kutusu'nun üstü; tek tık). Yalnızca Yönetici; RLS de denetler. */
+export async function acilDurdurmaAyarla(acik: boolean): Promise<{ hata?: string }> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (typeof acik !== "boolean") return { hata: "Geçersiz değer." };
+  await acilDurdurmaYaz(acik, k ? kullaniciNo(k.id) : null);
+  console.info(`[bot] acil durdurma ${acik ? "açıldı" : "kapatıldı"}`);
+  revalidatePath("/bot/ayarlar");
+  revalidatePath("/bot");
+  return {};
+}
+
+export type SurumKaydiSonucu = { hata?: string; hatalar?: AyarDenetimi["hatalar"]; surumNo?: number };
+
+/**
+ * Bot › Ayarlar: istem ayarlarını yeni sürüm olarak kaydeder ve aktif yapar (yalnızca Yönetici; SQL işlevi ve RLS de
+ * denetler). Sabit istem değişir, prompt cache bir kez yeniden yazılır. Sınır ve kişisel veri denetimi sunucuda.
+ */
+export async function istemAyarlariniKaydet(girdi: unknown, aciklama: string): Promise<SurumKaydiSonucu> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  const aktif = await aktifIstemAyari();
+  const d = ayarlariDenetle(girdi, aktif.kaynaklar);
+  if (Object.keys(d.hatalar).length) return { hata: "Kaydedilmedi: işaretli alanları düzeltin.", hatalar: d.hatalar };
+  const not = typeof aciklama === "string" ? aciklama.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+  const surumNo = await surumKaydet(d.ayarlar, not || null, k ? kullaniciNo(k.id) : null);
+  console.info(`[bot] ayar sürümü ${surumNo} kaydedildi`);
+  revalidatePath("/bot/ayarlar");
+  return { surumNo };
+}
+
+/** Önceki bir sürüme dön: o sürümün içeriği yeni sürüm olarak kaydedilir (yalnızca Yönetici). Sınırlar bugünkü kurallarla yeniden denetlenir. */
+export async function surumeDon(surumNo: number): Promise<SurumKaydiSonucu> {
+  const k = await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (!Number.isSafeInteger(surumNo) || surumNo < 1) return { hata: "Sürüm bulunamadı." };
+  const eski = (await surumListesi(200)).find((x) => x.surumNo === surumNo);
+  if (!eski) return { hata: "Sürüm bulunamadı." };
+  const d = ayarlariDenetle(eski.ayarlar, (await aktifIstemAyari()).kaynaklar);
+  if (Object.keys(d.hatalar).length) return { hata: `Sürüm ${surumNo} bugünkü sınırları aşıyor: ${Object.values(d.hatalar)[0]}`, hatalar: d.hatalar };
+  const yeni = await surumKaydet(null, null, k ? kullaniciNo(k.id) : null, surumNo);
+  console.info(`[bot] ayar sürümü ${surumNo}'e dönüldü (yeni sürüm ${yeni})`);
+  revalidatePath("/bot/ayarlar");
+  return { surumNo: yeni };
+}
+
+/**
+ * "Botu dene": taslak ayarla örnek konuşma (yalnızca Yönetici; gerçek müşteriye gitmez, kayıt açılmaz). Maliyet
+ * bot_kullanim'e "deneme" olarak yazılır ve günlük sınıra dahildir. Girdi burada doğrulanır.
+ */
+export async function botuDene(g: { ayarlar: unknown; kanal: string; mesajlar: unknown; kart?: unknown }): Promise<DenemeSonucu> {
+  await oturumGerekli(BOT_YONETICI_ROLLERI);
+  if (!(KONUSMA_KANALLARI as readonly string[]).includes(g?.kanal)) return { ok: false, hata: "Kanal seçin." };
+  const ham = Array.isArray(g?.mesajlar) ? (g.mesajlar as unknown[]) : [];
+  if (!ham.length) return { ok: false, hata: "Müşteri mesajı yazın." };
+  if (ham.length > DENEME_AZAMI_MESAJ * 2) return { ok: false, hata: "Deneme konuşması çok uzun; yeniden başlatın." };
+  const mesajlar: DenemeMesaji[] = [];
+  for (const m of ham) {
+    const o = m && typeof m === "object" ? (m as Record<string, unknown>) : {};
+    const metin = typeof o.metin === "string" ? o.metin.trim() : "";
+    if ((o.gonderen !== "musteri" && o.gonderen !== "bot") || !metin) return { ok: false, hata: "Mesajlar geçersiz." };
+    if (metin.length > 4000) return { ok: false, hata: "Bir mesaj en çok 4.000 karakter olabilir." };
+    mesajlar.push({ gonderen: o.gonderen, metin });
+  }
+  const aktif = await aktifIstemAyari();
+  const d = ayarlariDenetle(g.ayarlar, aktif.kaynaklar);
+  if (Object.keys(d.hatalar).length) return { ok: false, hata: `Taslak ayarlarda hata var: ${Object.values(d.hatalar)[0]}` };
+  return denemeTuru({ ayarlar: d.ayarlar, kaynaklar: aktif.kaynaklar, kanal: g.kanal, mesajlar, kart: g.kart ?? {} });
 }
 
 /**

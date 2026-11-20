@@ -9,7 +9,8 @@
 // devredilir ki müşteri sessizce beklemesin, "Cevap bekliyor" + sorumluya bildirim):
 //   bot kapalı / cevaplanacak yeni müşteri mesajı yok → hiçbir şey · ANTHROPIC_API_KEY yok · acil durdurma ·
 //   kanalın bot modu "otomatik" değil (gölge P2.5) · adaptör pencereyi "acik" demiyor (etiketli pencere yalnızca
-//   temsilci içindir) · tur sınırı · günlük maliyet sınırı.
+//   temsilci içindir) · tur sınırı · günlük maliyet sınırı (aşılınca yöneticilere günde bir bildirim, P2.4).
+// Sabit istem Bot › Ayarlar'daki aktif ayar sürümünden kurulur (P2.4); mesai durumu değişken kısma gider.
 // Hata, zaman aşımı, refusal ya da boş cevapta müşteriye bekletme mesajı GİTMEZ; konuşma insana devredilir.
 //
 // Kanal adına göre dal yok (değişmez kural 13): kanal adı, pencere ve biçim sınırları adaptörden.
@@ -21,9 +22,11 @@ import { botNotunuAl } from "@/components/konusma/queries";
 import type { DevirSebebi } from "@/components/konusma/devir-sebepleri";
 import { araciCalistir, aracTanimlari } from "./araclar";
 import { claudeCagir, claudeHazir, hataKodu, kullanim } from "./claude";
-import { degiskenIstem, ISTEM_SURUMU, sabitSistemIstemi } from "./istem";
+import { degiskenIstem, istemSurumuEtiketi, sabitSistemIstemi } from "./istem";
+import { mesaiDurumu } from "./ayar-surumu";
+import { maliyetSiniriBildir } from "./maliyet";
 import {
-  botAktifMi, botAyarlariOku, botBaglamiOku, botKullanimYaz, botMesajlariniBagla, gunlukMaliyet, kanalBotModu, turSayisi,
+  aktifIstemAyari, botAktifMi, botAyarlariOku, botBaglamiOku, botKullanimYaz, botMesajlariniBagla, gunlukMaliyet, kanalBotModu, turSayisi,
   type BotKullanimKaydi,
 } from "./veri";
 import { BOT_AZAMI_API_CAGRISI, BOT_EFFORT, BOT_MODELI, maliyetHesapla, type TokenKullanimi } from "./yapilandirma";
@@ -87,15 +90,24 @@ export async function botTuru(konusmaId: number, simdi = () => new Date()): Prom
   if ((await kanalBotModu(b.kanal)) !== "otomatik") return kapi(konusmaId, "kanal_modu");
   if (a.pencere(b.sonMusteriMesaji, simdi()).durum !== "acik") return kapi(konusmaId, "pencere");
   if ((await turSayisi(konusmaId, b.botDurumuZamani)) >= ayarlar.turSiniri) return kapi(konusmaId, "tur_siniri");
-  if ((await gunlukMaliyet(simdi())) >= ayarlar.gunlukMaliyetSiniriUsd) return kapi(konusmaId, "maliyet_siniri");
+  const bugun = await gunlukMaliyet(simdi());
+  if (bugun >= ayarlar.gunlukMaliyetSiniriUsd) {
+    // Bot durur (konuşma devredilir) ve yöneticilere günde bir kez bildirim gider
+    await maliyetSiniriBildir(bugun, ayarlar.gunlukMaliyetSiniriUsd, simdi());
+    return kapi(konusmaId, "maliyet_siniri");
+  }
 
   // İstem: sabit sistem + araçlar önde, değişken her şey tek kullanıcı mesajında sonda
   const ekipNotu = await botNotunuAl(konusmaId);
+  // Sabit kısım Bot › Ayarlar'daki aktif sürümden (sürüm değişmedikçe bayt bayt aynı → önbellekten okunur)
+  const ayar = await aktifIstemAyari();
   const mesajlar: Anthropic.MessageParam[] = [{
     role: "user",
-    content: degiskenIstem({ kanalAd: a.ad, sinirlar: a.sinirlar, lead: b.lead, ekipNotu, mesajlar: b.mesajlar }),
+    content: degiskenIstem({
+      kanalAd: a.ad, sinirlar: a.sinirlar, lead: b.lead, ekipNotu, mesajlar: b.mesajlar, mesai: mesaiDurumu(ayar.ayarlar.mesaiSaatleri, simdi()),
+    }),
   }];
-  const sistem = sabitSistemIstemi();
+  const sistem = sabitSistemIstemi(ayar.ayarlar, ayar.kaynaklar);
   const araclar = aracTanimlari();
 
   const toplam: TokenKullanimi = { girdi: 0, cikti: 0, cacheYazma: 0, cacheOkuma: 0 };
@@ -171,7 +183,7 @@ export async function botTuru(konusmaId: number, simdi = () => new Date()): Prom
   }
 
   const kayit: BotKullanimKaydi = {
-    konusmaId, kanal: b.kanal, model: BOT_MODELI, effort: BOT_EFFORT, istemSurumu: ISTEM_SURUMU, apiCagrisi,
+    konusmaId, kanal: b.kanal, model: BOT_MODELI, effort: BOT_EFFORT, istemSurumu: istemSurumuEtiketi(ayar.surumNo), apiCagrisi,
     ...toplam, maliyetUsd: maliyetHesapla(BOT_MODELI, toplam), araclar: cagrilanAraclar, sonuc,
     hataKodu: hataKoduYaz, sureMs: Date.now() - baslangic,
   };

@@ -18,7 +18,7 @@ describe("migration'lar ve seed", () => {
   it("boş veritabanında hatasız kurulur", async () => {
     expect(MIGRATIONLAR.length).toBeGreaterThanOrEqual(7);
     const r = await tek<{ n: number }>(`select count(*)::int n from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r'`);
-    expect(r.n).toBe(77); // P1.1: konusma_isleri, P1.2: konusma_okumalari, P1.3: kanal_ayarlari, konusma_olaylari, firsat_notlari, P2.1: bot_ayarlari, bot_kullanim
+    expect(r.n).toBe(78); // P2.4: bot_istem_surumleri, P1.1: konusma_isleri, P1.2: konusma_okumalari, P1.3: kanal_ayarlari, konusma_olaylari, firsat_notlari, P2.1: bot_ayarlari, bot_kullanim
   });
 
   it("kullanılmayan whatsapp_mesajlari tablosu kalmaz", async () => {
